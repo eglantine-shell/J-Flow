@@ -8,10 +8,29 @@
       name="description"
       content="J-Flow 是一个面向高计划性用户的决策型 Todo List。"
     />
+    <script>
+      ;(function (location) {
+        if (!location.search.startsWith('?p=')) {
+          return
+        }
+
+        const params = new URLSearchParams(location.search)
+        const redirectPath = params.get('p')
+
+        if (!redirectPath) {
+          return
+        }
+
+        const nextPath = decodeURIComponent(redirectPath)
+        const normalizedBase = location.pathname.replace(/\/+$/, '')
+        const normalizedPath = nextPath.startsWith('/') ? nextPath : `/${nextPath}`
+        const nextUrl = `${normalizedBase}${normalizedPath}${location.hash}`
+        window.history.replaceState(null, '', nextUrl)
+      })(window.location)
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

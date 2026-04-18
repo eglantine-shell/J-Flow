@@ -8,6 +8,8 @@ import { AppShell } from '@/app/shell/AppShell'
 import { HomePage } from '@/pages/home/HomePage'
 import { SetupPage } from '@/pages/setup/SetupPage'
 
+const routerBase = import.meta.env.BASE_URL.replace(/\/+$/, '') || '/'
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -31,4 +33,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
-])
+], {
+  basename: routerBase,
+})

@@ -292,6 +292,9 @@
 - 新增 `.github/workflows/deploy.yml`
 - 更新 `README.md`
 - 更新 GitHub Actions workflow 中的 action 版本与 `pnpm` 安装顺序
+- 更新 `src/app/router.tsx`，让 React Router 使用与 Vite 一致的 `basename`
+- 更新 `index.html`
+- 新增 `public/404.html`，为 GitHub Pages 项目路径部署补充 SPA fallback
 
 ### 验证结果
 - `pnpm run build`：通过
@@ -302,6 +305,7 @@
 - 部署工作流会在 `main` 分支 push 后自动构建并发布
 - 已补齐 `pnpm-lock.yaml`，避免 `npm ci` 因缺少 lockfile 导致 Pages workflow 失败
 - 已将 workflow 调整为先安装 `pnpm` 再进行 Node 缓存与依赖安装，并升级到 Node 24 runtime 兼容的 action 版本
+- 已修正 GitHub Pages 下 BrowserRouter 未识别仓库前缀导致的应用内 404 问题，并补齐子路径刷新兜底
 
 ### 当前风险与待确认问题
 - GitHub 仓库网页仍需手动将 Pages Source 切换为 `GitHub Actions`
