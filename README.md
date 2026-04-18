@@ -160,3 +160,17 @@ src/
 npm install
 npm run dev
 ```
+
+## GitHub Pages 部署
+
+当前项目已按 Vite 官方推荐方式适配 GitHub Pages 项目路径部署：
+- Vite `base` 已配置为 `/J-Flow/`
+- GitHub Actions 会在默认分支 `main` 收到 push 后自动构建并部署
+- 构建产物目录为 `dist/`
+
+首次启用时，请在 GitHub 仓库网页中完成：
+1. 打开 `Settings > Pages`
+2. 在 `Build and deployment` 中将 `Source` 设为 `GitHub Actions`
+
+部署成功后，预期访问地址为：
+- `https://eglantine-shell.github.io/J-Flow/`

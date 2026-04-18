@@ -32,6 +32,7 @@
 ## 下一步最推荐做什么
 - 先进入一轮真实试用，再做体验打磨、bug 修复和小优化。
 - 当前主路径已经闭环，继续新增功能的收益低于先验证规则理解、交互顺滑度和实例层边界是否稳定。
+- 工程侧已补齐 GitHub Pages 部署配置，可直接进入仓库级部署验证。
 
 ## 当前已知边界 / 技术债
 - 暂无自动化业务测试，当前主要依赖 `npm run build` 与 `npm run lint`。
@@ -41,10 +42,12 @@
 - 设置页、导出/清空数据、搜索/筛选等能力仍未实现。
 - `consumesDateTrigger` 仅有最小消费语义实现，不支持回滚与复杂历史修复。
 - 分次事项在保存为 100% 后不可回退。
+- GitHub Pages 首次启用仍需在仓库网页里把 Pages Source 切换到 `GitHub Actions`。
 
 ## 关键文件位置
 - `AGENTS.md`
 - `dev-log.md`
+- `.github/workflows/deploy.yml`
 - `src/pages/home/HomePage.tsx`
 - `src/db/storage.ts`
 - `src/types/models.ts`
@@ -56,6 +59,7 @@
 - `src/features/templates/TemplateFormFields.tsx`
 
 ## 最近一次验证结果
-- 最近一轮主要任务完成后验证通过：
-  - `npm run build`
-  - `npm run lint`
+- 最近补齐了 GitHub Pages 部署配置：
+  - Vite `base` 已适配 `/J-Flow/`
+  - GitHub Actions workflow 已新增
+  - 本地构建校验结果以最新一轮执行为准

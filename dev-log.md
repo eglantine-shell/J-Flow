@@ -259,6 +259,49 @@
 - 更新 `src/mocks/app-data.ts`
 - 新增一个 `status: 'expired'` 的 `RecurringTaskInstance`
 
+## 2026-04-18（GitHub Pages 部署配置）
+
+### 本轮目标
+- 将当前 `Vite + React` 项目适配为可部署到 GitHub Pages
+- 只做部署相关最小改动，不改动业务逻辑
+
+### 开始前已阅读
+- `AGENTS.md`
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键决策
+- 沿用项目当前包管理器与构建方式，GitHub Actions 使用 `npm ci` 和 `npm run build`
+- 按仓库名 `J-Flow` 配置 Vite `base` 为 `/J-Flow/`，适配 GitHub Pages 仓库路径部署
+- 使用 GitHub 官方 Pages Actions 流程：
+  - `actions/configure-pages`
+  - `actions/upload-pages-artifact`
+  - `actions/deploy-pages`
+- 保持默认 Vite 构建产物目录 `dist/`
+
+### 本轮修改
+- 更新 `vite.config.ts`
+- 新增 `.github/workflows/deploy.yml`
+- 更新 `README.md`
+
+### 验证结果
+- `npm run build`：通过
+- `npm run lint`：通过
+
+### 当前结论
+- 项目部署配置已对齐 GitHub Pages 项目路径部署要求
+- 部署工作流会在 `main` 分支 push 后自动构建并发布
+
+### 当前风险与待确认问题
+- GitHub 仓库网页仍需手动将 Pages Source 切换为 `GitHub Actions`
+- workflow 当前监听 `main`；若仓库默认分支不是 `main`，需要同步调整
+
 ## 2026-04-17（规则澄清：recurrence 仅支持日历型）
 
 ### 本轮目标
