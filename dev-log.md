@@ -277,7 +277,7 @@
 - `dev-log.md`
 
 ### 本轮关键决策
-- 沿用项目当前包管理器与构建方式，GitHub Actions 使用 `npm ci` 和 `npm run build`
+- 将 CI 与本地包管理器统一为 `pnpm`
 - 按仓库名 `J-Flow` 配置 Vite `base` 为 `/J-Flow/`，适配 GitHub Pages 仓库路径部署
 - 使用 GitHub 官方 Pages Actions 流程：
   - `actions/configure-pages`
@@ -286,17 +286,20 @@
 - 保持默认 Vite 构建产物目录 `dist/`
 
 ### 本轮修改
+- 更新 `package.json`
+- 新增 `pnpm-lock.yaml`
 - 更新 `vite.config.ts`
 - 新增 `.github/workflows/deploy.yml`
 - 更新 `README.md`
 
 ### 验证结果
-- `npm run build`：通过
-- `npm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run lint`：通过
 
 ### 当前结论
 - 项目部署配置已对齐 GitHub Pages 项目路径部署要求
 - 部署工作流会在 `main` 分支 push 后自动构建并发布
+- 已补齐 `pnpm-lock.yaml`，避免 `npm ci` 因缺少 lockfile 导致 Pages workflow 失败
 
 ### 当前风险与待确认问题
 - GitHub 仓库网页仍需手动将 Pages Source 切换为 `GitHub Actions`

@@ -43,6 +43,7 @@
 - `consumesDateTrigger` 仅有最小消费语义实现，不支持回滚与复杂历史修复。
 - 分次事项在保存为 100% 后不可回退。
 - GitHub Pages 首次启用仍需在仓库网页里把 Pages Source 切换到 `GitHub Actions`。
+- 部署工作流当前已统一为 `pnpm`，依赖 `pnpm-lock.yaml` 保持 CI 可重复安装。
 
 ## 关键文件位置
 - `AGENTS.md`
@@ -62,4 +63,5 @@
 - 最近补齐了 GitHub Pages 部署配置：
   - Vite `base` 已适配 `/J-Flow/`
   - GitHub Actions workflow 已新增
-  - 本地构建校验结果以最新一轮执行为准
+  - `pnpm run build`：通过
+  - `pnpm run lint`：通过

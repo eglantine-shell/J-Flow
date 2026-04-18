@@ -153,12 +153,12 @@ src/
 
 ## 启动方式
 
-当前仓库已补齐前端工程文件，但本地环境尚未发现 `node` / `npm` / `pnpm` / `yarn` / `bun`。
-待安装 Node.js 与依赖后，可使用以下命令启动：
+当前项目现在以 `pnpm` 作为本地与 CI 的统一包管理器。
+待安装 Node.js 与 pnpm 后，可使用以下命令启动：
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 ## GitHub Pages 部署
@@ -167,6 +167,7 @@ npm run dev
 - Vite `base` 已配置为 `/J-Flow/`
 - GitHub Actions 会在默认分支 `main` 收到 push 后自动构建并部署
 - 构建产物目录为 `dist/`
+- workflow 使用 `pnpm install --frozen-lockfile` 与 `pnpm run build`
 
 首次启用时，请在 GitHub 仓库网页中完成：
 1. 打开 `Settings > Pages`
