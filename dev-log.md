@@ -291,6 +291,7 @@
 - 更新 `vite.config.ts`
 - 新增 `.github/workflows/deploy.yml`
 - 更新 `README.md`
+- 更新 GitHub Actions workflow 中的 action 版本与 `pnpm` 安装顺序
 
 ### 验证结果
 - `pnpm run build`：通过
@@ -300,6 +301,7 @@
 - 项目部署配置已对齐 GitHub Pages 项目路径部署要求
 - 部署工作流会在 `main` 分支 push 后自动构建并发布
 - 已补齐 `pnpm-lock.yaml`，避免 `npm ci` 因缺少 lockfile 导致 Pages workflow 失败
+- 已将 workflow 调整为先安装 `pnpm` 再进行 Node 缓存与依赖安装，并升级到 Node 24 runtime 兼容的 action 版本
 
 ### 当前风险与待确认问题
 - GitHub 仓库网页仍需手动将 Pages Source 切换为 `GitHub Actions`

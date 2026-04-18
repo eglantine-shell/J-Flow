@@ -44,6 +44,7 @@
 - 分次事项在保存为 100% 后不可回退。
 - GitHub Pages 首次启用仍需在仓库网页里把 Pages Source 切换到 `GitHub Actions`。
 - 部署工作流当前已统一为 `pnpm`，依赖 `pnpm-lock.yaml` 保持 CI 可重复安装。
+- GitHub Actions workflow 已修正为先安装 `pnpm`，并升级到 Node 24 runtime 兼容的 action 版本。
 
 ## 关键文件位置
 - `AGENTS.md`
