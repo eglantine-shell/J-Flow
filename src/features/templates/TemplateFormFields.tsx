@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
 import type {
@@ -103,13 +104,26 @@ export function TaskTemplateFormFields({
   loadState,
   showAdvancedFields,
   setShowAdvancedFields,
+  onCreateSceneTag,
+  onCreateActivityType,
 }: {
   formState: TaskTemplateFormState
   setFormState: Dispatch<SetStateAction<TaskTemplateFormState>>
   loadState: TaskTemplateFormLoadState
   showAdvancedFields: boolean
   setShowAdvancedFields: Dispatch<SetStateAction<boolean>>
+  onCreateSceneTag?: (name: string) => Promise<void>
+  onCreateActivityType?: (name: string) => Promise<void>
 }) {
+  const [showSceneTagCreator, setShowSceneTagCreator] = useState(false)
+  const [sceneTagDraft, setSceneTagDraft] = useState('')
+  const [sceneTagError, setSceneTagError] = useState<string | null>(null)
+  const [isCreatingSceneTag, setIsCreatingSceneTag] = useState(false)
+  const [showActivityTypeCreator, setShowActivityTypeCreator] = useState(false)
+  const [activityTypeDraft, setActivityTypeDraft] = useState('')
+  const [activityTypeError, setActivityTypeError] = useState<string | null>(null)
+  const [isCreatingActivityType, setIsCreatingActivityType] = useState(false)
+
   const activeRecurrenceOption =
     recurrenceOptions.find((option) => option.value === formState.recurrence) ??
     recurrenceOptions[0]
@@ -121,6 +135,62 @@ export function TaskTemplateFormFields({
         ? current.sceneTagIds.filter((id) => id !== sceneTagId)
         : [...current.sceneTagIds, sceneTagId],
     }))
+  }
+
+  const submitSceneTagDraft = async () => {
+    const nextName = sceneTagDraft.trim()
+
+    if (!nextName) {
+      setSceneTagError('请输入时间场景名称。')
+      return
+    }
+
+    if (!onCreateSceneTag) {
+      return
+    }
+
+    setIsCreatingSceneTag(true)
+    setSceneTagError(null)
+
+    try {
+      await onCreateSceneTag(nextName)
+      setSceneTagDraft('')
+      setShowSceneTagCreator(false)
+    } catch (error: unknown) {
+      setSceneTagError(
+        error instanceof Error ? error.message : '新增时间场景失败，请稍后重试。',
+      )
+    } finally {
+      setIsCreatingSceneTag(false)
+    }
+  }
+
+  const submitActivityTypeDraft = async () => {
+    const nextName = activityTypeDraft.trim()
+
+    if (!nextName) {
+      setActivityTypeError('请输入活动类型名称。')
+      return
+    }
+
+    if (!onCreateActivityType) {
+      return
+    }
+
+    setIsCreatingActivityType(true)
+    setActivityTypeError(null)
+
+    try {
+      await onCreateActivityType(nextName)
+      setActivityTypeDraft('')
+      setShowActivityTypeCreator(false)
+    } catch (error: unknown) {
+      setActivityTypeError(
+        error instanceof Error ? error.message : '新增活动类型失败，请稍后重试。',
+      )
+    } finally {
+      setIsCreatingActivityType(false)
+    }
   }
 
   return (
@@ -169,6 +239,63 @@ export function TaskTemplateFormFields({
           </label>
         </div>
 
+        {onCreateActivityType ? (
+          <div className="inline-creator">
+            <button
+              className="ghost-button ghost-button--compact"
+              type="button"
+              onClick={() => {
+                setShowActivityTypeCreator((current) => !current)
+                setActivityTypeError(null)
+              }}
+            >
+              {showActivityTypeCreator ? '收起新增活动类型' : '现场新增活动类型'}
+            </button>
+
+            {showActivityTypeCreator ? (
+              <div className="inline-creator__panel">
+                <div className="inline-creator__controls">
+                  <input
+                    className="inline-creator__input"
+                    type="text"
+                    value={activityTypeDraft}
+                    onChange={(event) => {
+                      setActivityTypeDraft(event.target.value)
+                    }}
+                    placeholder="输入新的活动类型名称"
+                  />
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isCreatingActivityType}
+                    onClick={() => {
+                      void submitActivityTypeDraft()
+                    }}
+                  >
+                    {isCreatingActivityType ? '新增中...' : '保存'}
+                  </button>
+                  <button
+                    className="ghost-button ghost-button--compact"
+                    type="button"
+                    disabled={isCreatingActivityType}
+                    onClick={() => {
+                      setShowActivityTypeCreator(false)
+                      setActivityTypeDraft('')
+                      setActivityTypeError(null)
+                    }}
+                  >
+                    取消
+                  </button>
+                </div>
+
+                {activityTypeError ? (
+                  <p className="form-message form-message--danger">{activityTypeError}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="editor-field">
           <span>具体内容</span>
           <textarea
@@ -208,6 +335,63 @@ export function TaskTemplateFormFields({
             ))}
           </div>
         </div>
+
+        {onCreateSceneTag ? (
+          <div className="inline-creator">
+            <button
+              className="ghost-button ghost-button--compact"
+              type="button"
+              onClick={() => {
+                setShowSceneTagCreator((current) => !current)
+                setSceneTagError(null)
+              }}
+            >
+              {showSceneTagCreator ? '收起新增时间场景' : '现场新增时间场景'}
+            </button>
+
+            {showSceneTagCreator ? (
+              <div className="inline-creator__panel">
+                <div className="inline-creator__controls">
+                  <input
+                    className="inline-creator__input"
+                    type="text"
+                    value={sceneTagDraft}
+                    onChange={(event) => {
+                      setSceneTagDraft(event.target.value)
+                    }}
+                    placeholder="输入新的时间场景名称"
+                  />
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isCreatingSceneTag}
+                    onClick={() => {
+                      void submitSceneTagDraft()
+                    }}
+                  >
+                    {isCreatingSceneTag ? '新增中...' : '保存'}
+                  </button>
+                  <button
+                    className="ghost-button ghost-button--compact"
+                    type="button"
+                    disabled={isCreatingSceneTag}
+                    onClick={() => {
+                      setShowSceneTagCreator(false)
+                      setSceneTagDraft('')
+                      setSceneTagError(null)
+                    }}
+                  >
+                    取消
+                  </button>
+                </div>
+
+                {sceneTagError ? (
+                  <p className="form-message form-message--danger">{sceneTagError}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="editor-field">
           <span>兴趣程度</span>
@@ -353,4 +537,3 @@ export function TaskTemplateFormFields({
     </>
   )
 }
-

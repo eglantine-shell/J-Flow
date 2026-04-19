@@ -67,6 +67,44 @@ export function CreateTaskTemplateForm() {
 
   const validationMessage = validateTaskTemplateForm(formState)
 
+  const handleCreateSceneTag = async (name: string) => {
+    const created = await appDataRepository.sceneTags.create({
+      name,
+      isBuiltIn: false,
+    })
+
+    setLoadState((current) => ({
+      ...current,
+      sceneTags: [...current.sceneTags, created],
+    }))
+    setFormState((current) => ({
+      ...current,
+      sceneTagIds: current.sceneTagIds.includes(created.id)
+        ? current.sceneTagIds
+        : [...current.sceneTagIds, created.id],
+    }))
+    setErrorMessage(null)
+    setSuccessMessage(`已新增时间场景：${created.name}`)
+  }
+
+  const handleCreateActivityType = async (name: string) => {
+    const created = await appDataRepository.activityTypes.create({
+      name,
+      isBuiltIn: false,
+    })
+
+    setLoadState((current) => ({
+      ...current,
+      activityTypes: [...current.activityTypes, created],
+    }))
+    setFormState((current) => ({
+      ...current,
+      activityTypeId: created.id,
+    }))
+    setErrorMessage(null)
+    setSuccessMessage(`已新增活动类型：${created.name}`)
+  }
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -129,6 +167,8 @@ export function CreateTaskTemplateForm() {
         loadState={loadState}
         showAdvancedFields={showAdvancedFields}
         setShowAdvancedFields={setShowAdvancedFields}
+        onCreateSceneTag={handleCreateSceneTag}
+        onCreateActivityType={handleCreateActivityType}
       />
 
       {errorMessage ? (
@@ -151,4 +191,3 @@ export function CreateTaskTemplateForm() {
     </form>
   )
 }
-

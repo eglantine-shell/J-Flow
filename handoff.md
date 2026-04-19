@@ -8,6 +8,7 @@
 - 本地存储层：`AppData` 统一读写、默认 seed、轻量校验、基础 CRUD。
 - 主页面骨架：顶部日期区、模式切换区、主内容区、底部添加区。
 - 决策库录入：新增 `TaskTemplate`，支持日期、活动类型、时间场景、兴趣程度、必要、准备、日历型重复、分次。
+- 决策库录入：支持在录入表单内现场新增时间场景与活动类型，并立即用于当前提交。
 - 自动入计划：根据 `selectedDate` 惰性生成并持久化 `auto_generated DayPlanItem` 与需要的 `RecurringTaskInstance`。
 - 决策模式推荐：按活动类型与轻量场景匹配推荐候选，支持生成 `decision_selected DayPlanItem`。
 - Todo 模式：基于 `DayPlanItem` 展示真实实例列表，支持非分次完成、准备备注查看、来源区分、白天/晚上样式。

@@ -259,6 +259,47 @@
 - 更新 `src/mocks/app-data.ts`
 - 新增一个 `status: 'expired'` 的 `RecurringTaskInstance`
 
+## 2026-04-19（录入表单：现场新增场景与类型）
+
+### 本轮目标
+- 只补齐决策库条目录入表单里的“现场新增时间场景 / 活动类型”
+- 不改动自动生成、推荐、Todo、模板管理逻辑
+
+### 开始前已阅读
+- `AGENTS.md`
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键决策
+- 只在现有录入表单内增加轻量内嵌输入，不扩展成管理页或复杂弹窗
+- 直接复用现有 `appDataRepository.sceneTags.create` 与 `appDataRepository.activityTypes.create`
+- 新增成功后立即回填当前表单：
+  - 新时间场景自动加入当前多选
+  - 新活动类型自动设为当前单选值
+- 校验保持轻量，只校验名称非空
+
+### 本轮修改
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+- 更新 `src/styles/globals.css`
+
+### 验证结果
+- `pnpm run build`：通过
+- `pnpm run lint`：通过
+
+### 当前结论
+- 录入时已支持现场新增时间场景和活动类型
+- 新增项会立即进入当前表单可选项，并可直接用于本次模板提交
+
+### 当前风险与待确认问题
+- 当前未额外加入名称去重策略，仍保持轻量录入口径
+
 ## 2026-04-18（GitHub Pages 部署配置）
 
 ### 本轮目标
