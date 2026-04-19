@@ -591,6 +591,7 @@ function DecisionModePanel({ selectedDate }: { selectedDate: Date }) {
 export function HomePage() {
   const [mode, setMode] = useState<HomeMode>('decision')
   const [selectedDate, setSelectedDate] = useState(() => new Date())
+  const [showComposer, setShowComposer] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)
 
   const selectedHeaderLabel = useMemo(
@@ -604,14 +605,21 @@ export function HomePage() {
 
   return (
     <div className="home-layout">
-      <section className="home-hero">
-        <div className="home-hero__date">
-          <p className="eyebrow">Today</p>
-          <h2>{selectedHeaderLabel}</h2>
-          <p>{selectedMetaLabel}</p>
+      <section className="home-appbar">
+        <div className="home-appbar__main">
+          <div className="home-appbar__title">
+            <p className="eyebrow">Today</p>
+            <h2>{selectedHeaderLabel}</h2>
+          </div>
+          <div className="tag-row">
+            <span className="status-chip status-chip--mode">
+              {mode === 'decision' ? '决策' : 'Todo'}
+            </span>
+            <span className="status-chip">{selectedMetaLabel}</span>
+          </div>
         </div>
 
-        <div className="home-hero__controls">
+        <div className="home-appbar__controls">
           <div className="date-switcher" aria-label="日期切换">
             <button
               className="ghost-button"
@@ -694,8 +702,18 @@ export function HomePage() {
       </section>
 
       <section className="home-layout__composer">
-        <SurfaceCard title="添加到决策库" description="先填核心字段，其他设置按需展开。">
-          <div className="composer-toolbar">
+        <SurfaceCard title="决策库" description="需要时再展开。">
+          <div className="composer-entry">
+            <button
+              className="primary-button composer-entry__button"
+              type="button"
+              onClick={() => {
+                setShowComposer((current) => !current)
+              }}
+            >
+              {showComposer ? '收起添加入口' : '添加模板'}
+            </button>
+
             <button
               className="ghost-button"
               type="button"
@@ -707,9 +725,17 @@ export function HomePage() {
             </button>
           </div>
 
-          {showTemplateManager ? <TemplateManagerPanel /> : null}
+          {showComposer ? (
+            <div className="composer-panel">
+              <CreateTaskTemplateForm />
+            </div>
+          ) : null}
 
-          <CreateTaskTemplateForm />
+          {showTemplateManager ? (
+            <div className="composer-panel composer-panel--secondary">
+              <TemplateManagerPanel />
+            </div>
+          ) : null}
         </SurfaceCard>
       </section>
     </div>

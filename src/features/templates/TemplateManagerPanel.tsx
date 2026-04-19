@@ -189,8 +189,8 @@ export function TemplateManagerPanel() {
     <div className="template-manager">
       <div className="template-manager__intro">
         <div>
-          <p className="eyebrow">模板管理</p>
-          <h4>模板列表</h4>
+          <p className="eyebrow">Templates</p>
+          <h4>模板</h4>
         </div>
         <p>{templates.length} 个模板</p>
       </div>
@@ -219,7 +219,7 @@ export function TemplateManagerPanel() {
                   </div>
                   <div className="template-list-item__actions">
                     <button
-                      className="ghost-button"
+                      className="ghost-button ghost-button--compact"
                       type="button"
                       onClick={() => {
                         startEditing(template)
@@ -228,7 +228,7 @@ export function TemplateManagerPanel() {
                       编辑
                     </button>
                     <button
-                      className="ghost-button"
+                      className="ghost-button ghost-button--compact"
                       type="button"
                       onClick={() => {
                         void archiveTemplate(template)

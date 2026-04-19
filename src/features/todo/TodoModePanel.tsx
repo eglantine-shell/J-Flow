@@ -488,19 +488,19 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       <div className="mode-panel__summary">
         <div>
           <p className="eyebrow">Todo</p>
-          <h2>今天的事项</h2>
+          <h2>今天</h2>
         </div>
         <div className="tag-row">
-          <span className="status-chip">{dayItems.length} 个白天事项</span>
-          <span className="status-chip">{nightItems.length} 个晚上事项</span>
+          <span className="status-chip">{dayItems.length} 个白天</span>
+          <span className="status-chip">{nightItems.length} 个晚上</span>
         </div>
       </div>
 
-      <div className="temporary-composer">
+      <div className="temporary-composer temporary-composer--compact">
         <div className="temporary-composer__header">
           <div>
-            <p className="eyebrow">临时事项</p>
-            <h4>快速添加</h4>
+            <p className="eyebrow">Quick Add</p>
+            <h4>临时事项</h4>
           </div>
         </div>
 
