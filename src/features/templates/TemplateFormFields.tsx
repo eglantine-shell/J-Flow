@@ -197,8 +197,8 @@ export function TaskTemplateFormFields({
     <>
       <div className="template-form__section">
         <div className="template-form__section-header">
-          <h3>主字段</h3>
-          <p>日期是核心字段。当前始终显示，并作为重复规则的日历锚点。</p>
+          <h3>核心字段</h3>
+          <p>先填日期、类型和内容。</p>
         </div>
 
         <div className="form-grid">
@@ -249,7 +249,7 @@ export function TaskTemplateFormFields({
                 setActivityTypeError(null)
               }}
             >
-              {showActivityTypeCreator ? '收起新增活动类型' : '现场新增活动类型'}
+              {showActivityTypeCreator ? '收起新增活动类型' : '新增活动类型'}
             </button>
 
             {showActivityTypeCreator ? (
@@ -297,7 +297,7 @@ export function TaskTemplateFormFields({
         ) : null}
 
         <label className="editor-field">
-          <span>具体内容</span>
+          <span>内容</span>
           <textarea
             rows={3}
             value={formState.title}
@@ -315,7 +315,7 @@ export function TaskTemplateFormFields({
       <div className="template-form__section">
         <div className="template-form__section-header">
           <h3>常用设置</h3>
-          <p>时间场景可以为空提交；V1 仅保存模板属性，不在此处做推荐或自动生成。</p>
+          <p>用标签补充识别信息。</p>
         </div>
 
         <div className="editor-field">
@@ -346,7 +346,7 @@ export function TaskTemplateFormFields({
                 setSceneTagError(null)
               }}
             >
-              {showSceneTagCreator ? '收起新增时间场景' : '现场新增时间场景'}
+              {showSceneTagCreator ? '收起新增时间场景' : '新增时间场景'}
             </button>
 
             {showSceneTagCreator ? (
@@ -431,15 +431,15 @@ export function TaskTemplateFormFields({
           />
           <div>
             <strong>必要事项</strong>
-            <p>只影响未来自动进入计划与推荐竞争，不回写既有实例。</p>
+            <p>自动进入当天计划。</p>
           </div>
         </label>
       </div>
 
       <div className="template-form__section">
         <div className="template-form__section-header">
-          <h3>高级设置</h3>
-          <p>通过开关展开，保持新增与编辑时的字段语义一致。</p>
+          <h3>更多设置</h3>
+          <p>按需展开。</p>
         </div>
 
         <button
@@ -449,7 +449,7 @@ export function TaskTemplateFormFields({
             setShowAdvancedFields((current) => !current)
           }}
         >
-          {showAdvancedFields ? '收起高级设置' : '展开高级设置'}
+          {showAdvancedFields ? '收起更多设置' : '展开更多设置'}
         </button>
 
         {showAdvancedFields ? (
@@ -470,7 +470,7 @@ export function TaskTemplateFormFields({
               />
               <div>
                 <strong>需要准备</strong>
-                <p>V1 只把它作为提示展示，不参与排序或筛选。</p>
+                <p>在事项卡片里显示提醒。</p>
               </div>
             </label>
 
@@ -512,7 +512,6 @@ export function TaskTemplateFormFields({
 
             <p className="form-message">
               {activeRecurrenceOption.help}
-              编辑后只影响未来自动生成与未来推荐，不会回写已有实例。
             </p>
 
             <label className="toggle-row">
@@ -528,7 +527,7 @@ export function TaskTemplateFormFields({
               />
               <div>
                 <strong>分次事项</strong>
-                <p>只影响未来实例；已有实例保留原有进度语义。</p>
+                <p>用百分比推进。</p>
               </div>
             </label>
           </div>

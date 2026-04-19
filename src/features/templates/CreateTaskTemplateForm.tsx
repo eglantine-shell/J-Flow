@@ -153,8 +153,8 @@ export function CreateTaskTemplateForm() {
   if (isLoading) {
     return (
       <div className="form-status-card">
-        <p className="eyebrow">条目录入</p>
-        <p>正在加载时间场景与活动类型。</p>
+        <p className="eyebrow">新增模板</p>
+        <p>正在加载表单...</p>
       </div>
     )
   }
@@ -185,7 +185,7 @@ export function CreateTaskTemplateForm() {
           type="submit"
           disabled={isSaving || loadState.activityTypes.length === 0}
         >
-          {isSaving ? '保存中...' : '加入决策库'}
+          {isSaving ? '保存中...' : '保存模板'}
         </button>
       </div>
     </form>

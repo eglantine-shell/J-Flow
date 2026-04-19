@@ -21,9 +21,9 @@ const toDateString = (date: Date) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
 const sourceLabelMap: Record<DayPlanItemSource, string> = {
-  auto_generated: '自动生成',
-  decision_selected: '决策选入',
-  manual_temporary: '临时事项',
+  auto_generated: '自动',
+  decision_selected: '已选',
+  manual_temporary: '临时',
 }
 
 function sortTodoItems(items: DayPlanItem[]) {
@@ -38,6 +38,28 @@ function sortTodoItems(items: DayPlanItem[]) {
 
     return left.createdAt.localeCompare(right.createdAt)
   })
+}
+
+function buildItemTags(item: DayPlanItem) {
+  const tags = [sourceLabelMap[item.source]]
+
+  if (item.isNecessary) {
+    tags.push('必要')
+  }
+
+  if (item.isSegmented) {
+    tags.push(`分次 ${item.progressPercent}%`)
+  }
+
+  if (item.requiresPreparation) {
+    tags.push('准备')
+  }
+
+  if (item.status === 'completed') {
+    tags.push('已完成')
+  }
+
+  return tags
 }
 
 export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
@@ -282,159 +304,158 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const renderItems = (items: DayPlanItem[], timeBlock: 'day' | 'night') => {
     if (items.length === 0) {
       return (
-        <article className="todo-empty-card">
-          <p className="eyebrow">{timeBlock === 'day' ? 'Day' : 'Night'}</p>
-          <h5>{timeBlock === 'day' ? '白天暂无事项' : '晚上暂无事项'}</h5>
-          <p>Todo 模式当前只展示实例层数据，后续来源会继续从 DayPlanItem 汇入。</p>
+        <article className="empty-state-card">
+          <p>{timeBlock === 'day' ? '白天没有事项' : '晚上没有事项'}</p>
         </article>
       )
     }
 
     return (
       <div className="todo-list">
-        {items.map((item) => (
-          <article
-            key={item.id}
-            className={
-              item.timeBlock === 'day'
-                ? 'todo-item-card todo-item-card--day'
-                : 'todo-item-card todo-item-card--night'
-            }
-          >
-            <div className="todo-item-card__header">
-              <div>
-                <div className="todo-item-card__labels">
-                  <span className="status-chip">{sourceLabelMap[item.source]}</span>
-                  {item.isNecessary ? (
-                    <span className="status-chip status-chip--necessary">必要事项</span>
+        {items.map((item) => {
+          const tags = buildItemTags(item)
+
+          return (
+            <article
+              key={item.id}
+              className={
+                item.timeBlock === 'day'
+                  ? 'todo-item-card todo-item-card--day'
+                  : 'todo-item-card todo-item-card--night'
+              }
+            >
+              <div className="todo-item-card__header">
+                <div className="todo-item-card__main">
+                  <h5>{item.title}</h5>
+                  <div className="tag-row">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className={
+                          tag === '必要'
+                            ? 'status-chip status-chip--necessary'
+                            : tag === '已完成'
+                              ? 'status-chip status-chip--completed'
+                              : 'status-chip'
+                        }
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="todo-item-card__actions">
+                  {item.source === 'manual_temporary' ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => {
+                        void deleteTemporaryItem(item)
+                      }}
+                    >
+                      删除
+                    </button>
                   ) : null}
-                  {item.status === 'completed' ? (
-                    <span className="status-chip status-chip--completed">已完成</span>
+
+                  {item.isSegmented ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={item.status === 'completed' || item.source === 'manual_temporary'}
+                      onClick={() => {
+                        toggleProgressEditor(item)
+                      }}
+                    >
+                      {item.status === 'completed'
+                        ? '已完成'
+                        : expandedProgressItems[item.id]
+                          ? '收起'
+                          : '推进'}
+                    </button>
+                  ) : (
+                    <button
+                      className="primary-button"
+                      type="button"
+                      disabled={item.status === 'completed'}
+                      onClick={() => {
+                        void completeItem(item)
+                      }}
+                    >
+                      {item.status === 'completed' ? '已完成' : '完成'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {item.isSegmented ? (
+                <div className="segmented-progress-panel">
+                  {item.source === 'manual_temporary' ? (
+                    <p className="form-message">临时事项不支持分次推进。</p>
+                  ) : item.status === 'completed' ? (
+                    <p className="form-message form-message--success">已完成</p>
+                  ) : expandedProgressItems[item.id] ? (
+                    <>
+                      <div className="segmented-progress-panel__controls">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={progressDrafts[item.id] ?? item.progressPercent}
+                          onChange={(event) => {
+                            setProgressDraft(item.id, Number(event.target.value))
+                          }}
+                        />
+                        <input
+                          className="segmented-progress-panel__number"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={progressDrafts[item.id] ?? item.progressPercent}
+                          onChange={(event) => {
+                            setProgressDraft(item.id, Number(event.target.value))
+                          }}
+                        />
+                      </div>
+
+                      <div className="segmented-progress-panel__actions">
+                        <span className="status-chip">
+                          {progressDrafts[item.id] ?? item.progressPercent}%
+                        </span>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          onClick={() => {
+                            void saveSegmentedProgress(item)
+                          }}
+                        >
+                          保存进度
+                        </button>
+                      </div>
+                    </>
                   ) : null}
                 </div>
-                <h5>{item.title}</h5>
-              </div>
+              ) : null}
 
-              <div className="todo-item-card__actions">
-                {item.source === 'manual_temporary' ? (
+              {item.requiresPreparation ? (
+                <div className="todo-item-card__notes">
                   <button
-                    className="ghost-button"
+                    className="ghost-button ghost-button--compact"
                     type="button"
                     onClick={() => {
-                      void deleteTemporaryItem(item)
+                      toggleNotes(item.id)
                     }}
                   >
-                    删除
+                    {notesVisibility[item.id] ? '收起准备' : '查看准备'}
                   </button>
-                ) : null}
-
-                {item.isSegmented ? (
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    disabled={item.status === 'completed' || item.source === 'manual_temporary'}
-                    onClick={() => {
-                      toggleProgressEditor(item)
-                    }}
-                  >
-                    {item.status === 'completed'
-                      ? '已完成'
-                      : expandedProgressItems[item.id]
-                        ? '收起推进面板'
-                        : '推进进度'}
-                  </button>
-                ) : (
-                  <button
-                    className="primary-button"
-                    type="button"
-                    disabled={item.status === 'completed'}
-                    onClick={() => {
-                      void completeItem(item)
-                    }}
-                  >
-                    {item.status === 'completed' ? '已完成' : '完成'}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="todo-item-card__meta">
-              <span>{item.timeBlock === 'day' ? '白天样式' : '晚上样式'}</span>
-              <span>{item.timeBlockSource}</span>
-              {item.isSegmented ? <span>进度 {item.progressPercent}%</span> : null}
-            </div>
-
-            {item.isSegmented ? (
-              <div className="segmented-progress-panel">
-                {item.source === 'manual_temporary' ? (
-                  <p className="form-message">
-                    临时事项不参与分次推进逻辑。
-                  </p>
-                ) : item.status === 'completed' ? (
-                  <p className="form-message form-message--success">
-                    当前实例已在 100% 时整体完成，本轮不支持回退到未完成状态。
-                  </p>
-                ) : expandedProgressItems[item.id] ? (
-                  <>
-                    <div className="segmented-progress-panel__controls">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={progressDrafts[item.id] ?? item.progressPercent}
-                        onChange={(event) => {
-                          setProgressDraft(item.id, Number(event.target.value))
-                        }}
-                      />
-                      <input
-                        className="segmented-progress-panel__number"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={progressDrafts[item.id] ?? item.progressPercent}
-                        onChange={(event) => {
-                          setProgressDraft(item.id, Number(event.target.value))
-                        }}
-                      />
-                    </div>
-
-                    <div className="segmented-progress-panel__actions">
-                      <p className="form-message">
-                        只有点击“保存进度”才会写回存储。保存到 100% 后，本轮不支持回退。
-                      </p>
-                      <button
-                        className="primary-button"
-                        type="button"
-                        onClick={() => {
-                          void saveSegmentedProgress(item)
-                        }}
-                      >
-                        保存进度
-                      </button>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-
-            {item.requiresPreparation ? (
-              <div className="todo-item-card__notes">
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={() => {
-                    toggleNotes(item.id)
-                  }}
-                >
-                  {notesVisibility[item.id] ? '收起准备备注' : '查看准备备注'}
-                </button>
-                {notesVisibility[item.id] ? (
-                  <p>{item.preparationNotes || '当前没有准备备注。'}</p>
-                ) : null}
-              </div>
-            ) : null}
-          </article>
-        ))}
+                  {notesVisibility[item.id] ? (
+                    <p>{item.preparationNotes || '暂无备注'}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          )
+        })}
       </div>
     )
   }
@@ -442,10 +463,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   if (viewState.isLoading) {
     return (
       <div className="mode-panel">
-        <div className="mode-panel__intro">
-          <p className="eyebrow">Todo Mode</p>
-          <h2>正在读取实例层事项</h2>
-          <p>Todo 模式当前只从 DayPlanItem 读取数据，不回头从 TaskTemplate 推导列表。</p>
+        <div className="mode-panel__summary">
+          <div>
+            <p className="eyebrow">Todo</p>
+            <h2>加载中</h2>
+          </div>
         </div>
       </div>
     )
@@ -454,9 +476,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   if (viewState.errorMessage) {
     return (
       <div className="mode-panel">
-        <div className="mode-panel__intro">
-          <p className="eyebrow">Todo Mode</p>
-          <h2>列表读取失败</h2>
+        <div className="empty-state-card empty-state-card--danger">
           <p>{viewState.errorMessage}</p>
         </div>
       </div>
@@ -465,22 +485,23 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
   return (
     <div className="mode-panel">
-      <div className="mode-panel__intro">
-        <p className="eyebrow">Todo Mode</p>
-        <h2>实例层待办已接入</h2>
-        <p>
-          当前 Todo 模式只基于 DayPlanItem 展示。已完整承接自动事项与已有临时事项，并对
-          decision_selected 保持结构兼容。
-        </p>
+      <div className="mode-panel__summary">
+        <div>
+          <p className="eyebrow">Todo</p>
+          <h2>今天的事项</h2>
+        </div>
+        <div className="tag-row">
+          <span className="status-chip">{dayItems.length} 个白天事项</span>
+          <span className="status-chip">{nightItems.length} 个晚上事项</span>
+        </div>
       </div>
 
       <div className="temporary-composer">
         <div className="temporary-composer__header">
           <div>
             <p className="eyebrow">临时事项</p>
-            <h4>快速新增一行事项</h4>
+            <h4>快速添加</h4>
           </div>
-          <p>仅写入 `manual_temporary DayPlanItem`，不会进入决策库，也不会触发推荐或自动生成。</p>
         </div>
 
         <div className="temporary-composer__controls">
@@ -497,7 +518,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 void createTemporaryItem()
               }
             }}
-            placeholder="输入一条临时事项，例如：顺路取快递"
+            placeholder="输入一条临时事项"
           />
 
           <select
@@ -528,7 +549,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         <section className="todo-board__section todo-board__section--day">
           <div className="todo-board__header">
             <p className="eyebrow">Day</p>
-            <h4>白天事项</h4>
+            <h4>白天</h4>
           </div>
           {renderItems(dayItems, 'day')}
         </section>
@@ -536,7 +557,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         <section className="todo-board__section todo-board__section--night">
           <div className="todo-board__header">
             <p className="eyebrow">Night</p>
-            <h4>晚上事项</h4>
+            <h4>晚上</h4>
           </div>
           {renderItems(nightItems, 'night')}
         </section>

@@ -180,7 +180,7 @@ export function TemplateManagerPanel() {
     return (
       <div className="form-status-card">
         <p className="eyebrow">模板管理</p>
-        <p>正在加载现有决策库条目。</p>
+        <p>正在加载模板...</p>
       </div>
     )
   }
@@ -190,9 +190,9 @@ export function TemplateManagerPanel() {
       <div className="template-manager__intro">
         <div>
           <p className="eyebrow">模板管理</p>
-          <h4>查看、编辑与停用现有条目</h4>
+          <h4>模板列表</h4>
         </div>
-        <p>当前列表只展示未归档模板。编辑只影响未来自动生成与未来推荐，不回写已有实例。</p>
+        <p>{templates.length} 个模板</p>
       </div>
 
       {errorMessage ? (
@@ -206,10 +206,8 @@ export function TemplateManagerPanel() {
       <div className="template-manager__layout">
         <div className="template-manager__list">
           {templates.length === 0 ? (
-            <div className="todo-empty-card">
-              <p className="eyebrow">Templates</p>
-              <h5>当前没有可管理的未归档模板</h5>
-              <p>你可以先在新增表单中创建条目，之后再回来编辑或停用。</p>
+            <div className="empty-state-card">
+              <p>还没有模板</p>
             </div>
           ) : (
             templates.map((template) => (
@@ -217,10 +215,7 @@ export function TemplateManagerPanel() {
                 <div className="template-list-item__header">
                   <div>
                     <h5>{template.title}</h5>
-                    <p>
-                      日期锚点 {template.date} · {template.recurrence} ·
-                      {template.isSegmented ? ' 分次' : ' 非分次'}
-                    </p>
+                    <p>{template.date}</p>
                   </div>
                   <div className="template-list-item__actions">
                     <button
@@ -245,9 +240,18 @@ export function TemplateManagerPanel() {
                 </div>
 
                 <div className="template-list-item__meta">
-                  <span>{template.isNecessary ? '必要事项' : '普通事项'}</span>
-                  <span>兴趣程度 {template.interestLevel}</span>
-                  <span>{template.sceneTagIds.length > 0 ? '含时间场景' : '时间场景可为空'}</span>
+                  <span className={template.isNecessary ? 'status-chip status-chip--necessary' : 'status-chip'}>
+                    {template.isNecessary ? '必要' : '普通'}
+                  </span>
+                  <span className="status-chip">兴趣 {template.interestLevel}</span>
+                  <span className="status-chip">{template.recurrence}</span>
+                  {template.isSegmented ? <span className="status-chip">分次</span> : null}
+                  {template.requiresPreparation ? <span className="status-chip">准备</span> : null}
+                  {template.sceneTagIds.length > 0 ? (
+                    <span className="status-chip">{template.sceneTagIds.length} 个场景</span>
+                  ) : (
+                    <span className="status-chip">无场景</span>
+                  )}
                 </div>
               </article>
             ))
@@ -259,11 +263,11 @@ export function TemplateManagerPanel() {
             <form className="template-form" onSubmit={saveTemplate}>
               <div className="template-manager__editor-header">
                 <div>
-                  <p className="eyebrow">编辑模板</p>
+                  <p className="eyebrow">编辑</p>
                   <h4>{editingTemplate.title}</h4>
                 </div>
                 <button className="ghost-button" type="button" onClick={cancelEditing}>
-                  关闭编辑
+                  关闭
                 </button>
               </div>
 
@@ -282,10 +286,8 @@ export function TemplateManagerPanel() {
               </div>
             </form>
           ) : (
-            <div className="todo-empty-card">
-              <p className="eyebrow">编辑区</p>
-              <h5>从左侧选择一个模板开始编辑</h5>
-              <p>本轮停用采用归档语义，不会改动已有 DayPlanItem 或 RecurringTaskInstance。</p>
+            <div className="empty-state-card">
+              <p>选择一个模板开始编辑</p>
             </div>
           )}
         </div>

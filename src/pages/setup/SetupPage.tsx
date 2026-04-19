@@ -238,7 +238,7 @@ export function SetupPage() {
     <section className="page-grid setup-grid">
       <SurfaceCard
         title="首次初始化"
-        description="先建立你的基础使用框架。当前只处理时间场景、活动类型与完成初始化，不接入条目录入或当天计划。"
+        description="先准备时间场景和活动类型。"
       >
         <div className="setup-summary">
           <div className="setup-summary__item">
@@ -254,7 +254,7 @@ export function SetupPage() {
         {validationMessage ? (
           <p className="form-message form-message--warning">{validationMessage}</p>
         ) : (
-          <p className="form-message">校验通过后，点击“完成初始化”才会写入已初始化状态。</p>
+          <p className="form-message">准备好后即可进入主页。</p>
         )}
 
         {errorMessage ? (
@@ -277,7 +277,7 @@ export function SetupPage() {
 
       <SurfaceCard
         title="时间场景"
-        description="系统先给出默认值，你可以在初始化阶段调整，但至少保留一个。"
+        description="至少保留一个。"
       >
         <div className="editor-stack">
           {draft.sceneTags.map((item, index) => (
@@ -315,7 +315,7 @@ export function SetupPage() {
 
       <SurfaceCard
         title="活动类型"
-        description="初始化阶段只管理基础活动分类，后续条目录入与使用规则留给后续任务实现。"
+        description="至少保留一个。"
       >
         <div className="editor-stack">
           {draft.activityTypes.map((item, index) => (
