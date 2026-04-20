@@ -94,6 +94,7 @@ button:hover:not(:disabled) {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .eyebrow {
@@ -228,6 +229,12 @@ button:hover:not(:disabled) {
   color: var(--text);
   outline: none;
   resize: vertical;
+}
+
+.editor-field input[type='date'] {
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1.2;
 }
 
 .editor-field input:focus,
@@ -390,7 +397,9 @@ button:hover:not(:disabled) {
 .date-nav {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
 }
 
 .date-nav h2 {
@@ -398,6 +407,7 @@ button:hover:not(:disabled) {
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: -0.02em;
+  text-align: center;
 }
 
 .icon-button {
@@ -636,6 +646,7 @@ button:hover:not(:disabled) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 88px 56px;
   gap: 8px;
+  align-items: center;
 }
 
 .todo-item-card__main,
@@ -890,11 +901,20 @@ button:hover:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
+  width: 100%;
 }
 
 .composer-entry__title {
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.composer-entry__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
 }
 
 @media (max-width: 860px) {
@@ -953,10 +973,28 @@ button:hover:not(:disabled) {
     width: 100%;
   }
 
-  .home-appbar__main,
-  .home-appbar__controls,
-  .composer-entry {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+  .home-appbar__controls {
+    justify-content: center;
+  }
+
+  .date-nav {
+    justify-content: center;
+  }
+
+  .composer-entry--toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+
+  .composer-entry__actions {
+    margin-left: auto;
+  }
+
+  .temporary-composer__controls {
+    grid-template-columns: minmax(0, 1fr) 82px 52px;
+    gap: 6px;
   }
 }

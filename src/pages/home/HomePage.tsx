@@ -651,27 +651,29 @@ export function HomePage() {
         <div className="surface-card surface-card--compact">
           <div className="composer-entry composer-entry--toolbar">
             <span className="composer-entry__title">决策库</span>
-            <button
-              className="icon-button icon-button--toolbar"
-              type="button"
-              aria-label={showComposer ? '收起添加模板' : '展开添加模板'}
-              onClick={() => {
-                setShowComposer((current) => !current)
-              }}
-            >
-              {showComposer ? '−' : '+'}
-            </button>
+            <div className="composer-entry__actions">
+              <button
+                className="icon-button icon-button--toolbar"
+                type="button"
+                aria-label={showComposer ? '收起添加模板' : '展开添加模板'}
+                onClick={() => {
+                  setShowComposer((current) => !current)
+                }}
+              >
+                {showComposer ? '−' : '+'}
+              </button>
 
-            <button
-              className="icon-button icon-button--toolbar"
-              type="button"
-              aria-label={showTemplateManager ? '收起模板管理' : '展开模板管理'}
-              onClick={() => {
-                setShowTemplateManager((current) => !current)
-              }}
-            >
-              ≡
-            </button>
+              <button
+                className="icon-button icon-button--toolbar"
+                type="button"
+                aria-label={showTemplateManager ? '收起模板管理' : '展开模板管理'}
+                onClick={() => {
+                  setShowTemplateManager((current) => !current)
+                }}
+              >
+                ≡
+              </button>
+            </div>
           </div>
 
           {showComposer ? (
