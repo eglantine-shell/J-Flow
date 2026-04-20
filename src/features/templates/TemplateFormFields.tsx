@@ -46,32 +46,26 @@ export const interestOptions: Array<{
 export const recurrenceOptions: Array<{
   label: string
   value: RecurrenceRule
-  help: string
 }> = [
   {
     label: '不重复',
     value: 'none',
-    help: '只保存为单条模板，不按日历持续命中。',
   },
   {
     label: '每天',
     value: 'daily',
-    help: '日历型重复：从锚点日期开始每天命中。',
   },
   {
     label: '每周',
     value: 'weekly',
-    help: '日历型重复：命中锚点对应的星期，不是“每隔一周”。',
   },
   {
     label: '每月',
     value: 'monthly',
-    help: '日历型重复：命中锚点对应的日号，不是“每隔一个月”。',
   },
   {
     label: '每年',
     value: 'yearly',
-    help: '日历型重复：命中锚点对应的月和日，不是“每隔一年”。',
   },
 ]
 
@@ -123,10 +117,6 @@ export function TaskTemplateFormFields({
   const [activityTypeDraft, setActivityTypeDraft] = useState('')
   const [activityTypeError, setActivityTypeError] = useState<string | null>(null)
   const [isCreatingActivityType, setIsCreatingActivityType] = useState(false)
-
-  const activeRecurrenceOption =
-    recurrenceOptions.find((option) => option.value === formState.recurrence) ??
-    recurrenceOptions[0]
 
   const handleSceneTagToggle = (sceneTagId: string) => {
     setFormState((current) => ({
@@ -196,11 +186,6 @@ export function TaskTemplateFormFields({
   return (
     <>
       <div className="template-form__section">
-        <div className="template-form__section-header">
-          <h3>核心字段</h3>
-          <p>先填日期、类型和内容。</p>
-        </div>
-
         <div className="form-grid">
           <label className="editor-field">
             <span>日期</span>
@@ -313,16 +298,18 @@ export function TaskTemplateFormFields({
       </div>
 
       <div className="template-form__section">
-        <div className="template-form__section-header">
-          <h3>常用设置</h3>
-          <p>用标签补充识别信息。</p>
-        </div>
-
         <div className="editor-field">
           <span>时间场景</span>
-          <div className="selection-grid">
+          <div className="selection-grid selection-grid--compact">
             {loadState.sceneTags.map((sceneTag) => (
-              <label className="check-tile" key={sceneTag.id}>
+              <label
+                className={
+                  formState.sceneTagIds.includes(sceneTag.id)
+                    ? 'check-tile check-tile--selected'
+                    : 'check-tile'
+                }
+                key={sceneTag.id}
+              >
                 <input
                   type="checkbox"
                   checked={formState.sceneTagIds.includes(sceneTag.id)}
@@ -393,7 +380,7 @@ export function TaskTemplateFormFields({
           </div>
         ) : null}
 
-        <div className="editor-field">
+        <div className="editor-field editor-field--inline">
           <span>兴趣程度</span>
           <div className="segmented-control">
             {interestOptions.map((option) => (
@@ -431,19 +418,13 @@ export function TaskTemplateFormFields({
           />
           <div>
             <strong>必要事项</strong>
-            <p>自动进入当天计划。</p>
           </div>
         </label>
       </div>
 
       <div className="template-form__section">
-        <div className="template-form__section-header">
-          <h3>更多设置</h3>
-          <p>按需展开。</p>
-        </div>
-
         <button
-          className="ghost-button"
+          className="ghost-button ghost-button--compact"
           type="button"
           onClick={() => {
             setShowAdvancedFields((current) => !current)
@@ -470,7 +451,6 @@ export function TaskTemplateFormFields({
               />
               <div>
                 <strong>需要准备</strong>
-                <p>在事项卡片里显示提醒。</p>
               </div>
             </label>
 
@@ -510,10 +490,6 @@ export function TaskTemplateFormFields({
               </select>
             </label>
 
-            <p className="form-message">
-              {activeRecurrenceOption.help}
-            </p>
-
             <label className="toggle-row">
               <input
                 type="checkbox"
@@ -527,7 +503,6 @@ export function TaskTemplateFormFields({
               />
               <div>
                 <strong>分次事项</strong>
-                <p>用百分比推进。</p>
               </div>
             </label>
           </div>

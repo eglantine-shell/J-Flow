@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { SurfaceCard } from '@/components/ui/SurfaceCard'
 import {
   createDecisionSelectedDayPlanItem,
   getDecisionRecommendations,
@@ -40,13 +39,6 @@ const formatHeaderLabel = (date: Date) =>
     weekday: 'long',
   }).format(date)
 
-const formatMetaLabel = (date: Date) =>
-  new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date)
-
 const addDays = (date: Date, days: number) => {
   const nextDate = new Date(date)
   nextDate.setDate(nextDate.getDate() + days)
@@ -56,19 +48,16 @@ const addDays = (date: Date, days: number) => {
 
 const decisionContexts: Array<{
   id: TimeContext
-  label: string
   actionLabel: string
   emptyLabel: string
 }> = [
   {
     id: 'day',
-    label: '白天',
     actionLabel: '添加白天安排',
     emptyLabel: '白天还没有安排',
   },
   {
     id: 'night',
-    label: '晚上',
     actionLabel: '添加晚上安排',
     emptyLabel: '晚上还没有安排',
   },
@@ -80,17 +69,8 @@ const sourceChipLabel: Record<DayPlanItem['source'], string> = {
   manual_temporary: '临时',
 }
 
-const timeBlockLabel: Record<TimeBlock, string> = {
-  day: '日间',
-  night: '夜间',
-}
-
-function renderItemTags(item: DayPlanItem, includeTimeBlock = false) {
+function renderItemTags(item: DayPlanItem) {
   const tags = [sourceChipLabel[item.source]]
-
-  if (includeTimeBlock) {
-    tags.push(timeBlockLabel[item.timeBlock])
-  }
 
   if (item.isNecessary) {
     tags.push('必要')
@@ -143,10 +123,6 @@ function ItemCard({
           ))}
         </div>
       </div>
-
-      {item.requiresPreparation && item.preparationNotes ? (
-        <p className="item-card__note">{item.preparationNotes}</p>
-      ) : null}
     </article>
   )
 }
@@ -504,12 +480,8 @@ function DecisionModePanel({ selectedDate }: { selectedDate: Date }) {
 
   return (
     <div className="mode-panel">
-      <div className="mode-panel__summary">
-        <div>
-          <p className="eyebrow">决策模式</p>
-          <h2>{formatHeaderLabel(selectedDate)}</h2>
-        </div>
-        <span className="status-chip">{viewState.isLoading ? '同步中' : '已更新'}</span>
+      <div className="mode-panel__summary mode-panel__summary--compact">
+        <p>决策中：{formatHeaderLabel(selectedDate)}</p>
       </div>
 
       {viewState.errorMessage ? (
@@ -533,14 +505,11 @@ function DecisionModePanel({ selectedDate }: { selectedDate: Date }) {
                   ? 'time-context time-context--day'
                   : 'time-context time-context--night'
               }
+              aria-label={context.id === 'day' ? '白天安排' : '晚上安排'}
             >
               <div className="time-context__header">
-                <div>
-                  <p className="eyebrow">{context.id === 'day' ? 'Day' : 'Night'}</p>
-                  <h4>{context.label}</h4>
-                </div>
                 <button
-                  className="ghost-button"
+                  className="ghost-button ghost-button--compact"
                   type="button"
                   onClick={() => {
                     void openRecommendationPanel(context.id)
@@ -598,61 +567,38 @@ export function HomePage() {
     () => formatHeaderLabel(selectedDate),
     [selectedDate],
   )
-  const selectedMetaLabel = useMemo(
-    () => formatMetaLabel(selectedDate),
-    [selectedDate],
-  )
 
   return (
     <div className="home-layout">
       <section className="home-appbar">
-        <div className="home-appbar__main">
-          <div className="home-appbar__title">
-            <p className="eyebrow">Today</p>
-            <h2>{selectedHeaderLabel}</h2>
-          </div>
-          <div className="tag-row">
-            <span className="status-chip status-chip--mode">
-              {mode === 'decision' ? '决策' : 'Todo'}
-            </span>
-            <span className="status-chip">{selectedMetaLabel}</span>
-          </div>
-        </div>
+        <p className="eyebrow">Today</p>
 
         <div className="home-appbar__controls">
-          <div className="date-switcher" aria-label="日期切换">
+          <div className="date-nav" aria-label="日期切换">
             <button
-              className="ghost-button"
+              className="icon-button"
               type="button"
+              aria-label="前一天"
               onClick={() => {
                 setSelectedDate((current) => addDays(current, -1))
               }}
             >
-              前一天
+              ‹
             </button>
+            <h2>{selectedHeaderLabel}</h2>
             <button
-              className="primary-button"
+              className="icon-button"
               type="button"
-              onClick={() => {
-                setSelectedDate(new Date())
-              }}
-            >
-              今天
-            </button>
-            <button
-              className="ghost-button"
-              type="button"
+              aria-label="后一天"
               onClick={() => {
                 setSelectedDate((current) => addDays(current, 1))
               }}
             >
-              后一天
+              ›
             </button>
-          </div>
-
-          <div className="weather-chip" aria-label="天气占位">
-            <span className="weather-chip__icon">o</span>
-            <span>天气</span>
+            <span className="weather-chip weather-chip--icon" aria-label="天气占位">
+              <span className="weather-chip__icon">o</span>
+            </span>
           </div>
         </div>
       </section>
@@ -702,26 +648,29 @@ export function HomePage() {
       </section>
 
       <section className="home-layout__composer">
-        <SurfaceCard title="决策库" description="需要时再展开。">
-          <div className="composer-entry">
+        <div className="surface-card surface-card--compact">
+          <div className="composer-entry composer-entry--toolbar">
+            <span className="composer-entry__title">决策库</span>
             <button
-              className="primary-button composer-entry__button"
+              className="icon-button icon-button--toolbar"
               type="button"
+              aria-label={showComposer ? '收起添加模板' : '展开添加模板'}
               onClick={() => {
                 setShowComposer((current) => !current)
               }}
             >
-              {showComposer ? '收起添加入口' : '添加模板'}
+              {showComposer ? '−' : '+'}
             </button>
 
             <button
-              className="ghost-button"
+              className="icon-button icon-button--toolbar"
               type="button"
+              aria-label={showTemplateManager ? '收起模板管理' : '展开模板管理'}
               onClick={() => {
                 setShowTemplateManager((current) => !current)
               }}
             >
-              {showTemplateManager ? '收起模板管理' : '模板管理'}
+              ≡
             </button>
           </div>
 
@@ -736,7 +685,7 @@ export function HomePage() {
               <TemplateManagerPanel />
             </div>
           ) : null}
-        </SurfaceCard>
+        </div>
       </section>
     </div>
   )

@@ -348,7 +348,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 <div className="todo-item-card__actions">
                   {item.source === 'manual_temporary' ? (
                     <button
-                      className="ghost-button"
+                      className="ghost-button ghost-button--compact"
                       type="button"
                       onClick={() => {
                         void deleteTemporaryItem(item)
@@ -375,14 +375,21 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     </button>
                   ) : (
                     <button
-                      className="primary-button"
+                      className={
+                        item.status === 'completed'
+                          ? 'todo-check todo-check--checked'
+                          : 'todo-check'
+                      }
                       type="button"
+                      aria-label={item.status === 'completed' ? '已完成' : '标记完成'}
                       disabled={item.status === 'completed'}
                       onClick={() => {
                         void completeItem(item)
                       }}
                     >
-                      {item.status === 'completed' ? '已完成' : '完成'}
+                      <span className="todo-check__mark" aria-hidden="true">
+                        {item.status === 'completed' ? '✓' : ''}
+                      </span>
                     </button>
                   )}
                 </div>
@@ -485,25 +492,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
   return (
     <div className="mode-panel">
-      <div className="mode-panel__summary">
-        <div>
-          <p className="eyebrow">Todo</p>
-          <h2>今天</h2>
-        </div>
-        <div className="tag-row">
-          <span className="status-chip">{dayItems.length} 个白天</span>
-          <span className="status-chip">{nightItems.length} 个晚上</span>
-        </div>
+      <div className="mode-panel__summary mode-panel__summary--compact">
+        <p>{dayItems.length}个白天 · {nightItems.length}个晚上</p>
       </div>
 
       <div className="temporary-composer temporary-composer--compact">
-        <div className="temporary-composer__header">
-          <div>
-            <p className="eyebrow">Quick Add</p>
-            <h4>临时事项</h4>
-          </div>
-        </div>
-
         <div className="temporary-composer__controls">
           <input
             className="temporary-composer__input"
@@ -546,19 +539,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       </div>
 
       <div className="todo-board">
-        <section className="todo-board__section todo-board__section--day">
-          <div className="todo-board__header">
-            <p className="eyebrow">Day</p>
-            <h4>白天</h4>
-          </div>
+        <section className="todo-board__section todo-board__section--day" aria-label="白天事项">
           {renderItems(dayItems, 'day')}
         </section>
 
-        <section className="todo-board__section todo-board__section--night">
-          <div className="todo-board__header">
-            <p className="eyebrow">Night</p>
-            <h4>晚上</h4>
-          </div>
+        <section className="todo-board__section todo-board__section--night" aria-label="晚上事项">
           {renderItems(nightItems, 'night')}
         </section>
       </div>

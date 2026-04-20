@@ -78,33 +78,22 @@ button:hover:not(:disabled) {
 .app-shell__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
   max-width: 720px;
-  margin: 0 auto 14px;
-  padding: 14px 16px;
+  margin: 0 auto 10px;
+  padding: 10px 16px;
   border: 1px solid var(--border);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
 }
 
-.app-shell__header h1 {
-  margin: 4px 0 0;
-  font-size: clamp(1.1rem, 4vw, 1.45rem);
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  font-feature-settings: 'ss01', 'ss03', 'ss10', 'ss11', 'ss12';
-}
-
-.app-shell__meta {
+.app-shell__brand {
   margin: 0;
-  max-width: 140px;
   color: var(--text-muted);
-  text-align: right;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .eyebrow {
@@ -141,6 +130,10 @@ button:hover:not(:disabled) {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
+}
+
+.surface-card--compact {
+  padding: 12px 14px;
 }
 
 .surface-card__header {
@@ -206,6 +199,13 @@ button:hover:not(:disabled) {
   gap: 8px;
 }
 
+.editor-field--inline {
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .editor-field span {
   color: var(--text-muted);
   font-size: 0.88rem;
@@ -245,7 +245,6 @@ button:hover:not(:disabled) {
 .composer-toolbar,
 .tag-row,
 .todo-item-card__actions,
-.date-switcher,
 .mode-switcher {
   display: flex;
   flex-wrap: wrap;
@@ -254,8 +253,8 @@ button:hover:not(:disabled) {
 
 .primary-button,
 .ghost-button {
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 38px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
   cursor: pointer;
@@ -280,9 +279,9 @@ button:hover:not(:disabled) {
 }
 
 .ghost-button--compact {
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 0.88rem;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 0.8rem;
 }
 
 .primary-button:disabled,
@@ -339,42 +338,22 @@ button:hover:not(:disabled) {
 .home-appbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  gap: 6px;
   align-items: center;
-  padding: 16px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: 18px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(246, 241, 232, 0.96)),
     var(--surface);
   box-shadow: var(--shadow);
 }
 
-.home-appbar__main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.home-appbar__title {
-  display: grid;
-  gap: 4px;
-}
-
-.home-appbar__title h2 {
-  margin: 0;
-  font-size: clamp(1.45rem, 6vw, 2rem);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  font-feature-settings: 'ss01', 'ss03', 'ss10', 'ss11', 'ss12';
-}
-
 .home-appbar__controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 8px;
 }
 
 .weather-chip {
@@ -389,6 +368,13 @@ button:hover:not(:disabled) {
   color: var(--text-muted);
 }
 
+.weather-chip--icon {
+  min-height: 34px;
+  width: 34px;
+  justify-content: center;
+  padding: 0;
+}
+
 .weather-chip__icon {
   display: inline-flex;
   align-items: center;
@@ -401,13 +387,46 @@ button:hover:not(:disabled) {
   font-size: 0.75rem;
 }
 
+.date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-nav h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-button--toolbar {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
 .mode-switcher-wrap {
   display: flex;
 }
 
 .mode-switcher {
   width: 100%;
-  padding: 4px;
+  padding: 3px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.84);
@@ -416,8 +435,8 @@ button:hover:not(:disabled) {
 
 .mode-switcher__button {
   flex: 1 1 0;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -459,6 +478,16 @@ button:hover:not(:disabled) {
   letter-spacing: -0.03em;
 }
 
+.mode-panel__summary--compact {
+  padding: 10px 12px;
+  min-height: auto;
+}
+
+.mode-panel__summary--compact p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .plan-column__timeline,
 .todo-board {
   display: grid;
@@ -471,8 +500,8 @@ button:hover:not(:disabled) {
 .template-manager,
 .recommendation-card {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 22px;
   box-shadow: var(--shadow);
@@ -497,7 +526,7 @@ button:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .time-context__header h4,
@@ -516,7 +545,7 @@ button:hover:not(:disabled) {
 .template-manager__list,
 .template-manager__editor {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .item-card,
@@ -524,8 +553,8 @@ button:hover:not(:disabled) {
 .candidate-item,
 .template-list-item {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 10px 12px;
   border: 1px solid var(--border-soft);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.75);
@@ -548,7 +577,7 @@ button:hover:not(:disabled) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .item-card__header h5,
@@ -556,7 +585,8 @@ button:hover:not(:disabled) {
 .candidate-item h6,
 .template-list-item__header h5 {
   margin: 0;
-  font-size: 0.96rem;
+  font-size: 0.92rem;
+  line-height: 1.25;
 }
 
 .item-card__note,
@@ -572,19 +602,13 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  padding: 0 8px;
+  padding: 0 7px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
   color: var(--text-muted);
   font-size: 0.72rem;
   white-space: nowrap;
-}
-
-.status-chip--mode {
-  background: #000000;
-  border-color: #000000;
-  color: #ffffff;
 }
 
 .status-chip--necessary {
@@ -604,14 +628,14 @@ button:hover:not(:disabled) {
 }
 
 .temporary-composer--compact {
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .temporary-composer__controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 88px 56px;
+  gap: 8px;
 }
 
 .todo-item-card__main,
@@ -623,7 +647,7 @@ button:hover:not(:disabled) {
 
 .segmented-progress-panel {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px dashed var(--border);
   border-radius: 18px;
@@ -649,6 +673,37 @@ button:hover:not(:disabled) {
   gap: 12px;
 }
 
+.todo-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--success);
+  cursor: pointer;
+}
+
+.todo-check:hover:not(:disabled) {
+  border-color: rgba(7, 138, 82, 0.45);
+  background: rgba(132, 231, 165, 0.14);
+  box-shadow: none;
+}
+
+.todo-check--checked {
+  border-color: rgba(7, 138, 82, 0.3);
+  background: rgba(132, 231, 165, 0.24);
+}
+
+.todo-check__mark {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .recommendation-card {
   background: rgba(255, 255, 255, 0.9);
 }
@@ -671,10 +726,10 @@ button:hover:not(:disabled) {
 
 .template-form__section {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--border-soft);
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--surface-soft);
 }
 
@@ -695,21 +750,28 @@ button:hover:not(:disabled) {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .selection-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+}
+
+.selection-grid--compact .check-tile {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.75rem;
 }
 
 .check-tile {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 12px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
@@ -717,7 +779,15 @@ button:hover:not(:disabled) {
 }
 
 .check-tile input {
-  margin: 0;
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check-tile--selected {
+  border-color: rgba(67, 8, 159, 0.25);
+  background: rgba(193, 176, 255, 0.28);
+  color: var(--purple);
 }
 
 .inline-creator {
@@ -728,8 +798,8 @@ button:hover:not(:disabled) {
 .inline-creator__panel,
 .toggle-row {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px 12px;
   border: 1px dashed var(--border);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.55);
@@ -738,7 +808,7 @@ button:hover:not(:disabled) {
 .inline-creator__controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 10px;
+  gap: 8px;
 }
 
 .segmented-control {
@@ -753,7 +823,7 @@ button:hover:not(:disabled) {
 
 .segmented-control__button {
   min-width: 44px;
-  min-height: 36px;
+  min-height: 30px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -803,21 +873,28 @@ button:hover:not(:disabled) {
 .composer-entry {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.composer-entry__button {
-  flex: 1 1 180px;
+  gap: 8px;
 }
 
 .composer-panel {
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px dashed var(--border);
 }
 
 .composer-panel--secondary {
-  margin-top: 12px;
+  margin-top: 8px;
+}
+
+.composer-entry--toolbar {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.composer-entry__title {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 @media (max-width: 860px) {
