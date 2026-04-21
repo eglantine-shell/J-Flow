@@ -10,6 +10,7 @@ import { mockSeedAppData } from '@/mocks'
 import type {
   ActivityType,
   AppData,
+  AppSettings,
   DayPlanItem,
   RecurringTaskInstance,
   SceneTag,
@@ -39,6 +40,7 @@ type TaskTemplateUpdateInput = Partial<Omit<TaskTemplate, 'id'>> & Pick<TaskTemp
 type RecurringTaskInstanceUpdateInput = Partial<Omit<RecurringTaskInstance, 'id'>> &
   Pick<RecurringTaskInstance, 'id'>
 type DayPlanItemUpdateInput = Partial<Omit<DayPlanItem, 'id'>> & Pick<DayPlanItem, 'id'>
+type AppSettingsUpdateInput = Partial<Omit<AppSettings, 'createdAt' | 'updatedAt'>>
 
 const STORAGE_META_KEY = 'app_data_schema_version'
 
@@ -258,6 +260,29 @@ export async function resetAppData(seed: AppData = mockSeedAppData) {
   return persistAppData(seed)
 }
 
+async function updateSettings(input: AppSettingsUpdateInput) {
+  let settings: AppSettings | null = null
+
+  await mutateAppData((current) => {
+    settings = {
+      ...current.settings,
+      ...input,
+      updatedAt: nowIso(),
+    }
+
+    return {
+      ...current,
+      settings: settings as AppSettings,
+    }
+  })
+
+  if (!settings) {
+    throw new Error('Settings update failed')
+  }
+
+  return settings
+}
+
 async function listSceneTags() {
   return (await getAppData()).sceneTags
 }
@@ -307,6 +332,35 @@ async function deleteSceneTag(id: string) {
     return {
       ...current,
       sceneTags: result.collection,
+    }
+  })
+
+  return removed
+}
+
+async function deleteSceneTagAndDetachTemplates(id: string) {
+  let removed = false
+
+  await mutateAppData((current) => {
+    const result = removeById(current.sceneTags, id)
+    removed = result.removed
+
+    if (!removed) {
+      return current
+    }
+
+    return {
+      ...current,
+      sceneTags: result.collection,
+      taskTemplates: current.taskTemplates.map((template) =>
+        template.sceneTagIds.includes(id)
+          ? {
+              ...template,
+              sceneTagIds: template.sceneTagIds.filter((sceneTagId) => sceneTagId !== id),
+              updatedAt: nowIso(),
+            }
+          : template,
+      ),
     }
   })
 
@@ -366,6 +420,24 @@ async function deleteActivityType(id: string) {
   })
 
   return removed
+}
+
+async function deleteActivityTypeIfUnused(id: string) {
+  const current = await getAppData()
+
+  if (current.taskTemplates.some((template) => template.activityTypeId === id)) {
+    return {
+      removed: false,
+      reason: 'in_use' as const,
+    }
+  }
+
+  const removed = await deleteActivityType(id)
+
+  return {
+    removed,
+    reason: removed ? null : ('not_found' as const),
+  }
 }
 
 async function listTaskTemplates() {
@@ -550,12 +622,16 @@ export const appDataRepository = {
   replace: replaceAppData,
   update: updateAppData,
   reset: resetAppData,
+  settings: {
+    update: updateSettings,
+  },
   sceneTags: {
     list: listSceneTags,
     getById: getSceneTagById,
     create: createSceneTag,
     update: updateSceneTag,
     delete: deleteSceneTag,
+    deleteAndDetachTemplates: deleteSceneTagAndDetachTemplates,
   },
   activityTypes: {
     list: listActivityTypes,
@@ -563,6 +639,7 @@ export const appDataRepository = {
     create: createActivityType,
     update: updateActivityType,
     delete: deleteActivityType,
+    deleteIfUnused: deleteActivityTypeIfUnused,
   },
   taskTemplates: {
     list: listTaskTemplates,
@@ -598,4 +675,5 @@ export type {
   SceneTagUpdateInput,
   TaskTemplateCreateInput,
   TaskTemplateUpdateInput,
+  AppSettingsUpdateInput,
 }

@@ -1,2 +1,1 @@
-export {}
-
+export * from '@/features/settings/SettingsPanel'

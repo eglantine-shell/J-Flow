@@ -78,7 +78,7 @@ button:hover:not(:disabled) {
 .app-shell__header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   max-width: 720px;
   margin: 0 auto 10px;
   padding: 10px 16px;
@@ -95,6 +95,12 @@ button:hover:not(:disabled) {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: center;
+}
+
+.app-shell__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .eyebrow {
@@ -470,6 +476,11 @@ button:hover:not(:disabled) {
   width: 30px;
   height: 30px;
   border-radius: 10px;
+}
+
+.icon-button--active {
+  background: var(--text);
+  color: #ffffff;
 }
 
 .mode-switcher-wrap {
@@ -1064,6 +1075,23 @@ button:hover:not(:disabled) {
   justify-content: flex-end;
   gap: 8px;
   margin-left: auto;
+}
+
+.settings-toolbar,
+.settings-choice-row,
+.settings-danger-zone {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-choice-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ghost-button--danger {
+  border-color: rgba(166, 62, 73, 0.35);
+  background: rgba(252, 121, 129, 0.12);
+  color: var(--danger);
 }
 
 @media (max-width: 860px) {

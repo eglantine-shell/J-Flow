@@ -1,5 +1,86 @@
 # Dev Log
 
+## 2026-04-21（设置页 + 测试专用重置）
+
+### 本轮目标
+- 补齐 V1 第一版设置入口与设置页
+- 实现时间场景管理、活动类型管理、`tieBreakerOrder` 设置
+- 提供“重置应用（测试用）”入口，清空当前本地数据并重新进入初始化流程
+- 不扩写导出 / 搜索 / 归档恢复 / 推荐重构等其他能力
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键判断
+- 这轮更适合做成一个独立但很轻的 `/settings` 页面，而不是首页内展开面板：
+  - 用户明确希望设置入口出现在顶部 `J-Flow` 旁边
+  - `app-structure.md` 允许“设置页 / 设置弹窗”
+  - 新增一个受初始化守卫保护的页面即可满足要求，不会引入复杂路由体系
+- 现有推荐逻辑已经读取 `AppSettings.tieBreakerOrder`，因此本轮只需补设置 UI 与存储写入
+- 存储层已有 `resetAppData(mockSeedAppData)`，它正好等价于“回到第一次打开应用”的状态，因此测试重置优先复用现有能力
+
+### 本轮关键决策
+- 在 `AppShell` 的 `J-Flow` 旁边新增轻量设置图标入口，进入 `/settings`
+- 设置页按四块组织：
+  - 时间场景
+  - 活动类型
+  - 排序设置
+  - 测试工具
+- 时间场景删除逻辑下沉到存储层辅助接口：
+  - 删除 tag 本身
+  - 从所有模板的 `sceneTagIds` 中移除该 tag
+  - 不触碰模板本身与历史实例
+- 活动类型删除逻辑下沉到存储层辅助接口：
+  - 若任一 `TaskTemplate` 仍引用该类型，则直接阻止删除
+- `tieBreakerOrder` 通过 `settings.update` 写回 `AppSettings`
+- 测试重置直接调用 `appDataRepository.reset()` 回到 `mockSeedAppData`，随后导航回 `/setup`
+
+### 本轮修改
+- 更新 `src/db/storage.ts`
+  - 新增 `settings.update`
+  - 新增 `sceneTags.deleteAndDetachTemplates`
+  - 新增 `activityTypes.deleteIfUnused`
+- 新增 `src/features/settings/SettingsPanel.tsx`
+  - 实现设置页主体与四个模块
+- 更新 `src/features/settings/index.ts`
+  - 导出设置组件
+- 新增 `src/pages/settings/SettingsPage.tsx`
+  - 提供轻量页面包装
+- 更新 `src/app/router.tsx`
+  - 新增 `/settings` 路由，并沿用 `RequireInitialized`
+- 更新 `src/app/shell/AppShell.tsx`
+  - 在 `J-Flow` 旁边添加设置图标入口
+- 更新 `src/styles/globals.css`
+  - 补充设置入口、设置页、测试危险操作按钮等样式
+- 更新 `handoff.md`
+  - 同步本轮最近完成 task、下一步建议与当前边界
+
+### 本轮刻意未做
+- 未改 `product-rules.md`
+- 未做导出 / 导入
+- 未做搜索
+- 未做已归档模板恢复
+- 未改推荐逻辑本身
+- 未改 Todo / 决策模式
+- 未引入新依赖
+
+### 验证结果
+- `npm run build`：通过
+  - 仍有 Vite 的 chunk size warning，但不影响构建成功
+- `npm run lint`：通过
+
+### 当前风险与待确认问题
+- 当前设置页提供的是新增 / 删除与排序设置，没有提供“重命名已有时间场景 / 活动类型”；这不在本轮目标内
+- 活动类型“被使用时不可删除”当前按所有 `TaskTemplate` 判断，包含已归档模板；这更保守，也更符合“仍有模板在使用”的规则口径
+- 测试重置入口已经清空全部本地数据并回到未初始化状态，但它仍是测试工具，不代表最终正式产品入口形态
+
 ## 2026-04-21（决策 / Todo 双层结构拆除）
 
 ### 本轮目标
