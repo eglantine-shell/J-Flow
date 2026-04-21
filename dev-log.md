@@ -1,5 +1,73 @@
 # Dev Log
 
+## 2026-04-21（决策 / Todo 双层结构拆除）
+
+### 本轮目标
+- 将决策模式和 Todo 模式从“section-first + inner card”改为“list-first + item-first”
+- 只做层级重构，不新增功能，不改业务规则
+- 保留白天 / 晚上分组语义，但让分组退回轻量辅助层
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键判断
+- 当前页面“不像 todo list / plan list”的核心原因不是配色，而是：
+  - 决策模式由 `.time-context` 承担外层大卡片视觉，`item-card` 被压成内层小卡片
+  - Todo 模式由 `.todo-board__section` 承担外层大卡片视觉，`todo-item-card` 被压成内层小卡片
+- 这与主文档中的既有口径一致性不足：
+  - `app-structure.md` 已明确决策模式应为单列排程列表
+  - `product-rules.md` 已明确颜色属于排程条目本身，而不是时段容器
+- 因此本轮重点是“拆层级”，而不是简单调淡 section 背景
+
+### 本轮关键决策
+- 保留白天 / 晚上两个分组，但将其统一收敛为轻量 `list-group`
+- 决策模式中的“添加安排”继续留在对应分组 header，但 header 只作为标签和操作入口，不再表现为大卡片标题区
+- Todo 模式中的 `temporary-composer` 保留独立输入区，其下事项区改为连续单列列表
+- 白天 / 晚上色彩重心明确挂回 `.item-card--day|night` 与 `.todo-item-card--day|night`
+- 推荐面板与分次推进、完成、删除、临时事项等逻辑全部不改，仅改变它们所在的层级氛围
+
+### 本轮修改
+- 更新 `src/pages/home/HomePage.tsx`
+  - 为决策模式分组补充轻量标签文本
+  - 将原 `time-context` 强容器结构改为 `list-group`
+  - 保留原自动事项、已选事项、推荐面板和“添加安排”入口，但把它们放回单列列表语境
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 将原 `.todo-board__section` 改为轻量 `list-group`
+  - 保留临时事项输入区独立存在
+  - 保留白天 / 晚上分组与所有现有完成、推进、删除、备注逻辑
+- 更新 `src/styles/globals.css`
+  - 去除 `.time-context` / `.todo-board__section` 的强背景主导地位
+  - 新增 `list-group`、轻量 header 和 divider 样式
+  - 将条目背景、边框、阴影和 day/night 区分集中到 `.item-card` / `.todo-item-card`
+  - 保持 warm cream / oat border / light mode / 紧凑移动端节奏
+- 更新 `handoff.md`
+  - 同步最近完成 task、下一步建议与当前 UI 状态
+
+### 本轮刻意未做
+- 未改推荐逻辑
+- 未改完成逻辑
+- 未改分次推进逻辑
+- 未改模板区
+- 未改数据模型与任何业务字段语义
+- 未调整 appbar、顶部日期区或决策库入口
+- 未引入新依赖
+
+### 验证结果
+- `npm run build`：通过
+- `npm run lint`：通过
+
+### 当前风险与待确认问题
+- 当前已实现 list-first 层级，但推荐面板和临时输入区仍然保留卡片感，后续若继续压层级，可再评估它们是否还要进一步变轻
+- `item-card` / `todo-item-card` 现在成为主视觉主体，但若后续继续追求更强“列表感”，还可以进一步微调条目间距、tag 密度和操作区尺寸
+- 当前仍无自动化业务测试，回归主要依赖构建和静态类型校验
+
 ## 2026-04-21（文档对齐 + 模板添加表单返工）
 
 ### 本轮目标

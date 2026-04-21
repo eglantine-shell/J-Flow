@@ -546,8 +546,6 @@ button:hover:not(:disabled) {
   gap: 12px;
 }
 
-.time-context,
-.todo-board__section,
 .temporary-composer,
 .template-manager,
 .recommendation-card {
@@ -559,18 +557,12 @@ button:hover:not(:disabled) {
   box-shadow: var(--shadow);
 }
 
-.time-context--day,
-.todo-board__section--day {
-  background: var(--surface-day);
+.list-group {
+  display: grid;
+  gap: 8px;
 }
 
-.time-context--night,
-.todo-board__section--night {
-  background: var(--surface-night);
-}
-
-.time-context__header,
-.todo-board__header,
+.list-group__header,
 .temporary-composer__header,
 .recommendation-card__header,
 .template-manager__editor-header,
@@ -581,8 +573,22 @@ button:hover:not(:disabled) {
   gap: 10px;
 }
 
-.time-context__header h4,
-.todo-board__header h4,
+.list-group__heading {
+  display: grid;
+  gap: 2px;
+}
+
+.list-group__heading .eyebrow {
+  color: var(--text-muted);
+}
+
+.list-group__divider {
+  height: 1px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(218, 212, 200, 0.9), rgba(218, 212, 200, 0.18));
+}
+
 .temporary-composer__header h4,
 .recommendation-card__header h5,
 .template-manager__intro h4,
@@ -605,21 +611,25 @@ button:hover:not(:disabled) {
 .candidate-item,
 .template-list-item {
   display: grid;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.75);
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow);
 }
 
 .item-card--day,
 .todo-item-card--day {
-  background: rgba(255, 255, 255, 0.86);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 232, 0.88));
 }
 
 .item-card--night,
 .todo-item-card--night {
-  background: rgba(255, 255, 255, 0.64);
+  background:
+    linear-gradient(180deg, rgba(245, 241, 255, 0.96), rgba(238, 233, 223, 0.92));
+  border-color: rgba(193, 176, 255, 0.28);
 }
 
 .item-card__header,
@@ -1060,8 +1070,7 @@ button:hover:not(:disabled) {
   .app-shell__header,
   .home-appbar,
   .mode-panel__summary,
-  .time-context__header,
-  .todo-board__header,
+  .list-group__header,
   .temporary-composer__header,
   .recommendation-card__header,
   .template-manager__editor-header,
@@ -1099,8 +1108,6 @@ button:hover:not(:disabled) {
   .surface-card,
   .home-appbar,
   .mode-panel__summary,
-  .time-context,
-  .todo-board__section,
   .temporary-composer,
   .template-manager,
   .recommendation-card {

@@ -311,7 +311,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     }
 
     return (
-      <div className="todo-list">
+      <div className="list-group__items">
         {items.map((item) => {
           const tags = buildItemTags(item)
 
@@ -539,11 +539,23 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       </div>
 
       <div className="todo-board">
-        <section className="todo-board__section todo-board__section--day" aria-label="白天事项">
+        <section className="list-group" aria-label="白天事项">
+          <div className="list-group__header">
+            <div className="list-group__heading">
+              <p className="eyebrow">白天</p>
+            </div>
+          </div>
+          <div className="list-group__divider" aria-hidden="true" />
           {renderItems(dayItems, 'day')}
         </section>
 
-        <section className="todo-board__section todo-board__section--night" aria-label="晚上事项">
+        <section className="list-group" aria-label="晚上事项">
+          <div className="list-group__header">
+            <div className="list-group__heading">
+              <p className="eyebrow">晚上</p>
+            </div>
+          </div>
+          <div className="list-group__divider" aria-hidden="true" />
           {renderItems(nightItems, 'night')}
         </section>
       </div>
