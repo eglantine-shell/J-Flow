@@ -66,6 +66,10 @@ const parseDate = (dateString: string) => {
 }
 
 const matchesSelectedDate = (template: TaskTemplate, selectedDate: Date, selectedDateKey: string) => {
+  if (!template.date) {
+    return false
+  }
+
   const templateDate = parseDate(template.date)
 
   if (template.recurrence === 'none') {

@@ -14,6 +14,7 @@ import {
 
 const isoDatetimeSchema = z.string().datetime({ offset: true })
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD date')
+const templateDateSchema = z.union([dateSchema, z.literal('')])
 
 const progressPercentSchema = z
   .number()
@@ -37,7 +38,7 @@ export const activityTypeSchema = z.object({
 export const taskTemplateSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
-  date: dateSchema,
+  date: templateDateSchema,
   activityTypeId: z.string().min(1),
   sceneTagIds: z.array(z.string().min(1)),
   interestLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -121,4 +122,3 @@ export const appDataRecordSchema = z.object({
 })
 
 export type AppDataRecord = z.infer<typeof appDataRecordSchema>
-

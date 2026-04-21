@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { appDataRepository } from '@/db'
 import {
   createInitialTaskTemplateFormState,
+  getEffectiveTemplateDate,
   TaskTemplateFormFields,
   type TaskTemplateFormLoadState,
   type TaskTemplateFormState,
@@ -34,7 +35,6 @@ export function TemplateManagerPanel() {
   const [formState, setFormState] = useState<TaskTemplateFormState>(
     createInitialTaskTemplateFormState,
   )
-  const [showAdvancedFields, setShowAdvancedFields] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -85,9 +85,6 @@ export function TemplateManagerPanel() {
   const startEditing = (template: TaskTemplate) => {
     setEditingTemplateId(template.id)
     setFormState(toFormState(template))
-    setShowAdvancedFields(
-      template.requiresPreparation || template.recurrence !== 'none' || template.isSegmented,
-    )
     setErrorMessage(null)
     setSuccessMessage(null)
   }
@@ -95,7 +92,6 @@ export function TemplateManagerPanel() {
   const cancelEditing = () => {
     setEditingTemplateId(null)
     setFormState(createInitialTaskTemplateFormState())
-    setShowAdvancedFields(false)
   }
 
   const saveTemplate = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -118,7 +114,7 @@ export function TemplateManagerPanel() {
     try {
       const updated: TaskTemplate = await appDataRepository.taskTemplates.update({
         id: editingTemplateId,
-        date: formState.date,
+        date: getEffectiveTemplateDate(formState),
         activityTypeId: formState.activityTypeId,
         title: formState.title.trim(),
         sceneTagIds: formState.sceneTagIds,
@@ -215,7 +211,7 @@ export function TemplateManagerPanel() {
                 <div className="template-list-item__header">
                   <div>
                     <h5>{template.title}</h5>
-                    <p>{template.date}</p>
+                    {template.date ? <p>{template.date}</p> : null}
                   </div>
                   <div className="template-list-item__actions">
                     <button
@@ -275,8 +271,6 @@ export function TemplateManagerPanel() {
                 formState={formState}
                 setFormState={setFormState}
                 loadState={loadState}
-                showAdvancedFields={showAdvancedFields}
-                setShowAdvancedFields={setShowAdvancedFields}
               />
 
               <div className="setup-actions">

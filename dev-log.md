@@ -1837,3 +1837,91 @@
 
 ### 当前风险与待确认问题
 - 当前 Todo 快速新增区在极窄宽度下已尽量保持单行紧凑排列，但若后续还要继续压缩到更小屏幕，可能仍需要进一步调整控件最小宽度
+
+## 2026-04-21（模板添加界面压缩 + 日期条件显隐）
+
+### 本轮目标
+- 将模板添加界面从三个分散 section 压缩为一个连续表单区块
+- 删除表单中的结构性说明文案，提升移动端录入效率
+- 只做与模板日期条件显隐直接相关的最小业务逻辑调整
+
+### 开始前已阅读
+- `AGENTS.md`
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/templates/CreateTaskTemplateForm.tsx`
+- `src/features/templates/TemplateFormFields.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/db/schema.ts`
+- `src/db/storage.ts`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/decision/recommendation.ts`
+- `src/styles/globals.css`
+
+### 本轮关键决策
+- 模板日期不改为可选字段，仍保留 `string`，但允许为空字符串 `''`
+- 日期只在“必要事项”或“重复规则不是不重复”时显示；显示时默认当天
+- 非必要且不重复的模板不显示日期，也不写入日期
+- 活动类型改为与时间场景统一的 tag 选择样式，但保持单选语义
+- 取消模板添加表单中的三段色块 section，改为单区块连续排布
+
+### 文档冲突与处理
+- 旧文档中存在“每个条目都必须有日期，默认值为添加当天”的口径
+- 本轮已按新的产品规则更新 `product-rules.md` 与 `data-model.md`
+- 同步更新了 `app-structure.md` 与 `task-list.md`，避免继续与产品规则冲突
+
+### 本轮修改
+- 更新 `src/db/schema.ts`
+  - 允许 `TaskTemplate.date` 保存为空字符串 `''`
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - 跳过无日期模板的日期触发匹配，避免空日期参与自动生成
+- 更新 `src/features/decision/recommendation.ts`
+  - 推荐生成实例时仅在模板存在日期时写入 `targetDate`
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 将模板添加表单重组为单区块紧凑布局
+  - 活动类型改为单选 tag
+  - 时间场景保留多选 tag，并将新增入口改为 `+` tag
+  - 新增活动类型入口也改为 `+` tag
+  - 删除“内容 / 时间场景 / 重复规则”等结构说明文字
+  - 将“必要事项 + 重复规则”合并为一行，并按条件显示日期输入
+  - 将“需要准备 + 分次事项”合并为一行
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 提交时按条件写入模板日期
+  - 移除更多设置展开逻辑
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 编辑时沿用新的条件日期逻辑
+  - 模板列表遇到空日期时不再渲染空白日期行
+- 更新 `src/styles/globals.css`
+  - 为紧凑单区块表单补齐行内排布、tag、toggle、输入框样式
+  - 继续压缩移动端表单高度
+- 更新 `product-rules.md`
+- 更新 `data-model.md`
+- 更新 `app-structure.md`
+
+### 本轮删除的说明文案
+- `内容`
+- `时间场景`
+- `重复规则`
+- `核心字段`
+- `先填日期、类型和内容`
+- `常用设置`
+- `用标签补充识别信息`
+- `自动进入当天计划`
+- 原有更多设置的结构性提示
+
+### 本轮验证结果
+- `npm run build`：通过
+- `npm run lint`：通过
+
+### 当前结论
+- 模板添加区已从“长网页表单”转向“单区块紧凑录入面板”
+- 日期逻辑已收敛为条件显隐，不再给所有模板默认写今天
+
+### 当前风险与待确认问题
+- 新增活动类型 / 时间场景的 inline tag 输入目前仍主要依赖键盘提交，后续如继续做移动端细修，可再评估是否需要更强的完成反馈

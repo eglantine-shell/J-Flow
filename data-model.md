@@ -91,7 +91,7 @@ type TaskTemplate = {
 字段说明：
 
 title：条目内容，例如“《abc》”“买牛奶”“整理书架”
-date：条目日期；所有条目都必须有该字段，添加时默认写入当天
+date：条目日期；仅在 `isNecessary = true` 或 `recurrence !== 'none'` 时写入，其他条目写空字符串 `''`
 activityTypeId：主活动类型
 sceneTagIds：适用时间场景，可为空，可多选
 只有少数系统内置标签参与白天/晚上映射，其他标签仅作为筛选标签
@@ -101,6 +101,8 @@ requiresPreparation：是否需要准备
 preparationNotes：准备备注
 recurrence：重复规则
 对于重复条目，date 是重复规则的锚点
+对于必要事项，date 表示该条目的目标日期
+对于非必要且不重复的条目，不存储目标日期
 其中 `daily` 表示从锚点日期开始每天生效
 V1 的 `daily / weekly / monthly / yearly` 都是“日历型重复”
 - `daily`：从锚点日期开始，每天命中

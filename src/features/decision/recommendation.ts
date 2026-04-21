@@ -193,7 +193,7 @@ export async function createDecisionSelectedDayPlanItem({
 
   return appDataRepository.dayPlanItems.create({
     date: selectedDateKey,
-    targetDate: template.date,
+    targetDate: template.date || undefined,
     timeBlock,
     timeBlockSource: timeBlock === 'night' ? 'manual_night' : 'default_day',
     sortOrder,

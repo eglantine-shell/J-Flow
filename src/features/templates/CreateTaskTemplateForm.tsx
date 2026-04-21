@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { appDataRepository } from '@/db'
 import {
   createInitialTaskTemplateFormState,
+  getEffectiveTemplateDate,
   TaskTemplateFormFields,
   type TaskTemplateFormLoadState,
   type TaskTemplateFormState,
@@ -19,7 +20,6 @@ export function CreateTaskTemplateForm() {
   })
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [showAdvancedFields, setShowAdvancedFields] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -120,7 +120,7 @@ export function CreateTaskTemplateForm() {
 
     try {
       const created = await appDataRepository.taskTemplates.create({
-        date: formState.date,
+        date: getEffectiveTemplateDate(formState),
         activityTypeId: formState.activityTypeId,
         title: formState.title.trim(),
         sceneTagIds: formState.sceneTagIds,
@@ -139,7 +139,6 @@ export function CreateTaskTemplateForm() {
         ...createInitialTaskTemplateFormState(),
         activityTypeId: loadState.activityTypes[0]?.id || '',
       })
-      setShowAdvancedFields(false)
       setSuccessMessage(`已加入决策库：${created.title}`)
     } catch (error: unknown) {
       setErrorMessage(
@@ -165,8 +164,6 @@ export function CreateTaskTemplateForm() {
         formState={formState}
         setFormState={setFormState}
         loadState={loadState}
-        showAdvancedFields={showAdvancedFields}
-        setShowAdvancedFields={setShowAdvancedFields}
         onCreateSceneTag={handleCreateSceneTag}
         onCreateActivityType={handleCreateActivityType}
       />

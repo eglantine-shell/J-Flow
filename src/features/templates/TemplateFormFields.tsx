@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, KeyboardEvent, SetStateAction } from 'react'
 
 import type {
   ActivityType,
@@ -47,30 +47,15 @@ export const recurrenceOptions: Array<{
   label: string
   value: RecurrenceRule
 }> = [
-  {
-    label: '不重复',
-    value: 'none',
-  },
-  {
-    label: '每天',
-    value: 'daily',
-  },
-  {
-    label: '每周',
-    value: 'weekly',
-  },
-  {
-    label: '每月',
-    value: 'monthly',
-  },
-  {
-    label: '每年',
-    value: 'yearly',
-  },
+  { label: '不重复', value: 'none' },
+  { label: '每天', value: 'daily' },
+  { label: '每周', value: 'weekly' },
+  { label: '每月', value: 'monthly' },
+  { label: '每年', value: 'yearly' },
 ]
 
 export const createInitialTaskTemplateFormState = (): TaskTemplateFormState => ({
-  date: todayDateString(),
+  date: '',
   activityTypeId: '',
   title: '',
   sceneTagIds: [],
@@ -82,8 +67,28 @@ export const createInitialTaskTemplateFormState = (): TaskTemplateFormState => (
   isSegmented: false,
 })
 
+export const shouldShowTemplateDate = (formState: TaskTemplateFormState) =>
+  formState.isNecessary || formState.recurrence !== 'none'
+
+export const getEffectiveTemplateDate = (formState: TaskTemplateFormState) =>
+  shouldShowTemplateDate(formState) ? formState.date : ''
+
+const syncDateVisibility = (nextState: TaskTemplateFormState): TaskTemplateFormState => {
+  if (shouldShowTemplateDate(nextState)) {
+    return {
+      ...nextState,
+      date: nextState.date || todayDateString(),
+    }
+  }
+
+  return {
+    ...nextState,
+    date: '',
+  }
+}
+
 export function validateTaskTemplateForm(formState: TaskTemplateFormState) {
-  return !formState.date
+  return shouldShowTemplateDate(formState) && !formState.date
     ? '请填写日期。'
     : !formState.activityTypeId
       ? '请选择活动类型。'
@@ -96,16 +101,12 @@ export function TaskTemplateFormFields({
   formState,
   setFormState,
   loadState,
-  showAdvancedFields,
-  setShowAdvancedFields,
   onCreateSceneTag,
   onCreateActivityType,
 }: {
   formState: TaskTemplateFormState
   setFormState: Dispatch<SetStateAction<TaskTemplateFormState>>
   loadState: TaskTemplateFormLoadState
-  showAdvancedFields: boolean
-  setShowAdvancedFields: Dispatch<SetStateAction<boolean>>
   onCreateSceneTag?: (name: string) => Promise<void>
   onCreateActivityType?: (name: string) => Promise<void>
 }) {
@@ -118,12 +119,25 @@ export function TaskTemplateFormFields({
   const [activityTypeError, setActivityTypeError] = useState<string | null>(null)
   const [isCreatingActivityType, setIsCreatingActivityType] = useState(false)
 
+  const showDateField = shouldShowTemplateDate(formState)
+
+  const updateFormState = (updater: (current: TaskTemplateFormState) => TaskTemplateFormState) => {
+    setFormState((current) => syncDateVisibility(updater(current)))
+  }
+
   const handleSceneTagToggle = (sceneTagId: string) => {
-    setFormState((current) => ({
+    updateFormState((current) => ({
       ...current,
       sceneTagIds: current.sceneTagIds.includes(sceneTagId)
         ? current.sceneTagIds.filter((id) => id !== sceneTagId)
         : [...current.sceneTagIds, sceneTagId],
+    }))
+  }
+
+  const handleActivityTypeSelect = (activityTypeId: string) => {
+    updateFormState((current) => ({
+      ...current,
+      activityTypeId,
     }))
   }
 
@@ -183,204 +197,154 @@ export function TaskTemplateFormFields({
     }
   }
 
+  const handleInlineSubmit = (
+    event: KeyboardEvent<HTMLInputElement>,
+    submit: () => Promise<void>,
+  ) => {
+    if (event.key !== 'Enter') {
+      return
+    }
+
+    event.preventDefault()
+    void submit()
+  }
+
   return (
-    <>
-      <div className="template-form__section">
-        <div className="form-grid">
-          <label className="editor-field">
-            <span>日期</span>
-            <input
-              type="date"
-              value={formState.date}
-              onChange={(event) => {
-                setFormState((current) => ({
-                  ...current,
-                  date: event.target.value,
-                }))
-              }}
-            />
-          </label>
-
-          <label className="editor-field">
-            <span>活动类型</span>
-            <select
-              value={formState.activityTypeId}
-              onChange={(event) => {
-                setFormState((current) => ({
-                  ...current,
-                  activityTypeId: event.target.value,
-                }))
-              }}
-            >
-              <option value="" disabled>
-                请选择活动类型
-              </option>
-              {loadState.activityTypes.map((activityType) => (
-                <option key={activityType.id} value={activityType.id}>
-                  {activityType.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {onCreateActivityType ? (
-          <div className="inline-creator">
-            <button
-              className="ghost-button ghost-button--compact"
-              type="button"
-              onClick={() => {
-                setShowActivityTypeCreator((current) => !current)
-                setActivityTypeError(null)
-              }}
-            >
-              {showActivityTypeCreator ? '收起新增活动类型' : '新增活动类型'}
-            </button>
-
-            {showActivityTypeCreator ? (
-              <div className="inline-creator__panel">
-                <div className="inline-creator__controls">
-                  <input
-                    className="inline-creator__input"
-                    type="text"
-                    value={activityTypeDraft}
-                    onChange={(event) => {
-                      setActivityTypeDraft(event.target.value)
-                    }}
-                    placeholder="输入新的活动类型名称"
-                  />
-                  <button
-                    className="primary-button"
-                    type="button"
-                    disabled={isCreatingActivityType}
-                    onClick={() => {
-                      void submitActivityTypeDraft()
-                    }}
-                  >
-                    {isCreatingActivityType ? '新增中...' : '保存'}
-                  </button>
-                  <button
-                    className="ghost-button ghost-button--compact"
-                    type="button"
-                    disabled={isCreatingActivityType}
-                    onClick={() => {
-                      setShowActivityTypeCreator(false)
-                      setActivityTypeDraft('')
-                      setActivityTypeError(null)
-                    }}
-                  >
-                    取消
-                  </button>
-                </div>
-
-                {activityTypeError ? (
-                  <p className="form-message form-message--danger">{activityTypeError}</p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <label className="editor-field">
-          <span>内容</span>
-          <textarea
-            rows={3}
-            value={formState.title}
-            onChange={(event) => {
-              setFormState((current) => ({
-                ...current,
-                title: event.target.value,
-              }))
-            }}
-            placeholder="例如：读《深度工作》、整理书架、复习英语单词"
-          />
-        </label>
+    <div className="template-form__compact">
+      <div className="template-form__row template-form__row--content">
+        <textarea
+          className="template-form__content-input"
+          rows={2}
+          value={formState.title}
+          onChange={(event) => {
+            updateFormState((current) => ({
+              ...current,
+              title: event.target.value,
+            }))
+          }}
+          placeholder="输入模板内容"
+          aria-label="模板内容"
+        />
       </div>
 
-      <div className="template-form__section">
-        <div className="editor-field">
-          <span>时间场景</span>
-          <div className="selection-grid selection-grid--compact">
-            {loadState.sceneTags.map((sceneTag) => (
-              <label
-                className={
-                  formState.sceneTagIds.includes(sceneTag.id)
-                    ? 'check-tile check-tile--selected'
-                    : 'check-tile'
-                }
-                key={sceneTag.id}
-              >
-                <input
-                  type="checkbox"
-                  checked={formState.sceneTagIds.includes(sceneTag.id)}
-                  onChange={() => {
-                    handleSceneTagToggle(sceneTag.id)
-                  }}
-                />
-                <span>{sceneTag.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {onCreateSceneTag ? (
-          <div className="inline-creator">
+      <div className="template-form__row">
+        <div className="selection-grid selection-grid--compact" aria-label="活动类型">
+          {loadState.activityTypes.map((activityType) => (
             <button
-              className="ghost-button ghost-button--compact"
+              key={activityType.id}
+              className={
+                formState.activityTypeId === activityType.id
+                  ? 'check-tile check-tile--selected'
+                  : 'check-tile'
+              }
               type="button"
               onClick={() => {
-                setShowSceneTagCreator((current) => !current)
-                setSceneTagError(null)
+                handleActivityTypeSelect(activityType.id)
               }}
             >
-              {showSceneTagCreator ? '收起新增时间场景' : '新增时间场景'}
+              {activityType.name}
             </button>
+          ))}
 
-            {showSceneTagCreator ? (
-              <div className="inline-creator__panel">
-                <div className="inline-creator__controls">
-                  <input
-                    className="inline-creator__input"
-                    type="text"
-                    value={sceneTagDraft}
-                    onChange={(event) => {
-                      setSceneTagDraft(event.target.value)
-                    }}
-                    placeholder="输入新的时间场景名称"
-                  />
-                  <button
-                    className="primary-button"
-                    type="button"
-                    disabled={isCreatingSceneTag}
-                    onClick={() => {
-                      void submitSceneTagDraft()
-                    }}
-                  >
-                    {isCreatingSceneTag ? '新增中...' : '保存'}
-                  </button>
-                  <button
-                    className="ghost-button ghost-button--compact"
-                    type="button"
-                    disabled={isCreatingSceneTag}
-                    onClick={() => {
-                      setShowSceneTagCreator(false)
-                      setSceneTagDraft('')
-                      setSceneTagError(null)
-                    }}
-                  >
-                    取消
-                  </button>
-                </div>
-
-                {sceneTagError ? (
-                  <p className="form-message form-message--danger">{sceneTagError}</p>
-                ) : null}
+          {onCreateActivityType ? (
+            showActivityTypeCreator ? (
+              <div className="creator-tag">
+                <span className="creator-tag__prefix">+</span>
+                <input
+                  className="creator-tag__input"
+                  type="text"
+                  value={activityTypeDraft}
+                  onChange={(event) => {
+                    setActivityTypeDraft(event.target.value)
+                  }}
+                  onKeyDown={(event) => {
+                    handleInlineSubmit(event, submitActivityTypeDraft)
+                  }}
+                  placeholder="活动类型"
+                  autoFocus
+                />
               </div>
-            ) : null}
-          </div>
-        ) : null}
+            ) : (
+              <button
+                className="check-tile check-tile--create"
+                type="button"
+                onClick={() => {
+                  setShowActivityTypeCreator(true)
+                  setActivityTypeError(null)
+                }}
+                aria-label="新增活动类型"
+              >
+                +
+              </button>
+            )
+          ) : null}
+        </div>
 
-        <div className="editor-field editor-field--inline">
+        {activityTypeError ? (
+          <p className="form-message form-message--danger">{activityTypeError}</p>
+        ) : null}
+      </div>
+
+      <div className="template-form__row">
+        <div className="selection-grid selection-grid--compact" aria-label="时间场景">
+          {loadState.sceneTags.map((sceneTag) => (
+            <button
+              key={sceneTag.id}
+              className={
+                formState.sceneTagIds.includes(sceneTag.id)
+                  ? 'check-tile check-tile--selected'
+                  : 'check-tile'
+              }
+              type="button"
+              onClick={() => {
+                handleSceneTagToggle(sceneTag.id)
+              }}
+            >
+              {sceneTag.name}
+            </button>
+          ))}
+
+          {onCreateSceneTag ? (
+            showSceneTagCreator ? (
+              <div className="creator-tag">
+                <span className="creator-tag__prefix">+</span>
+                <input
+                  className="creator-tag__input"
+                  type="text"
+                  value={sceneTagDraft}
+                  onChange={(event) => {
+                    setSceneTagDraft(event.target.value)
+                  }}
+                  onKeyDown={(event) => {
+                    handleInlineSubmit(event, submitSceneTagDraft)
+                  }}
+                  placeholder="时间场景"
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <button
+                className="check-tile check-tile--create"
+                type="button"
+                onClick={() => {
+                  setShowSceneTagCreator(true)
+                  setSceneTagError(null)
+                }}
+                aria-label="新增时间场景"
+              >
+                +
+              </button>
+            )
+          ) : null}
+        </div>
+
+        {sceneTagError ? (
+          <p className="form-message form-message--danger">{sceneTagError}</p>
+        ) : null}
+      </div>
+
+      <div className="template-form__row template-form__row--inline">
+        <div className="template-form__inline-field">
           <span>兴趣程度</span>
           <div className="segmented-control">
             {interestOptions.map((option) => (
@@ -393,7 +357,7 @@ export function TaskTemplateFormFields({
                 }
                 type="button"
                 onClick={() => {
-                  setFormState((current) => ({
+                  updateFormState((current) => ({
                     ...current,
                     interestLevel: option.value,
                   }))
@@ -404,110 +368,109 @@ export function TaskTemplateFormFields({
             ))}
           </div>
         </div>
+      </div>
 
-        <label className="toggle-row">
+      <div className="template-form__row template-form__row--inline template-form__row--decision">
+        <label className="toggle-chip">
           <input
             type="checkbox"
             checked={formState.isNecessary}
             onChange={(event) => {
-              setFormState((current) => ({
+              updateFormState((current) => ({
                 ...current,
                 isNecessary: event.target.checked,
               }))
             }}
           />
-          <div>
-            <strong>必要事项</strong>
-          </div>
+          <span>必要事项</span>
+        </label>
+
+        <select
+          className="template-form__recurrence-select"
+          value={formState.recurrence}
+          onChange={(event) => {
+            updateFormState((current) => ({
+              ...current,
+              recurrence: event.target.value as RecurrenceRule,
+            }))
+          }}
+          aria-label="重复规则"
+        >
+          {recurrenceOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {showDateField ? (
+        <div className="template-form__row">
+          <input
+            className="template-form__date-input"
+            type="date"
+            value={formState.date}
+            onChange={(event) => {
+              updateFormState((current) => ({
+                ...current,
+                date: event.target.value,
+              }))
+            }}
+            aria-label="日期"
+          />
+        </div>
+      ) : null}
+
+      <div className="template-form__row template-form__row--inline">
+        <label className="toggle-chip">
+          <input
+            type="checkbox"
+            checked={formState.requiresPreparation}
+            onChange={(event) => {
+              const checked = event.target.checked
+
+              updateFormState((current) => ({
+                ...current,
+                requiresPreparation: checked,
+                preparationNotes: checked ? current.preparationNotes : '',
+              }))
+            }}
+          />
+          <span>需要准备</span>
+        </label>
+
+        <label className="toggle-chip">
+          <input
+            type="checkbox"
+            checked={formState.isSegmented}
+            onChange={(event) => {
+              updateFormState((current) => ({
+                ...current,
+                isSegmented: event.target.checked,
+              }))
+            }}
+          />
+          <span>分次事项</span>
         </label>
       </div>
 
-      <div className="template-form__section">
-        <button
-          className="ghost-button ghost-button--compact"
-          type="button"
-          onClick={() => {
-            setShowAdvancedFields((current) => !current)
-          }}
-        >
-          {showAdvancedFields ? '收起更多设置' : '展开更多设置'}
-        </button>
-
-        {showAdvancedFields ? (
-          <div className="advanced-stack">
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={formState.requiresPreparation}
-                onChange={(event) => {
-                  const checked = event.target.checked
-
-                  setFormState((current) => ({
-                    ...current,
-                    requiresPreparation: checked,
-                    preparationNotes: checked ? current.preparationNotes : '',
-                  }))
-                }}
-              />
-              <div>
-                <strong>需要准备</strong>
-              </div>
-            </label>
-
-            {formState.requiresPreparation ? (
-              <label className="editor-field">
-                <span>准备备注</span>
-                <textarea
-                  rows={3}
-                  value={formState.preparationNotes}
-                  onChange={(event) => {
-                    setFormState((current) => ({
-                      ...current,
-                      preparationNotes: event.target.value,
-                    }))
-                  }}
-                  placeholder="例如：提前腾出 20 分钟，并准备收纳盒。"
-                />
-              </label>
-            ) : null}
-
-            <label className="editor-field">
-              <span>重复规则</span>
-              <select
-                value={formState.recurrence}
-                onChange={(event) => {
-                  setFormState((current) => ({
-                    ...current,
-                    recurrence: event.target.value as RecurrenceRule,
-                  }))
-                }}
-              >
-                {recurrenceOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={formState.isSegmented}
-                onChange={(event) => {
-                  setFormState((current) => ({
-                    ...current,
-                    isSegmented: event.target.checked,
-                  }))
-                }}
-              />
-              <div>
-                <strong>分次事项</strong>
-              </div>
-            </label>
-          </div>
-        ) : null}
-      </div>
-    </>
+      {formState.requiresPreparation ? (
+        <div className="template-form__row">
+          <textarea
+            className="template-form__notes-input"
+            rows={2}
+            value={formState.preparationNotes}
+            onChange={(event) => {
+              updateFormState((current) => ({
+                ...current,
+                preparationNotes: event.target.value,
+              }))
+            }}
+            placeholder="准备备注"
+            aria-label="准备备注"
+          />
+        </div>
+      ) : null}
+    </div>
   )
 }
