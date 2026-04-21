@@ -209,24 +209,20 @@ export function TaskTemplateFormFields({
     void submit()
   }
 
+  const cancelSceneTagCreator = () => {
+    setShowSceneTagCreator(false)
+    setSceneTagDraft('')
+    setSceneTagError(null)
+  }
+
+  const cancelActivityTypeCreator = () => {
+    setShowActivityTypeCreator(false)
+    setActivityTypeDraft('')
+    setActivityTypeError(null)
+  }
+
   return (
     <div className="template-form__compact">
-      <div className="template-form__row template-form__row--content">
-        <textarea
-          className="template-form__content-input"
-          rows={2}
-          value={formState.title}
-          onChange={(event) => {
-            updateFormState((current) => ({
-              ...current,
-              title: event.target.value,
-            }))
-          }}
-          placeholder="输入模板内容"
-          aria-label="模板内容"
-        />
-      </div>
-
       <div className="template-form__row">
         <div className="selection-grid selection-grid--compact" aria-label="活动类型">
           {loadState.activityTypes.map((activityType) => (
@@ -249,7 +245,6 @@ export function TaskTemplateFormFields({
           {onCreateActivityType ? (
             showActivityTypeCreator ? (
               <div className="creator-tag">
-                <span className="creator-tag__prefix">+</span>
                 <input
                   className="creator-tag__input"
                   type="text"
@@ -263,6 +258,26 @@ export function TaskTemplateFormFields({
                   placeholder="活动类型"
                   autoFocus
                 />
+                <button
+                  className="creator-tag__action creator-tag__action--save"
+                  type="button"
+                  onClick={() => {
+                    void submitActivityTypeDraft()
+                  }}
+                  disabled={isCreatingActivityType}
+                  aria-label="保存活动类型"
+                >
+                  保存
+                </button>
+                <button
+                  className="creator-tag__action"
+                  type="button"
+                  onClick={cancelActivityTypeCreator}
+                  disabled={isCreatingActivityType}
+                  aria-label="取消新增活动类型"
+                >
+                  取消
+                </button>
               </div>
             ) : (
               <button
@@ -283,6 +298,22 @@ export function TaskTemplateFormFields({
         {activityTypeError ? (
           <p className="form-message form-message--danger">{activityTypeError}</p>
         ) : null}
+      </div>
+
+      <div className="template-form__row template-form__row--content">
+        <textarea
+          className="template-form__content-input"
+          rows={2}
+          value={formState.title}
+          onChange={(event) => {
+            updateFormState((current) => ({
+              ...current,
+              title: event.target.value,
+            }))
+          }}
+          placeholder="输入模板内容"
+          aria-label="模板内容"
+        />
       </div>
 
       <div className="template-form__row">
@@ -307,7 +338,6 @@ export function TaskTemplateFormFields({
           {onCreateSceneTag ? (
             showSceneTagCreator ? (
               <div className="creator-tag">
-                <span className="creator-tag__prefix">+</span>
                 <input
                   className="creator-tag__input"
                   type="text"
@@ -321,6 +351,26 @@ export function TaskTemplateFormFields({
                   placeholder="时间场景"
                   autoFocus
                 />
+                <button
+                  className="creator-tag__action creator-tag__action--save"
+                  type="button"
+                  onClick={() => {
+                    void submitSceneTagDraft()
+                  }}
+                  disabled={isCreatingSceneTag}
+                  aria-label="保存时间场景"
+                >
+                  保存
+                </button>
+                <button
+                  className="creator-tag__action"
+                  type="button"
+                  onClick={cancelSceneTagCreator}
+                  disabled={isCreatingSceneTag}
+                  aria-label="取消新增时间场景"
+                >
+                  取消
+                </button>
               </div>
             ) : (
               <button

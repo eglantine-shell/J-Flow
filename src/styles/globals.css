@@ -191,6 +191,9 @@ button:hover:not(:disabled) {
 .template-form__compact {
   display: grid;
   gap: 10px;
+  --template-control-height: 38px;
+  --template-control-radius: 14px;
+  --template-control-padding-x: 12px;
 }
 
 .template-form__row {
@@ -249,14 +252,15 @@ button:hover:not(:disabled) {
 .template-form__date-input,
 .template-form__recurrence-select {
   width: 100%;
-  min-height: 40px;
-  padding: 10px 12px;
+  min-height: var(--template-control-height);
+  padding: 9px var(--template-control-padding-x);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--template-control-radius);
   background: var(--surface);
   color: var(--text);
   outline: none;
   resize: vertical;
+  line-height: 1.25;
 }
 
 .editor-field input[type='date'],
@@ -809,9 +813,10 @@ button:hover:not(:disabled) {
 }
 
 .selection-grid--compact .check-tile {
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 10px;
   font-size: 0.75rem;
+  line-height: 1;
 }
 
 .check-tile {
@@ -825,6 +830,7 @@ button:hover:not(:disabled) {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
   cursor: pointer;
+  line-height: 1;
 }
 
 .check-tile input {
@@ -849,25 +855,49 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0 6px 0 10px;
   border: 1px solid rgba(67, 8, 159, 0.25);
   border-radius: 999px;
   background: rgba(193, 176, 255, 0.18);
-}
-
-.creator-tag__prefix {
-  color: var(--purple);
-  font-weight: 700;
+  max-width: 100%;
 }
 
 .creator-tag__input {
-  width: 72px;
+  width: 76px;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--text);
   outline: none;
   padding: 0;
+  line-height: 1.2;
+}
+
+.creator-tag__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.creator-tag__action:hover:not(:disabled) {
+  transform: none;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.creator-tag__action--save {
+  background: rgba(248, 204, 101, 0.9);
+  color: var(--text);
 }
 
 .inline-creator {
@@ -894,21 +924,24 @@ button:hover:not(:disabled) {
 .segmented-control {
   display: inline-flex;
   gap: 8px;
-  padding: 4px;
-  width: fit-content;
+  padding: 3px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
+  min-height: var(--template-control-height);
 }
 
 .segmented-control__button {
-  min-width: 44px;
-  min-height: 30px;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(var(--template-control-height) - 8px);
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  line-height: 1;
 }
 
 .segmented-control__button--active {
@@ -917,11 +950,10 @@ button:hover:not(:disabled) {
 }
 
 .template-form__inline-field {
-  display: inline-flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
-  flex-wrap: wrap;
   width: 100%;
 }
 
@@ -953,13 +985,14 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
+  min-height: var(--template-control-height);
+  padding: 0 var(--template-control-padding-x);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--template-control-radius);
   background: rgba(255, 255, 255, 0.8);
   color: var(--text-muted);
   width: 100%;
+  line-height: 1;
 }
 
 .toggle-chip input {
@@ -968,6 +1001,7 @@ button:hover:not(:disabled) {
 
 .toggle-chip span {
   font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .template-manager {
@@ -1054,10 +1088,6 @@ button:hover:not(:disabled) {
   .segmented-progress-panel__controls {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .template-form__row--inline {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 640px) {
@@ -1088,6 +1118,26 @@ button:hover:not(:disabled) {
 
   .date-nav {
     justify-content: center;
+  }
+
+  .template-form__row--inline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .template-form__inline-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .creator-tag {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .creator-tag__input {
+    flex: 1 1 auto;
+    width: auto;
   }
 
   .composer-entry--toolbar {
