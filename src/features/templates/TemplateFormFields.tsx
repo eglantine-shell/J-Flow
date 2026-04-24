@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react'
 
+import { CheckIcon, CloseIcon, PlusIcon } from '@/components/ui/Icons'
 import type {
   ActivityType,
   InterestLevel,
@@ -103,12 +104,16 @@ export function TaskTemplateFormFields({
   loadState,
   onCreateSceneTag,
   onCreateActivityType,
+  onDeleteSceneTag,
+  onDeleteActivityType,
 }: {
   formState: TaskTemplateFormState
   setFormState: Dispatch<SetStateAction<TaskTemplateFormState>>
   loadState: TaskTemplateFormLoadState
   onCreateSceneTag?: (name: string) => Promise<void>
   onCreateActivityType?: (name: string) => Promise<void>
+  onDeleteSceneTag?: (sceneTag: SceneTag) => Promise<void>
+  onDeleteActivityType?: (activityType: ActivityType) => Promise<void>
 }) {
   const [showSceneTagCreator, setShowSceneTagCreator] = useState(false)
   const [sceneTagDraft, setSceneTagDraft] = useState('')
@@ -209,16 +214,40 @@ export function TaskTemplateFormFields({
     void submit()
   }
 
-  const cancelSceneTagCreator = () => {
-    setShowSceneTagCreator(false)
-    setSceneTagDraft('')
+  const handleSceneTagDelete = async (sceneTag: SceneTag) => {
+    if (!onDeleteSceneTag) {
+      return
+    }
+
     setSceneTagError(null)
+
+    try {
+      await onDeleteSceneTag(sceneTag)
+      updateFormState((current) => ({
+        ...current,
+        sceneTagIds: current.sceneTagIds.filter((id) => id !== sceneTag.id),
+      }))
+    } catch (error: unknown) {
+      setSceneTagError(
+        error instanceof Error ? error.message : '删除时间场景失败，请稍后重试。',
+      )
+    }
   }
 
-  const cancelActivityTypeCreator = () => {
-    setShowActivityTypeCreator(false)
-    setActivityTypeDraft('')
+  const handleActivityTypeDelete = async (activityType: ActivityType) => {
+    if (!onDeleteActivityType) {
+      return
+    }
+
     setActivityTypeError(null)
+
+    try {
+      await onDeleteActivityType(activityType)
+    } catch (error: unknown) {
+      setActivityTypeError(
+        error instanceof Error ? error.message : '删除活动类型失败，请稍后重试。',
+      )
+    }
   }
 
   return (
@@ -226,27 +255,42 @@ export function TaskTemplateFormFields({
       <div className="template-form__row">
         <div className="selection-grid selection-grid--compact" aria-label="活动类型">
           {loadState.activityTypes.map((activityType) => (
-            <button
+            <div
               key={activityType.id}
               className={
                 formState.activityTypeId === activityType.id
-                  ? 'check-tile check-tile--selected'
-                  : 'check-tile'
+                  ? 'tag-chip tag-chip--selected'
+                  : 'tag-chip'
               }
-              type="button"
-              onClick={() => {
-                handleActivityTypeSelect(activityType.id)
-              }}
             >
-              {activityType.name}
-            </button>
+              <button
+                className="tag-chip__label tag-chip__label--button"
+                type="button"
+                onClick={() => {
+                  handleActivityTypeSelect(activityType.id)
+                }}
+              >
+                {activityType.name}
+              </button>
+              <span className="tag-chip__divider" aria-hidden="true" />
+              <button
+                className="tag-chip__action"
+                type="button"
+                onClick={() => {
+                  void handleActivityTypeDelete(activityType)
+                }}
+                aria-label={`删除活动类型 ${activityType.name}`}
+              >
+                <CloseIcon className="tag-chip__icon" />
+              </button>
+            </div>
           ))}
 
           {onCreateActivityType ? (
             showActivityTypeCreator ? (
-              <div className="creator-tag">
+              <div className="tag-chip tag-chip--creator">
                 <input
-                  className="creator-tag__input"
+                  className="tag-chip__input"
                   type="text"
                   value={activityTypeDraft}
                   onChange={(event) => {
@@ -258,8 +302,9 @@ export function TaskTemplateFormFields({
                   placeholder="活动类型"
                   autoFocus
                 />
+                <span className="tag-chip__divider" aria-hidden="true" />
                 <button
-                  className="creator-tag__action creator-tag__action--save"
+                  className="tag-chip__action tag-chip__action--confirm"
                   type="button"
                   onClick={() => {
                     void submitActivityTypeDraft()
@@ -267,21 +312,12 @@ export function TaskTemplateFormFields({
                   disabled={isCreatingActivityType}
                   aria-label="保存活动类型"
                 >
-                  保存
-                </button>
-                <button
-                  className="creator-tag__action"
-                  type="button"
-                  onClick={cancelActivityTypeCreator}
-                  disabled={isCreatingActivityType}
-                  aria-label="取消新增活动类型"
-                >
-                  取消
+                  <CheckIcon className="tag-chip__icon" />
                 </button>
               </div>
             ) : (
               <button
-                className="check-tile check-tile--create"
+                className="tag-chip tag-chip--create"
                 type="button"
                 onClick={() => {
                   setShowActivityTypeCreator(true)
@@ -289,7 +325,13 @@ export function TaskTemplateFormFields({
                 }}
                 aria-label="新增活动类型"
               >
-                +
+                <span className="tag-chip__label tag-chip__label--icon">
+                  <PlusIcon className="tag-chip__icon" />
+                </span>
+                <span className="tag-chip__divider" aria-hidden="true" />
+                <span className="tag-chip__action tag-chip__action--ghost" aria-hidden="true">
+                  <CheckIcon className="tag-chip__icon" />
+                </span>
               </button>
             )
           ) : null}
@@ -319,27 +361,42 @@ export function TaskTemplateFormFields({
       <div className="template-form__row">
         <div className="selection-grid selection-grid--compact" aria-label="时间场景">
           {loadState.sceneTags.map((sceneTag) => (
-            <button
+            <div
               key={sceneTag.id}
               className={
                 formState.sceneTagIds.includes(sceneTag.id)
-                  ? 'check-tile check-tile--selected'
-                  : 'check-tile'
+                  ? 'tag-chip tag-chip--selected'
+                  : 'tag-chip'
               }
-              type="button"
-              onClick={() => {
-                handleSceneTagToggle(sceneTag.id)
-              }}
             >
-              {sceneTag.name}
-            </button>
+              <button
+                className="tag-chip__label tag-chip__label--button"
+                type="button"
+                onClick={() => {
+                  handleSceneTagToggle(sceneTag.id)
+                }}
+              >
+                {sceneTag.name}
+              </button>
+              <span className="tag-chip__divider" aria-hidden="true" />
+              <button
+                className="tag-chip__action"
+                type="button"
+                onClick={() => {
+                  void handleSceneTagDelete(sceneTag)
+                }}
+                aria-label={`删除时间场景 ${sceneTag.name}`}
+              >
+                <CloseIcon className="tag-chip__icon" />
+              </button>
+            </div>
           ))}
 
           {onCreateSceneTag ? (
             showSceneTagCreator ? (
-              <div className="creator-tag">
+              <div className="tag-chip tag-chip--creator">
                 <input
-                  className="creator-tag__input"
+                  className="tag-chip__input"
                   type="text"
                   value={sceneTagDraft}
                   onChange={(event) => {
@@ -351,8 +408,9 @@ export function TaskTemplateFormFields({
                   placeholder="时间场景"
                   autoFocus
                 />
+                <span className="tag-chip__divider" aria-hidden="true" />
                 <button
-                  className="creator-tag__action creator-tag__action--save"
+                  className="tag-chip__action tag-chip__action--confirm"
                   type="button"
                   onClick={() => {
                     void submitSceneTagDraft()
@@ -360,21 +418,12 @@ export function TaskTemplateFormFields({
                   disabled={isCreatingSceneTag}
                   aria-label="保存时间场景"
                 >
-                  保存
-                </button>
-                <button
-                  className="creator-tag__action"
-                  type="button"
-                  onClick={cancelSceneTagCreator}
-                  disabled={isCreatingSceneTag}
-                  aria-label="取消新增时间场景"
-                >
-                  取消
+                  <CheckIcon className="tag-chip__icon" />
                 </button>
               </div>
             ) : (
               <button
-                className="check-tile check-tile--create"
+                className="tag-chip tag-chip--create"
                 type="button"
                 onClick={() => {
                   setShowSceneTagCreator(true)
@@ -382,7 +431,13 @@ export function TaskTemplateFormFields({
                 }}
                 aria-label="新增时间场景"
               >
-                +
+                <span className="tag-chip__label tag-chip__label--icon">
+                  <PlusIcon className="tag-chip__icon" />
+                </span>
+                <span className="tag-chip__divider" aria-hidden="true" />
+                <span className="tag-chip__action tag-chip__action--ghost" aria-hidden="true">
+                  <CheckIcon className="tag-chip__icon" />
+                </span>
               </button>
             )
           ) : null}
@@ -393,8 +448,8 @@ export function TaskTemplateFormFields({
         ) : null}
       </div>
 
-      <div className="template-form__row template-form__row--inline">
-        <div className="template-form__inline-field">
+      <div className="template-form__row">
+        <div className="template-form__inline-field template-form__inline-field--interest">
           <span>兴趣程度</span>
           <div className="segmented-control">
             {interestOptions.map((option) => (

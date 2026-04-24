@@ -562,7 +562,7 @@ function DecisionModePanel({ selectedDate }: { selectedDate: Date }) {
 }
 
 export function HomePage() {
-  const [mode, setMode] = useState<HomeMode>('decision')
+  const [mode, setMode] = useState<HomeMode>('todo')
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [showComposer, setShowComposer] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)

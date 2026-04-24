@@ -1,5 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
+import { SettingsIcon } from '@/components/ui/Icons'
+
 export function AppShell() {
   const location = useLocation()
   const showSettingsEntry = location.pathname !== '/setup'
@@ -19,7 +21,7 @@ export function AppShell() {
               to="/settings"
               aria-label="打开设置"
             >
-              ⚙
+              <SettingsIcon className="icon-button__icon" />
             </Link>
           </div>
         ) : null}

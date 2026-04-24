@@ -1,5 +1,90 @@
 # Dev Log
 
+## 2026-04-24（初始化页 tag 化 + 顶部收口 + 默认 Todo）
+
+### 本轮目标
+- 将初始化页从后台式表单改为 tag 式配置
+- 继续压缩主页面顶部、模板添加表单、Todo 临时事项入口
+- 删除设置页中已重复的时间场景 / 活动类型管理区
+- 将刷新后的默认模式改为 Todo
+- 不改业务规则、不改数据模型、不改推荐 / 自动生成 / Todo 完成逻辑
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键判断
+- 当前初始化页业务逻辑已经成立，问题主要是视觉结构太像后台表单，因此本轮只收口展示方式，不重写初始化数据流程。
+- 活动类型与时间场景的全局新增 / 删除规则已经在主页面表单和存储层具备能力，所以设置页里继续保留同样的管理区会造成重复。
+- 顶部设置入口已具备独立页面能力，本轮只需把 emoji 换成线条 icon，并把标题与设置入口拉回同一行。
+- 刷新默认回到决策模式仅是 UI 默认值问题，本轮不需要做模式持久化。
+
+### 本轮关键决策
+- 初始化页改为单卡片内两组 tag 配置：
+  - 已有项显示为 `名称 | ×`
+  - 新增项使用原位输入 + 保存图标
+  - 保留“至少保留一个”的既有规则
+- 提取一组轻量 SVG 线条 icon，统一用于设置、保存、关闭、加号、太阳、月亮，不引入新依赖。
+- 模板添加表单里的活动类型 / 时间场景改为与初始化页同款 tag 交互，同时复用现有全局删除规则。
+- Todo 临时事项入口改为太阳 / 月亮 segmented control，保留原有 `manual_temporary` 创建语义。
+- 设置页只保留返回主页、排序设置和测试重置，删除重复的统计色块与分类管理区。
+- 首页默认模式从 `decision` 调整为 `todo`，不增加 localStorage 记忆。
+
+### 本轮修改
+- 新增 `src/components/ui/Icons.tsx`
+  - 提供线条风格 `SettingsIcon`、`CheckIcon`、`CloseIcon`、`PlusIcon`、`SunIcon`、`MoonIcon`
+- 更新 `src/pages/setup/SetupPage.tsx`
+  - 删除顶部统计色块
+  - 改为 tag 式时间场景 / 活动类型配置
+  - 完成初始化区改为左侧说明 + 右侧 `→` 按钮
+- 更新 `src/app/shell/AppShell.tsx`
+  - 顶部设置入口改为线条 icon
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 兴趣程度改为与 `1 / 2 / 3` 同行
+  - 活动类型 / 时间场景改为 tag 式选择 + 删除 + 原位新增
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 接入模板表单内的时间场景删除与活动类型删除
+  - 删除活动类型时增加表单有效性兜底
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 临时事项时段选择改为太阳 / 月亮 segmented control
+  - “添加”按钮收口为 `+`
+- 更新 `src/pages/home/HomePage.tsx`
+  - 默认模式改为 `todo`
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 删除统计色块、时间场景 section、活动类型 section
+  - 保留返回主页、排序设置、测试工具 / 重置应用
+- 更新 `src/styles/globals.css`
+  - 收口初始化页 tag、顶部 header、模板表单高度、Todo 临时入口 segmented 样式
+  - 保持移动端两列并排与统一控件高度
+- 更新 `handoff.md`
+  - 同步当前最新收口状态与下一步建议
+
+### 本轮刻意未做
+- 未改 `product-rules.md`
+- 未改数据模型
+- 未改推荐逻辑
+- 未改自动生成逻辑
+- 未改 Todo 完成 / 分次推进逻辑
+- 未做导出 / 导入 / 搜索
+- 未重做整体视觉系统
+- 未引入新依赖
+
+### 验证结果
+- `pnpm run build`：通过
+  - 仍有 Vite 的 chunk size warning，但不影响构建成功
+- `pnpm run lint`：通过
+
+### 当前风险与待确认问题
+- 模板表单内现在已经具备全局 tag 删除能力，但这类全局修改发生在录入上下文中，后续仍可继续评估是否需要更强提示文案。
+- 初始化页与模板页的 tag 交互已统一，但按钮密度和输入宽度仍有继续微调空间。
+- 当前仍无自动化业务测试，回归依然主要依赖构建与静态检查。
+
 ## 2026-04-21（设置页 + 测试专用重置）
 
 ### 本轮目标

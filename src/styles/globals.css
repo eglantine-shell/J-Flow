@@ -76,9 +76,9 @@ button:hover:not(:disabled) {
 }
 
 .app-shell__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   max-width: 720px;
   margin: 0 auto 10px;
   padding: 10px 16px;
@@ -89,6 +89,8 @@ button:hover:not(:disabled) {
 
 .app-shell__brand {
   margin: 0;
+  grid-column: 2;
+  justify-self: center;
   color: var(--text-muted);
   font-size: 0.8rem;
   font-weight: 600;
@@ -101,6 +103,8 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  grid-column: 3;
+  justify-self: end;
 }
 
 .eyebrow {
@@ -163,6 +167,37 @@ button:hover:not(:disabled) {
 
 .surface-card__content {
   margin-top: 20px;
+}
+
+.setup-tag-section {
+  display: grid;
+  gap: 10px;
+}
+
+.setup-tag-section__header {
+  display: grid;
+  gap: 2px;
+}
+
+.setup-tag-section__header h3,
+.setup-tag-section__header p {
+  margin: 0;
+}
+
+.setup-tag-section__header h3 {
+  font-size: 0.96rem;
+}
+
+.setup-tag-section__header p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.setup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .setup-summary {
@@ -250,7 +285,6 @@ button:hover:not(:disabled) {
 .editor-field select,
 .editor-field textarea,
 .temporary-composer__input,
-.temporary-composer__select,
 .segmented-progress-panel__number,
 .inline-creator__input,
 .template-form__content-input,
@@ -285,7 +319,6 @@ button:hover:not(:disabled) {
 .editor-field select:focus,
 .editor-field textarea:focus,
 .temporary-composer__input:focus,
-.temporary-composer__select:focus,
 .segmented-progress-panel__number:focus,
 .inline-creator__input:focus,
 .template-form__content-input:focus,
@@ -322,6 +355,12 @@ button:hover:not(:disabled) {
 
 .primary-button:hover:not(:disabled) {
   box-shadow: #000000 -5px 5px;
+}
+
+.primary-button--arrow {
+  min-width: 38px;
+  padding: 0 12px;
+  font-size: 1rem;
 }
 
 .ghost-button {
@@ -470,6 +509,12 @@ button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.82);
   color: var(--text);
   cursor: pointer;
+}
+
+.icon-button__icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.9;
 }
 
 .icon-button--toolbar {
@@ -707,9 +752,13 @@ button:hover:not(:disabled) {
 
 .temporary-composer__controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 88px 56px;
+  grid-template-columns: minmax(0, 1fr) 108px 44px;
   gap: 8px;
   align-items: center;
+}
+
+.temporary-composer__segmented {
+  min-width: 0;
 }
 
 .todo-item-card__main,
@@ -833,11 +882,115 @@ button:hover:not(:disabled) {
   gap: 8px;
 }
 
-.selection-grid--compact .check-tile {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 0.75rem;
+.selection-grid--compact .tag-chip {
+  min-height: 34px;
+}
+
+.tag-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+.tag-chip--create,
+.tag-chip--creator {
+  padding: 0;
+}
+
+.tag-chip--selected {
+  border-color: rgba(67, 8, 159, 0.24);
+  background: rgba(193, 176, 255, 0.22);
+  color: var(--purple);
+}
+
+.tag-chip__label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 0.8rem;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.tag-chip__label--button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-chip__label--icon {
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+}
+
+.tag-chip__divider {
+  width: 1px;
+  min-height: 100%;
+  background: rgba(218, 212, 200, 0.95);
+}
+
+.tag-chip__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.tag-chip__action:hover:not(:disabled),
+.tag-chip__label--button:hover:not(:disabled) {
+  transform: none;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.tag-chip__action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tag-chip__action--ghost {
+  color: var(--text-soft);
+}
+
+.tag-chip__action--confirm {
+  background: rgba(248, 204, 101, 0.88);
+  color: var(--text);
+}
+
+.tag-chip__input {
+  width: 88px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  line-height: 1;
+}
+
+.tag-chip__icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
 }
 
 .check-tile {
@@ -954,6 +1107,10 @@ button:hover:not(:disabled) {
 }
 
 .segmented-control__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   flex: 1 1 0;
   min-width: 0;
   min-height: calc(var(--template-control-height) - 8px);
@@ -970,6 +1127,12 @@ button:hover:not(:disabled) {
   color: #ffffff;
 }
 
+.segmented-control__icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
 .template-form__inline-field {
   display: grid;
   align-items: center;
@@ -982,6 +1145,11 @@ button:hover:not(:disabled) {
   color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: 500;
+}
+
+.template-form__inline-field--interest {
+  grid-template-columns: auto minmax(0, 160px);
+  justify-content: space-between;
 }
 
 .toggle-row {
@@ -1095,7 +1263,6 @@ button:hover:not(:disabled) {
 }
 
 @media (max-width: 860px) {
-  .app-shell__header,
   .home-appbar,
   .mode-panel__summary,
   .list-group__header,
@@ -1111,7 +1278,6 @@ button:hover:not(:disabled) {
     display: grid;
   }
 
-  .app-shell__meta,
   .home-appbar__controls {
     text-align: left;
     justify-items: start;
@@ -1165,12 +1331,20 @@ button:hover:not(:disabled) {
     gap: 6px;
   }
 
-  .creator-tag {
-    width: 100%;
-    justify-content: flex-start;
+  .template-form__inline-field--interest {
+    grid-template-columns: auto minmax(0, 156px);
+    gap: 8px;
   }
 
-  .creator-tag__input {
+  .tag-chip {
+    max-width: 100%;
+  }
+
+  .tag-chip--creator {
+    flex: 1 1 160px;
+  }
+
+  .tag-chip__input {
     flex: 1 1 auto;
     width: auto;
   }
@@ -1188,7 +1362,11 @@ button:hover:not(:disabled) {
   }
 
   .temporary-composer__controls {
-    grid-template-columns: minmax(0, 1fr) 82px 52px;
+    grid-template-columns: minmax(0, 1fr) 96px 44px;
     gap: 6px;
+  }
+
+  .setup-footer {
+    align-items: center;
   }
 }
