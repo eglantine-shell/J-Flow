@@ -88,11 +88,11 @@ export function SetupPage() {
   const validationMessage = !draft
     ? null
     : sceneTagCount < 1
-      ? '至少保留一个时间场景后才能完成初始化。'
+      ? '至少保留一个“有空就做”场景后才能完成初始化。'
       : activityTypeCount < 1
-        ? '至少保留一个活动类型后才能完成初始化。'
+        ? '至少保留一个“种草清单”分类后才能完成初始化。'
         : hasBlankName(draft.sceneTags) || hasBlankName(draft.activityTypes)
-          ? '时间场景和活动类型名称不能为空。'
+          ? '“种草清单”和“有空就做”的名称不能为空。'
           : null
 
   const addSceneTag = () => {
@@ -214,7 +214,7 @@ export function SetupPage() {
       <section className="page-grid page-grid--single">
         <SurfaceCard
           title="正在准备初始化"
-          description="正在加载默认时间场景与活动类型。"
+          description="正在加载默认种草清单和有空就做场景。"
         />
       </section>
     )
@@ -234,90 +234,16 @@ export function SetupPage() {
   return (
     <section className="page-grid page-grid--single">
       <SurfaceCard
-        title="首次初始化"
-        description="先准备时间场景和活动类型。"
+        title="哪怕你是一个100%的J人，想必也会有……"
+        description="先准备你的种草清单，以及什么样的“有空”适合拿来拔草。"
       >
         <div className="setup-tag-section">
           <div className="setup-tag-section__header">
-            <h3>时间场景</h3>
-            <p>至少保留一个</p>
+            <h3>种草清单</h3>
+            <p>比如，书单、影单、探店清单、逛公园清单，甚至……待处理的家务死角清单？</p>
           </div>
 
-          <div className="tag-chip-grid" aria-label="初始化时间场景">
-            {draft.sceneTags.map((item) => (
-              <div className="tag-chip" key={item.id}>
-                <span className="tag-chip__label">{item.name}</span>
-                <span className="tag-chip__divider" aria-hidden="true" />
-                <button
-                  className="tag-chip__action"
-                  type="button"
-                  onClick={() => {
-                    removeSceneTag(item.id)
-                  }}
-                  disabled={draft.sceneTags.length <= 1}
-                  aria-label={`删除时间场景 ${item.name}`}
-                >
-                  <CloseIcon className="tag-chip__icon" />
-                </button>
-              </div>
-            ))}
-
-            {showSceneTagCreator ? (
-              <div className="tag-chip tag-chip--creator">
-                <input
-                  className="tag-chip__input"
-                  value={sceneTagDraft}
-                  onChange={(event) => {
-                    setSceneTagDraft(event.target.value)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      addSceneTag()
-                    }
-                  }}
-                  placeholder="新增"
-                  aria-label="新增时间场景"
-                  autoFocus
-                />
-                <span className="tag-chip__divider" aria-hidden="true" />
-                <button
-                  className="tag-chip__action tag-chip__action--confirm"
-                  type="button"
-                  onClick={addSceneTag}
-                  aria-label="保存时间场景"
-                >
-                  <CheckIcon className="tag-chip__icon" />
-                </button>
-              </div>
-            ) : (
-              <button
-                className="tag-chip tag-chip--create"
-                type="button"
-                onClick={() => {
-                  setShowSceneTagCreator(true)
-                }}
-                aria-label="新增时间场景"
-              >
-                <span className="tag-chip__label tag-chip__label--icon">
-                  <PlusIcon className="tag-chip__icon" />
-                </span>
-                <span className="tag-chip__divider" aria-hidden="true" />
-                <span className="tag-chip__action tag-chip__action--ghost" aria-hidden="true">
-                  <CheckIcon className="tag-chip__icon" />
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="setup-tag-section">
-          <div className="setup-tag-section__header">
-            <h3>活动类型</h3>
-            <p>至少保留一个</p>
-          </div>
-
-          <div className="tag-chip-grid" aria-label="初始化活动类型">
+          <div className="tag-chip-grid" aria-label="初始化种草清单">
             {draft.activityTypes.map((item) => (
               <div className="tag-chip" key={item.id}>
                 <span className="tag-chip__label">{item.name}</span>
@@ -329,7 +255,7 @@ export function SetupPage() {
                     removeActivityType(item.id)
                   }}
                   disabled={draft.activityTypes.length <= 1}
-                  aria-label={`删除活动类型 ${item.name}`}
+                  aria-label={`删除种草清单 ${item.name}`}
                 >
                   <CloseIcon className="tag-chip__icon" />
                 </button>
@@ -351,7 +277,7 @@ export function SetupPage() {
                     }
                   }}
                   placeholder="新增"
-                  aria-label="新增活动类型"
+                  aria-label="新增种草清单"
                   autoFocus
                 />
                 <span className="tag-chip__divider" aria-hidden="true" />
@@ -359,7 +285,7 @@ export function SetupPage() {
                   className="tag-chip__action tag-chip__action--confirm"
                   type="button"
                   onClick={addActivityType}
-                  aria-label="保存活动类型"
+                  aria-label="保存种草清单"
                 >
                   <CheckIcon className="tag-chip__icon" />
                 </button>
@@ -371,7 +297,81 @@ export function SetupPage() {
                 onClick={() => {
                   setShowActivityTypeCreator(true)
                 }}
-                aria-label="新增活动类型"
+                aria-label="新增种草清单"
+              >
+                <span className="tag-chip__label tag-chip__label--icon">
+                  <PlusIcon className="tag-chip__icon" />
+                </span>
+                <span className="tag-chip__divider" aria-hidden="true" />
+                <span className="tag-chip__action tag-chip__action--ghost" aria-hidden="true">
+                  <CheckIcon className="tag-chip__icon" />
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="setup-tag-section">
+          <div className="setup-tag-section__header">
+            <h3>有空就做</h3>
+            <p>当你将某些事定义为“有空就做”的事，期待的是怎样的“有空”？</p>
+          </div>
+
+          <div className="tag-chip-grid" aria-label="初始化有空就做">
+            {draft.sceneTags.map((item) => (
+              <div className="tag-chip" key={item.id}>
+                <span className="tag-chip__label">{item.name}</span>
+                <span className="tag-chip__divider" aria-hidden="true" />
+                <button
+                  className="tag-chip__action"
+                  type="button"
+                  onClick={() => {
+                    removeSceneTag(item.id)
+                  }}
+                  disabled={draft.sceneTags.length <= 1}
+                  aria-label={`删除有空就做 ${item.name}`}
+                >
+                  <CloseIcon className="tag-chip__icon" />
+                </button>
+              </div>
+            ))}
+
+            {showSceneTagCreator ? (
+              <div className="tag-chip tag-chip--creator">
+                <input
+                  className="tag-chip__input"
+                  value={sceneTagDraft}
+                  onChange={(event) => {
+                    setSceneTagDraft(event.target.value)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addSceneTag()
+                    }
+                  }}
+                  placeholder="新增"
+                  aria-label="新增有空就做"
+                  autoFocus
+                />
+                <span className="tag-chip__divider" aria-hidden="true" />
+                <button
+                  className="tag-chip__action tag-chip__action--confirm"
+                  type="button"
+                  onClick={addSceneTag}
+                  aria-label="保存有空就做"
+                >
+                  <CheckIcon className="tag-chip__icon" />
+                </button>
+              </div>
+            ) : (
+              <button
+                className="tag-chip tag-chip--create"
+                type="button"
+                onClick={() => {
+                  setShowSceneTagCreator(true)
+                }}
+                aria-label="新增有空就做"
               >
                 <span className="tag-chip__label tag-chip__label--icon">
                   <PlusIcon className="tag-chip__icon" />
@@ -394,7 +394,7 @@ export function SetupPage() {
         ) : null}
 
         <div className="setup-footer">
-          <p className="form-message">准备好后即可进入主页。</p>
+          <p className="form-message">准备好后即可进入主页，主页面迁移会在后续 V2-3 继续推进。</p>
           <button
             className="primary-button primary-button--arrow"
             type="button"

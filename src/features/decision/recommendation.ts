@@ -183,7 +183,7 @@ export async function createDecisionSelectedDayPlanItem({
   )
 
   if (existingItems.some((item) => item.templateId === template.id)) {
-    throw new Error('当前语境中已存在同一模板，不能重复加入。')
+    throw new Error('当前时段已存在同一条种草，不能重复添加。')
   }
 
   const sortOrder =

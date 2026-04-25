@@ -426,21 +426,46 @@ button:hover:not(:disabled) {
 
 .home-layout {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+}
+
+.home-section-intro {
+  display: grid;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.home-section-intro h3,
+.home-section-intro p {
+  margin: 0;
+}
+
+.home-section-intro h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.home-section-intro > p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-size: 0.82rem;
 }
 
 .home-appbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  padding: 10px 14px;
+  padding: 9px 12px;
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 16px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(246, 241, 232, 0.96)),
     var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow:
+    rgba(0, 0, 0, 0.06) 0 1px 1px,
+    rgba(0, 0, 0, 0.03) 0 -1px 1px inset;
 }
 
 .home-appbar__controls {
@@ -454,8 +479,8 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px dashed var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.6);
@@ -463,8 +488,8 @@ button:hover:not(:disabled) {
 }
 
 .weather-chip--icon {
-  min-height: 34px;
-  width: 34px;
+  min-height: 30px;
+  width: 30px;
   justify-content: center;
   padding: 0;
 }
@@ -491,7 +516,7 @@ button:hover:not(:disabled) {
 
 .date-nav h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   text-align: center;
@@ -501,11 +526,11 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
   color: var(--text);
   cursor: pointer;
@@ -518,41 +543,12 @@ button:hover:not(:disabled) {
 }
 
 .icon-button--toolbar {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
 }
 
 .icon-button--active {
-  background: var(--text);
-  color: #ffffff;
-}
-
-.mode-switcher-wrap {
-  display: flex;
-}
-
-.mode-switcher {
-  width: 100%;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: var(--shadow);
-}
-
-.mode-switcher__button {
-  flex: 1 1 0;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.mode-switcher__button--active {
   background: var(--text);
   color: #ffffff;
 }
@@ -564,7 +560,7 @@ button:hover:not(:disabled) {
 
 .mode-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .mode-panel__summary {
@@ -572,11 +568,11 @@ button:hover:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
 }
 
 .mode-panel__summary h2 {
@@ -587,8 +583,12 @@ button:hover:not(:disabled) {
 }
 
 .mode-panel__summary--compact {
-  padding: 10px 12px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   min-height: auto;
+  box-shadow: none;
 }
 
 .mode-panel__summary--compact p {
@@ -599,23 +599,25 @@ button:hover:not(:disabled) {
 .plan-column__timeline,
 .todo-board {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .temporary-composer,
 .template-manager,
 .recommendation-card {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
+  border-radius: 16px;
+  box-shadow:
+    rgba(0, 0, 0, 0.05) 0 1px 1px,
+    rgba(0, 0, 0, 0.02) 0 -1px 1px inset;
 }
 
 .list-group {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .list-group__header,
@@ -631,18 +633,19 @@ button:hover:not(:disabled) {
 
 .list-group__heading {
   display: grid;
-  gap: 2px;
+  gap: 0;
 }
 
 .list-group__heading .eyebrow {
   color: var(--text-muted);
+  font-size: 0.68rem;
 }
 
 .list-group__divider {
   height: 1px;
   border-radius: 999px;
   background:
-    linear-gradient(90deg, rgba(218, 212, 200, 0.9), rgba(218, 212, 200, 0.18));
+    linear-gradient(90deg, rgba(218, 212, 200, 0.7), rgba(218, 212, 200, 0.08));
 }
 
 .temporary-composer__header h4,
@@ -659,7 +662,7 @@ button:hover:not(:disabled) {
 .template-manager__list,
 .template-manager__editor {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .item-card,
@@ -667,25 +670,25 @@ button:hover:not(:disabled) {
 .candidate-item,
 .template-list-item {
   display: grid;
-  gap: 8px;
-  padding: 11px 12px;
+  gap: 6px;
+  padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: var(--shadow);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: none;
 }
 
 .item-card--day,
 .todo-item-card--day {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 232, 0.88));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(246, 241, 232, 0.56));
 }
 
 .item-card--night,
 .todo-item-card--night {
   background:
-    linear-gradient(180deg, rgba(245, 241, 255, 0.96), rgba(238, 233, 223, 0.92));
-  border-color: rgba(193, 176, 255, 0.28);
+    linear-gradient(180deg, rgba(245, 241, 255, 0.86), rgba(238, 233, 223, 0.62));
+  border-color: rgba(193, 176, 255, 0.18);
 }
 
 .item-card__header,
@@ -703,7 +706,7 @@ button:hover:not(:disabled) {
 .candidate-item h6,
 .template-list-item__header h5 {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   line-height: 1.25;
 }
 
@@ -719,13 +722,13 @@ button:hover:not(:disabled) {
 .status-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 7px;
+  min-height: 20px;
+  padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.64);
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 
@@ -742,39 +745,100 @@ button:hover:not(:disabled) {
 }
 
 .temporary-composer {
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .temporary-composer--compact {
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .temporary-composer__controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 108px 44px;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+}
+
+.temporary-composer__controls--expanded {
+  grid-template-columns: minmax(0, 1fr) 92px auto 40px;
 }
 
 .temporary-composer__segmented {
   min-width: 0;
 }
 
+.temporary-composer__more-toggle {
+  white-space: nowrap;
+  min-height: 32px;
+  padding: 0 8px;
+  border-style: dashed;
+  color: var(--text-soft);
+}
+
+.temporary-composer__more {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.temporary-composer__section {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.temporary-composer__section + .temporary-composer__section {
+  border-top: 1px dashed rgba(218, 212, 200, 0.7);
+  padding-top: 10px;
+}
+
+.temporary-composer__section .recommendation-card {
+  padding: 8px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.temporary-composer__section-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.temporary-composer__section-heading h5,
+.temporary-composer__section-heading p {
+  margin: 0;
+}
+
+.temporary-composer__section-heading h5 {
+  font-size: 0.88rem;
+}
+
+.temporary-composer__action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .todo-item-card__main,
 .todo-item-card__notes,
 .recommendation-block {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .segmented-progress-panel {
   display: grid;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   border: 1px dashed var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.56);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.46);
 }
 
 .segmented-progress-panel__controls {
@@ -800,11 +864,11 @@ button:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
   color: var(--success);
   cursor: pointer;
@@ -828,12 +892,12 @@ button:hover:not(:disabled) {
 }
 
 .recommendation-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .recommendation-card__body {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .section-heading h6 {
@@ -844,7 +908,7 @@ button:hover:not(:disabled) {
 
 .candidate-item--recommended {
   border-color: rgba(248, 204, 101, 0.8);
-  background: rgba(248, 204, 101, 0.16);
+  background: rgba(248, 204, 101, 0.12);
 }
 
 .template-form__section {
@@ -1194,7 +1258,8 @@ button:hover:not(:disabled) {
 }
 
 .template-manager {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.58);
+  border-style: dashed;
 }
 
 .template-manager__layout {
@@ -1216,8 +1281,8 @@ button:hover:not(:disabled) {
 }
 
 .composer-panel {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px dashed var(--border);
 }
 
@@ -1233,7 +1298,7 @@ button:hover:not(:disabled) {
 }
 
 .composer-entry__title {
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 600;
 }
 
@@ -1305,8 +1370,8 @@ button:hover:not(:disabled) {
   .temporary-composer,
   .template-manager,
   .recommendation-card {
-    padding: 18px;
-    border-radius: 24px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .mode-switcher {
@@ -1362,8 +1427,12 @@ button:hover:not(:disabled) {
   }
 
   .temporary-composer__controls {
-    grid-template-columns: minmax(0, 1fr) 96px 44px;
+    grid-template-columns: minmax(0, 1fr) 84px 40px;
     gap: 6px;
+  }
+
+  .temporary-composer__controls--expanded {
+    grid-template-columns: minmax(0, 1fr) 84px 56px 40px;
   }
 
   .setup-footer {

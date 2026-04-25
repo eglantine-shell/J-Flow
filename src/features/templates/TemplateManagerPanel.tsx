@@ -64,7 +64,7 @@ export function TemplateManagerPanel() {
       .catch((error: unknown) => {
         if (!cancelled) {
           setErrorMessage(
-            error instanceof Error ? error.message : '模板列表读取失败，请稍后重试。',
+            error instanceof Error ? error.message : '种草列表读取失败，请稍后重试。',
           )
         }
       })
@@ -131,10 +131,10 @@ export function TemplateManagerPanel() {
       await loadTemplates()
       setEditingTemplateId(updated.id)
       setFormState(toFormState(updated))
-      setSuccessMessage(`已更新模板：${updated.title}`)
+      setSuccessMessage(`已更新种草：${updated.title}`)
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error ? error.message : '模板保存失败，请稍后重试。',
+        error instanceof Error ? error.message : '种草保存失败，请稍后重试。',
       )
     } finally {
       setIsSaving(false)
@@ -143,7 +143,7 @@ export function TemplateManagerPanel() {
 
   const archiveTemplate = async (template: TaskTemplate) => {
     const shouldArchive = window.confirm(
-      `确认停用「${template.title}」吗？停用后它将不再参与未来自动生成与推荐，但不会改动已有实例。`,
+      `确认停用「${template.title}」吗？停用后它将不再参与未来自动生成与拔草，但不会改动已有实例。`,
     )
 
     if (!shouldArchive) {
@@ -164,10 +164,10 @@ export function TemplateManagerPanel() {
       }
 
       await loadTemplates()
-      setSuccessMessage(`已停用模板：${template.title}`)
+      setSuccessMessage(`已停用种草：${template.title}`)
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error ? error.message : '模板停用失败，请稍后重试。',
+        error instanceof Error ? error.message : '种草停用失败，请稍后重试。',
       )
     }
   }
@@ -175,8 +175,8 @@ export function TemplateManagerPanel() {
   if (isLoading) {
     return (
       <div className="form-status-card">
-        <p className="eyebrow">模板管理</p>
-        <p>正在加载模板...</p>
+        <p className="eyebrow">管理种草</p>
+        <p>正在加载种草...</p>
       </div>
     )
   }
@@ -185,10 +185,10 @@ export function TemplateManagerPanel() {
     <div className="template-manager">
       <div className="template-manager__intro">
         <div>
-          <p className="eyebrow">Templates</p>
-          <h4>模板</h4>
+          <p className="eyebrow">Grass</p>
+          <h4>种草清单</h4>
         </div>
-        <p>{templates.length} 个模板</p>
+        <p>{templates.length} 条种草</p>
       </div>
 
       {errorMessage ? (
@@ -203,7 +203,7 @@ export function TemplateManagerPanel() {
         <div className="template-manager__list">
           {templates.length === 0 ? (
             <div className="empty-state-card">
-              <p>还没有模板</p>
+              <p>还没有种草</p>
             </div>
           ) : (
             templates.map((template) => (
@@ -275,13 +275,13 @@ export function TemplateManagerPanel() {
 
               <div className="setup-actions">
                 <button className="primary-button" type="submit" disabled={isSaving}>
-                  {isSaving ? '保存中...' : '保存模板'}
+                  {isSaving ? '保存中...' : '保存种草'}
                 </button>
               </div>
             </form>
           ) : (
             <div className="empty-state-card">
-              <p>选择一个模板开始编辑</p>
+              <p>选择一条种草开始编辑</p>
             </div>
           )}
         </div>

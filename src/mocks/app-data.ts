@@ -13,8 +13,8 @@ export const mockSeedAppData: AppData = {
   },
   sceneTags: [
     {
-      id: 'scene-weekday',
-      name: '周中',
+      id: 'scene-weekday-evening',
+      name: '工作日晚上',
       createdAt,
       isBuiltIn: true,
     },
@@ -25,14 +25,8 @@ export const mockSeedAppData: AppData = {
       isBuiltIn: true,
     },
     {
-      id: 'scene-morning',
-      name: '上午',
-      createdAt,
-      isBuiltIn: true,
-    },
-    {
-      id: 'scene-evening',
-      name: '晚上',
+      id: 'scene-holiday',
+      name: '长假',
       createdAt,
       isBuiltIn: true,
     },
@@ -45,8 +39,14 @@ export const mockSeedAppData: AppData = {
       isBuiltIn: true,
     },
     {
-      id: 'activity-home',
-      name: '家务',
+      id: 'activity-movie',
+      name: '观影',
+      createdAt,
+      isBuiltIn: true,
+    },
+    {
+      id: 'activity-travel',
+      name: '旅游',
       createdAt,
       isBuiltIn: true,
     },

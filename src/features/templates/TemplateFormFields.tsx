@@ -92,9 +92,9 @@ export function validateTaskTemplateForm(formState: TaskTemplateFormState) {
   return shouldShowTemplateDate(formState) && !formState.date
     ? '请填写日期。'
     : !formState.activityTypeId
-      ? '请选择活动类型。'
+      ? '请选择种草清单。'
       : formState.title.trim().length === 0
-        ? '请填写具体内容。'
+        ? '请填写种草内容。'
         : null
 }
 
@@ -150,7 +150,7 @@ export function TaskTemplateFormFields({
     const nextName = sceneTagDraft.trim()
 
     if (!nextName) {
-      setSceneTagError('请输入时间场景名称。')
+      setSceneTagError('请输入“有空就做”名称。')
       return
     }
 
@@ -167,7 +167,7 @@ export function TaskTemplateFormFields({
       setShowSceneTagCreator(false)
     } catch (error: unknown) {
       setSceneTagError(
-        error instanceof Error ? error.message : '新增时间场景失败，请稍后重试。',
+        error instanceof Error ? error.message : '新增“有空就做”失败，请稍后重试。',
       )
     } finally {
       setIsCreatingSceneTag(false)
@@ -178,7 +178,7 @@ export function TaskTemplateFormFields({
     const nextName = activityTypeDraft.trim()
 
     if (!nextName) {
-      setActivityTypeError('请输入活动类型名称。')
+      setActivityTypeError('请输入种草清单名称。')
       return
     }
 
@@ -195,7 +195,7 @@ export function TaskTemplateFormFields({
       setShowActivityTypeCreator(false)
     } catch (error: unknown) {
       setActivityTypeError(
-        error instanceof Error ? error.message : '新增活动类型失败，请稍后重试。',
+        error instanceof Error ? error.message : '新增种草清单失败，请稍后重试。',
       )
     } finally {
       setIsCreatingActivityType(false)
@@ -229,7 +229,7 @@ export function TaskTemplateFormFields({
       }))
     } catch (error: unknown) {
       setSceneTagError(
-        error instanceof Error ? error.message : '删除时间场景失败，请稍后重试。',
+        error instanceof Error ? error.message : '删除“有空就做”失败，请稍后重试。',
       )
     }
   }
@@ -245,7 +245,7 @@ export function TaskTemplateFormFields({
       await onDeleteActivityType(activityType)
     } catch (error: unknown) {
       setActivityTypeError(
-        error instanceof Error ? error.message : '删除活动类型失败，请稍后重试。',
+        error instanceof Error ? error.message : '删除种草清单失败，请稍后重试。',
       )
     }
   }
@@ -253,7 +253,7 @@ export function TaskTemplateFormFields({
   return (
     <div className="template-form__compact">
       <div className="template-form__row">
-        <div className="selection-grid selection-grid--compact" aria-label="活动类型">
+        <div className="selection-grid selection-grid--compact" aria-label="种草清单">
           {loadState.activityTypes.map((activityType) => (
             <div
               key={activityType.id}
@@ -279,7 +279,7 @@ export function TaskTemplateFormFields({
                 onClick={() => {
                   void handleActivityTypeDelete(activityType)
                 }}
-                aria-label={`删除活动类型 ${activityType.name}`}
+                aria-label={`删除种草清单 ${activityType.name}`}
               >
                 <CloseIcon className="tag-chip__icon" />
               </button>
@@ -299,7 +299,7 @@ export function TaskTemplateFormFields({
                   onKeyDown={(event) => {
                     handleInlineSubmit(event, submitActivityTypeDraft)
                   }}
-                  placeholder="活动类型"
+                  placeholder="种草清单"
                   autoFocus
                 />
                 <span className="tag-chip__divider" aria-hidden="true" />
@@ -310,7 +310,7 @@ export function TaskTemplateFormFields({
                     void submitActivityTypeDraft()
                   }}
                   disabled={isCreatingActivityType}
-                  aria-label="保存活动类型"
+                  aria-label="保存种草清单"
                 >
                   <CheckIcon className="tag-chip__icon" />
                 </button>
@@ -323,7 +323,7 @@ export function TaskTemplateFormFields({
                   setShowActivityTypeCreator(true)
                   setActivityTypeError(null)
                 }}
-                aria-label="新增活动类型"
+                aria-label="新增种草清单"
               >
                 <span className="tag-chip__label tag-chip__label--icon">
                   <PlusIcon className="tag-chip__icon" />
@@ -353,13 +353,13 @@ export function TaskTemplateFormFields({
               title: event.target.value,
             }))
           }}
-          placeholder="输入模板内容"
-          aria-label="模板内容"
+          placeholder="输入种草内容"
+          aria-label="种草内容"
         />
       </div>
 
       <div className="template-form__row">
-        <div className="selection-grid selection-grid--compact" aria-label="时间场景">
+        <div className="selection-grid selection-grid--compact" aria-label="有空就做">
           {loadState.sceneTags.map((sceneTag) => (
             <div
               key={sceneTag.id}
@@ -385,7 +385,7 @@ export function TaskTemplateFormFields({
                 onClick={() => {
                   void handleSceneTagDelete(sceneTag)
                 }}
-                aria-label={`删除时间场景 ${sceneTag.name}`}
+                aria-label={`删除有空就做 ${sceneTag.name}`}
               >
                 <CloseIcon className="tag-chip__icon" />
               </button>
@@ -405,7 +405,7 @@ export function TaskTemplateFormFields({
                   onKeyDown={(event) => {
                     handleInlineSubmit(event, submitSceneTagDraft)
                   }}
-                  placeholder="时间场景"
+                  placeholder="有空就做"
                   autoFocus
                 />
                 <span className="tag-chip__divider" aria-hidden="true" />
@@ -416,7 +416,7 @@ export function TaskTemplateFormFields({
                     void submitSceneTagDraft()
                   }}
                   disabled={isCreatingSceneTag}
-                  aria-label="保存时间场景"
+                  aria-label="保存有空就做"
                 >
                   <CheckIcon className="tag-chip__icon" />
                 </button>
@@ -429,7 +429,7 @@ export function TaskTemplateFormFields({
                   setShowSceneTagCreator(true)
                   setSceneTagError(null)
                 }}
-                aria-label="新增时间场景"
+                aria-label="新增有空就做"
               >
                 <span className="tag-chip__label tag-chip__label--icon">
                   <PlusIcon className="tag-chip__icon" />

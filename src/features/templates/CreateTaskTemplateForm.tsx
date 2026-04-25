@@ -84,7 +84,7 @@ export function CreateTaskTemplateForm() {
         : [...current.sceneTagIds, created.id],
     }))
     setErrorMessage(null)
-    setSuccessMessage(`已新增时间场景：${created.name}`)
+    setSuccessMessage(`已新增有空就做：${created.name}`)
   }
 
   const handleCreateActivityType = async (name: string) => {
@@ -102,7 +102,7 @@ export function CreateTaskTemplateForm() {
       activityTypeId: created.id,
     }))
     setErrorMessage(null)
-    setSuccessMessage(`已新增活动类型：${created.name}`)
+    setSuccessMessage(`已新增种草清单：${created.name}`)
   }
 
   const handleDeleteSceneTag = async (sceneTag: TaskTemplateFormLoadState['sceneTags'][number]) => {
@@ -123,24 +123,24 @@ export function CreateTaskTemplateForm() {
       sceneTagIds: current.sceneTagIds.filter((id) => id !== sceneTag.id),
     }))
     setErrorMessage(null)
-    setSuccessMessage(`已删除时间场景：${sceneTag.name}`)
+    setSuccessMessage(`已删除有空就做：${sceneTag.name}`)
   }
 
   const handleDeleteActivityType = async (
     activityType: TaskTemplateFormLoadState['activityTypes'][number],
   ) => {
     if (loadState.activityTypes.length <= 1) {
-      throw new Error('至少保留一个活动类型，才能继续录入模板。')
+      throw new Error('至少保留一个种草清单，才能继续新增种草。')
     }
 
     const result = await appDataRepository.activityTypes.deleteIfUnused(activityType.id)
 
     if (!result.removed) {
       if (result.reason === 'in_use') {
-        throw new Error('该活动类型仍被使用，需先修改或删除相关条目后再删除。')
+        throw new Error('该种草清单仍被使用，需先修改或停用相关种草后再删除。')
       }
 
-      throw new Error('活动类型删除失败，请稍后重试。')
+      throw new Error('种草清单删除失败，请稍后重试。')
     }
 
     const nextActivityTypes = loadState.activityTypes.filter((item) => item.id !== activityType.id)
@@ -157,7 +157,7 @@ export function CreateTaskTemplateForm() {
           : current.activityTypeId,
     }))
     setErrorMessage(null)
-    setSuccessMessage(`已删除活动类型：${activityType.name}`)
+    setSuccessMessage(`已删除种草清单：${activityType.name}`)
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -194,10 +194,10 @@ export function CreateTaskTemplateForm() {
         ...createInitialTaskTemplateFormState(),
         activityTypeId: loadState.activityTypes[0]?.id || '',
       })
-      setSuccessMessage(`已加入决策库：${created.title}`)
+      setSuccessMessage(`已加入种草：${created.title}`)
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error ? error.message : '条目录入失败，请稍后重试。',
+        error instanceof Error ? error.message : '种草保存失败，请稍后重试。',
       )
     } finally {
       setIsSaving(false)
@@ -207,8 +207,8 @@ export function CreateTaskTemplateForm() {
   if (isLoading) {
     return (
       <div className="form-status-card">
-        <p className="eyebrow">新增模板</p>
-        <p>正在加载表单...</p>
+        <p className="eyebrow">新增种草</p>
+        <p>正在加载种草表单...</p>
       </div>
     )
   }
@@ -239,7 +239,7 @@ export function CreateTaskTemplateForm() {
           type="submit"
           disabled={isSaving || loadState.activityTypes.length === 0}
         >
-          {isSaving ? '保存中...' : '保存模板'}
+          {isSaving ? '保存中...' : '保存种草'}
         </button>
       </div>
     </form>
