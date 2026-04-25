@@ -22,15 +22,8 @@ function BaseIcon({ children, ...props }: IconProps) {
 export function SettingsIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 2.8v2.1" />
-      <path d="M12 19.1v2.1" />
-      <path d="m4.7 4.7 1.5 1.5" />
-      <path d="m17.8 17.8 1.5 1.5" />
-      <path d="M2.8 12h2.1" />
-      <path d="M19.1 12h2.1" />
-      <path d="m4.7 19.3 1.5-1.5" />
-      <path d="m17.8 6.2 1.5-1.5" />
+      <circle cx="12" cy="12" r="2.7" />
+      <path d="M12 4.1 13.5 5l1.8-.5.9 1.6-.9 1.6.6 1.5 1.6.6 1.6-.9 1.6.9v1.8l-1.6.9-.5 1.8 1 1.5-.9 1.6-1.8-.4-1.5 1-1 .9h-1.8l-.9-1.6-1.8-.5-1.5 1-.9-.5-.9-1.6 1-1.5-.6-1.8-1.6-.9v-1.8l1.6-.9.5-1.8-1-1.5.9-1.6 1.8.4L10.5 5Z" />
     </BaseIcon>
   )
 }
