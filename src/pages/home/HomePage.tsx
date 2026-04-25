@@ -63,12 +63,6 @@ export function HomePage() {
       </section>
 
       <section className="home-main">
-        <div className="home-section-intro">
-          <div>
-            <p className="eyebrow">Todo</p>
-            <h3>今天的 Todo</h3>
-          </div>
-        </div>
         <TodoModePanel selectedDate={selectedDate} />
       </section>
 

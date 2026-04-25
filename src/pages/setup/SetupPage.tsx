@@ -233,13 +233,10 @@ export function SetupPage() {
 
   return (
     <section className="page-grid page-grid--single">
-      <SurfaceCard
-        title="哪怕你是一个100%的J人，想必也会有……"
-        description="先准备你的种草清单，以及什么样的“有空”适合拿来拔草。"
-      >
+      <SurfaceCard title="哪怕你是一个100%的J人，想必也会有……">
         <div className="setup-tag-section">
           <div className="setup-tag-section__header">
-            <h3>种草清单</h3>
+            <h2>种草清单</h2>
             <p>比如，书单、影单、探店清单、逛公园清单，甚至……待处理的家务死角清单？</p>
           </div>
 
@@ -313,7 +310,7 @@ export function SetupPage() {
 
         <div className="setup-tag-section">
           <div className="setup-tag-section__header">
-            <h3>有空就做</h3>
+            <h2>有空就做</h2>
             <p>当你将某些事定义为“有空就做”的事，期待的是怎样的“有空”？</p>
           </div>
 
@@ -394,7 +391,6 @@ export function SetupPage() {
         ) : null}
 
         <div className="setup-footer">
-          <p className="form-message">准备好后即可进入主页，主页面迁移会在后续 V2-3 继续推进。</p>
           <button
             className="primary-button primary-button--arrow"
             type="button"

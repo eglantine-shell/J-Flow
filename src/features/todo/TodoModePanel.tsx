@@ -96,13 +96,14 @@ function RecommendationInlineCard({
   onConfirm: (template: TaskTemplate) => void
   onClose: () => void
 }) {
+  const visibleCandidates = panelState.candidates
+
   return (
     <div className="recommendation-card">
       <div className="recommendation-card__header">
-        <div>
-          <p className="eyebrow">从种草添加</p>
-          <h5>{panelState.timeBlock === 'day' ? '白天拔草' : '晚上拔草'}</h5>
-        </div>
+        <span className="status-chip recommendation-card__context">
+          {panelState.timeBlock === 'day' ? '白天' : '晚上'}
+        </span>
         <button className="ghost-button" type="button" onClick={onClose}>
           收起
         </button>
@@ -130,61 +131,36 @@ function RecommendationInlineCard({
         <p className="form-message form-message--danger">{panelState.errorMessage}</p>
       ) : (
         <div className="recommendation-card__body">
-          <div className="recommendation-block">
-            <div className="section-heading">
-              <h6>推荐</h6>
+          {visibleCandidates.length === 0 ? (
+            <div className="empty-state-card">
+              <p>没有可选候选</p>
             </div>
+          ) : (
+            <div className="candidate-list">
+              {visibleCandidates.map((candidate) => {
+                const isRecommended = panelState.recommended?.id === candidate.id
 
-            {panelState.recommended ? (
-              <article className="candidate-item candidate-item--recommended">
-                <div>
-                  <h6>{panelState.recommended.title}</h6>
-                  <div className="tag-row">
-                    <span className="status-chip">
-                      兴趣 {panelState.recommended.interestLevel}
-                    </span>
-                    <span className="status-chip">{panelState.recommended.date}</span>
-                  </div>
-                </div>
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => {
-                    onConfirm(panelState.recommended as TaskTemplate)
-                  }}
-                >
-                  添加到 Todo
-                </button>
-              </article>
-            ) : (
-              <div className="empty-state-card">
-                <p>没有默认推荐</p>
-              </div>
-            )}
-          </div>
-
-          <div className="recommendation-block">
-            <div className="section-heading">
-              <h6>候选列表</h6>
-            </div>
-
-            {panelState.candidates.length === 0 ? (
-              <div className="empty-state-card">
-                <p>没有可选候选</p>
-              </div>
-            ) : (
-              <div className="candidate-list">
-                {panelState.candidates.map((candidate) => (
-                  <article className="candidate-item" key={candidate.id}>
-                    <div>
+                return (
+                  <article
+                    className={
+                      isRecommended
+                        ? 'candidate-item candidate-item--recommended'
+                        : 'candidate-item'
+                    }
+                    key={candidate.id}
+                  >
+                    <div className="candidate-item__main">
                       <h6>{candidate.title}</h6>
                       <div className="tag-row">
+                        {isRecommended ? <span className="status-chip">默认推荐</span> : null}
                         <span className="status-chip">兴趣 {candidate.interestLevel}</span>
-                        <span className="status-chip">{candidate.date}</span>
+                        {candidate.date ? (
+                          <span className="status-chip">{candidate.date}</span>
+                        ) : null}
                       </div>
                     </div>
                     <button
-                      className="ghost-button"
+                      className={isRecommended ? 'primary-button' : 'ghost-button'}
                       type="button"
                       onClick={() => {
                         onConfirm(candidate)
@@ -193,10 +169,10 @@ function RecommendationInlineCard({
                       添加
                     </button>
                   </article>
-                ))}
-              </div>
-            )}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -610,74 +586,92 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                   : 'todo-item-card todo-item-card--night'
               }
             >
-              <div className="todo-item-card__header">
-                <div className="todo-item-card__main">
-                  <h5>{item.title}</h5>
-                  <div className="tag-row">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className={
-                          tag === '必要'
-                            ? 'status-chip status-chip--necessary'
-                            : tag === '已完成'
-                              ? 'status-chip status-chip--completed'
-                              : 'status-chip'
-                        }
-                      >
-                        {tag}
-                      </span>
-                    ))}
+              <div className="todo-item-card__layout">
+                <div className="todo-item-card__content">
+                  <div className="todo-item-card__main">
+                    <h5>{item.title}</h5>
+                    <div className="tag-row">
+                      {tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className={
+                            tag === '必要'
+                              ? 'status-chip status-chip--necessary'
+                              : tag === '已完成'
+                                ? 'status-chip status-chip--completed'
+                                : 'status-chip'
+                          }
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
+
+                  {item.requiresPreparation ? (
+                    <div className="todo-item-card__notes">
+                      <button
+                        className="ghost-button ghost-button--compact"
+                        type="button"
+                        onClick={() => {
+                          toggleNotes(item.id)
+                        }}
+                      >
+                        {notesVisibility[item.id] ? '收起准备' : '查看准备'}
+                      </button>
+                      {notesVisibility[item.id] ? (
+                        <p>{item.preparationNotes || '暂无备注'}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {item.isSegmented && item.status !== 'completed' && item.source !== 'manual_temporary' ? (
+                    <div className="todo-item-card__meta">
+                      {!expandedProgressItems[item.id] ? (
+                        <button
+                          className="ghost-button ghost-button--compact"
+                          type="button"
+                          onClick={() => {
+                            toggleProgressEditor(item)
+                          }}
+                        >
+                          推进
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="todo-item-card__actions">
-                  {item.source === 'manual_temporary' ? (
-                    <button
-                      className="ghost-button ghost-button--compact"
-                      type="button"
-                      onClick={() => {
-                        void deleteTemporaryItem(item)
-                      }}
-                    >
-                      删除
-                    </button>
-                  ) : null}
+                  <button
+                    className={
+                      item.status === 'completed'
+                        ? 'todo-check todo-check--checked'
+                        : 'todo-check'
+                    }
+                    type="button"
+                    aria-label={item.status === 'completed' ? '已完成' : '标记完成'}
+                    disabled={item.status === 'completed' || item.isSegmented}
+                    onClick={() => {
+                      void completeItem(item)
+                    }}
+                  >
+                    <span className="todo-check__mark" aria-hidden="true">
+                      {item.status === 'completed' ? '✓' : ''}
+                    </span>
+                  </button>
 
-                  {item.isSegmented ? (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      disabled={item.status === 'completed' || item.source === 'manual_temporary'}
-                      onClick={() => {
-                        toggleProgressEditor(item)
-                      }}
-                    >
-                      {item.status === 'completed'
-                        ? '已完成'
-                        : expandedProgressItems[item.id]
-                          ? '收起'
-                          : '推进'}
-                    </button>
-                  ) : (
-                    <button
-                      className={
-                        item.status === 'completed'
-                          ? 'todo-check todo-check--checked'
-                          : 'todo-check'
-                      }
-                      type="button"
-                      aria-label={item.status === 'completed' ? '已完成' : '标记完成'}
-                      disabled={item.status === 'completed'}
-                      onClick={() => {
-                        void completeItem(item)
-                      }}
-                    >
-                      <span className="todo-check__mark" aria-hidden="true">
-                        {item.status === 'completed' ? '✓' : ''}
-                      </span>
-                    </button>
-                  )}
+                  <button
+                    className="todo-item-card__delete"
+                    type="button"
+                    aria-label="删除事项"
+                    onClick={() => {
+                      void deleteTemporaryItem(item)
+                    }}
+                    disabled={item.source !== 'manual_temporary'}
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
 
@@ -730,22 +724,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 </div>
               ) : null}
 
-              {item.requiresPreparation ? (
-                <div className="todo-item-card__notes">
-                  <button
-                    className="ghost-button ghost-button--compact"
-                    type="button"
-                    onClick={() => {
-                      toggleNotes(item.id)
-                    }}
-                  >
-                    {notesVisibility[item.id] ? '收起准备' : '查看准备'}
-                  </button>
-                  {notesVisibility[item.id] ? (
-                    <p>{item.preparationNotes || '暂无备注'}</p>
-                  ) : null}
-                </div>
-              ) : null}
             </article>
           )
         })}
@@ -778,10 +756,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
   return (
     <div className="mode-panel">
-      <div className="mode-panel__summary mode-panel__summary--compact">
-        <p>{dayItems.length}个白天 · {nightItems.length}个晚上</p>
-      </div>
-
       <div className="temporary-composer temporary-composer--compact">
         <div className="temporary-composer__controls temporary-composer__controls--expanded">
           <input
@@ -862,11 +836,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         {showMoreOptions ? (
           <div className="temporary-composer__more">
             <div className="temporary-composer__section">
-              <div className="temporary-composer__section-heading">
-                <p className="eyebrow">拔草</p>
-                <h5>从种草添加</h5>
-              </div>
-
               <div className="temporary-composer__action-row">
                 <button
                   className="ghost-button"
@@ -894,16 +863,13 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                   }}
                 />
               ) : (
-                <p className="form-message">需要时再从种草里挑一条加入当前时段。</p>
+                <div className="temporary-composer__hint-row">
+                  <span className="status-chip">需要时再从种草里挑一条</span>
+                </div>
               )}
             </div>
 
             <div className="temporary-composer__section">
-              <div className="temporary-composer__section-heading">
-                <p className="eyebrow">本次 Todo 属性</p>
-                <h5>只作用于本次创建</h5>
-              </div>
-
               <label className="toggle-chip">
                 <input
                   type="checkbox"
@@ -953,8 +919,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 />
                 <span>分次事项</span>
               </label>
-
-              <p className="form-message">重复规则本轮暂不支持，仍通过种草层保留。</p>
             </div>
           </div>
         ) : null}
