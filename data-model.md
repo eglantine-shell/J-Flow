@@ -1,70 +1,145 @@
 # 数据模型文档
 
-本文档定义当前版本的核心数据结构。
-应用使用本地存储，因此需要明确区分“长期存在的模板数据”和“某一天实际出现的实例数据”。
+本文档定义当前版本的核心数据结构口径。
+
+V2.1 的重要调整是：
+- 产品主语切换为 Todo
+- 模板、实例、来源、continuation 等概念降级为内部实现说明
+- 本轮不新增字段，不改 schema，不改 storage
 
 字段名允许使用英文，说明文字使用中文。
 
 ---
 
-## 一、建模原则
+## 一、V2.1 建模原则
 
-### 1. 模板与实例分离
-本项目至少存在两层数据：
+### 1. 产品主语是 Todo，不是模板
 
-- 决策库条目：长期存在，用户主动维护
-- 当日事项实例：某一天实际出现在页面中的事项
+产品层面对用户讲述的主语应是 Todo。
 
-不能将两者混为一体，否则会难以处理：
-- 重复任务
-- 分次任务
-- 临时事项
-- 自动生成事项
-- 决策模式选入事项
+无论底层是否仍保留：
+- 模板层
+- 重复实例层
+- 当日实例层
+- continuation 链路
 
-### 2. 来源必须可追踪
-Todo 模式中的事项必须知道自己来自哪里。
-至少要区分：
-- 自动生成
-- 决策选入
-- 临时手动添加
+这些都只能服务于 Todo 行为，不应反过来定义 Todo 是什么。
 
-### 3. 任务条目需保留扩展空间
-后续可能需要：
-- 模糊搜索
-- 前置提醒
-- 更细的状态机
+### 2. UI 与底层模型分层
 
-因此字段设计不能过死。
+V2.1 后续实现应明确分成两层：
+
+1. 底层存储模型
+- 用于持久化、同步、兼容历史数据
+
+2. UI 视图模型
+- 用于渲染 Todo 与决定按钮状态
+
+UI 不应直接把底层实例字段当作产品规则。
+
+### 3. 当前不扩字段
+
+本轮只重写规则与建模口径，不新增：
+- 新字段
+- 新 schema
+- 新 storage 结构
+
+若后续实现发现底层结构不足，应先补规则，再决定是否调整模型。
 
 ---
 
-## 二、时间场景
+## 二、TodoViewModel 规划
 
-type SceneTag = {
+V2.1 建议新增一个面向 UI 的 `TodoViewModel`。
+
+### 最小字段集合
+
+type TodoViewModel = {
   id: string
-  name: string
-  createdAt: string
-  isBuiltIn: boolean
+  title: string
+  date: string
+  timeBlock: 'day' | 'night'
+
+  isCompleted: boolean
+  isDeleted: boolean
+
+  isSegmented: boolean
+  progressPercent: number
+
+  isRepeating: boolean
+  isNecessary: boolean
+  preparationNotes: string
+
+  carryHint?: string
+  originLabel?: string
+
+  canEdit: boolean
+  canDelete: boolean
+  canComplete: boolean
+  canUncomplete: boolean
+  canStopRepeating: boolean
+
+  internalRef: unknown
 }
 
-说明：
+### 规划说明
 
-时间场景是 tag，可多选
-可由系统提供默认值，也可由用户自定义
+- `TodoViewModel` 是 UI 层模型，不代表必须入库
+- 它可以由现有底层结构映射而来
+- `internalRef` 只用于映射层回写底层，不应直接暴露为产品心智
+- V2.1-2 已按该方向落地到 Todo 功能层：
+  - `TodoModePanel` 先读取底层 `DayPlanItem`
+  - 再映射为 `TodoViewModel`
+  - 按钮能力与轻量来源标签都尽量从映射层读取
 
-## 三、活动类型
-type ActivityType = {
-  id: string
-  name: string
-  createdAt: string
-  isBuiltIn: boolean
-}
+---
 
-说明：
-每条决策库条目必须有且只有一个主活动类型
+## 三、当前底层数据层
 
-## 四、模板条目
+V2.1 当前仍允许保留以下底层模型。
+
+### 1. SceneTag
+
+用于表达“有空就做”的场景标签。
+
+### 2. ActivityType
+
+用于表达种草分类。
+
+### 3. TaskTemplate
+
+仍可保留，用于支撑：
+- 种草长期存在
+- 重复规则长期存在
+
+但在 V2.1 中，`TaskTemplate` 不再是产品主语。
+
+它是内部持久化对象，不是用户在 Todo 主流程中首先感知的对象。
+
+### 4. RecurringTaskInstance
+
+仍可保留，用于支撑：
+- 重复规则按周期追踪状态
+- 当前 occurrence 的完成与进度同步
+
+但在 V2.1 中，它属于内部实现层。
+
+### 5. DayPlanItem
+
+仍可保留，用于支撑：
+- 某一天实际出现的 Todo 实例
+- 手动创建、从种草加入、重复生成、跨日延续后的实例落地
+
+但它不应继续直接承担 UI 主模型职责。
+
+V2.1-3 当前已进一步落地：
+- continuation 不再只服务分次事项
+- 而是作为通用 todo carryover 的内部同步机制存在
+
+---
+
+## 四、TaskTemplate 的 V2.1 口径
+
 type TaskTemplate = {
   id: string
   templateKind: 'grass' | 'todo_recurring'
@@ -89,54 +164,31 @@ type TaskTemplate = {
   isArchived: boolean
 }
 
-字段说明：
+### V2.1 解释
 
-templateKind：模板种类
-- `grass`：用户主动维护的种草模板
-- `todo_recurring`：从 Todo 添加区创建、由系统后台托管的重复 Todo 模板
-title：条目内容，例如“《abc》”“买牛奶”“整理书架”
-date：条目日期；仅在 `isNecessary = true` 或 `recurrence !== 'none'` 时写入，其他条目写空字符串 `''`
-activityTypeId：主活动类型
-- 对 `grass` 模板仍为必填
-- 对 `todo_recurring` 模板可为空，因为它不属于种草分类体系
-sceneTagIds：适用时间场景，可为空，可多选
-只有少数系统内置标签参与白天/晚上映射，其他标签仅作为筛选标签
-interestLevel：兴趣程度，1/2/3
-isNecessary：是否必要
-requiresPreparation：是否需要准备
-preparationNotes：准备备注
-recurrence：重复规则
-对于重复条目，date 是重复规则的锚点
-对于必要事项，date 表示该条目的目标日期
-对于非必要且不重复的条目，不存储目标日期
-其中 `daily` 表示从锚点日期开始每天生效
-V1 的 `daily / weekly / monthly / yearly` 都是“日历型重复”
-- `daily`：从锚点日期开始，每天命中
-- `weekly`：每周命中锚点对应的星期
-- `monthly`：每月命中锚点对应的日号
-- `yearly`：每年命中锚点对应的月 + 日
-V1 不支持“每隔 x 天 / 每隔 x 周 / 每隔 x 月”的间隔型重复
-若后续需要支持 interval-based recurrence，应扩展为另一套 recurrence 结构，而不是直接复用当前枚举语义
-isSegmented：是否分次
-isArchived：是否归档；仅表示用户主动停用该模板，不再参与决策与自动生成
+`TaskTemplate` 继续允许存在，但其产品地位下降为内部对象。
 
-补充说明：
-- `grass` 模板：
-  - 可参与种草列表展示
-  - 可参与拔草推荐
-  - 可被用户主动维护
-- `todo_recurring` 模板：
-  - 不参与种草列表展示
-  - 不参与拔草推荐
-  - 主要服务于未来自动生成重复 Todo
-  - 推荐默认 `interestLevel = 2`
-  - 可复用 `requiresPreparation`、`preparationNotes`、`isSegmented`
-  - 其 `date` 为用户在 Todo 区创建该重复事项时的锚点日期
+它主要服务于：
+- 长期保存种草
+- 保存重复规则
 
-## 五、重复任务周期实例
+它不直接定义：
+- Todo 是否可编辑
+- Todo 是否可删除
+- Todo 是否可完成
+- Todo 是否可取消完成
 
-对于带重复规则的任务，需要有周期实例层。
-否则无法处理“本周期已完成 / 未完成 / 过期未完成”。
+### 降级说明
+
+以下字段继续允许存在，但降级为内部实现说明：
+- `templateKind`
+- `date` 作为重复锚点
+- `sceneTagIds`
+- `isArchived`
+
+---
+
+## 五、RecurringTaskInstance 的 V2.1 口径
 
 type RecurringTaskInstance = {
   id: string
@@ -155,27 +207,51 @@ type RecurringTaskInstance = {
   completedAt?: string
 }
 
-说明：
+### V2.1 解释
 
-dateKey：该实例所属周期的标识
-daily: 2026-04-15
-weekly: 2026-W16
-monthly: 2026-04
-yearly: 2026
-这些实例键都服务于“日历型重复”：
-- weekly 代表“该锚点星期所在周”
-- monthly 代表“该锚点日号所在月”
-- yearly 代表“该锚点月日所在年”
-它们不表示“距离上次完成后过了一个间隔周期”
-status：周期实例状态
-progressState：用于兼容分次任务
-progressPercent：实例级百分比进度，范围为 0-100；对于分次任务，0-99 表示继续中，100 表示整体完成
-progressNote：自由进度说明，V1 可选填或由系统生成简单描述
-每个被日期规则触发的非必要重复任务实例，都应在当天生成对应的 `DayPlanItem`
+它继续可用于底层追踪某次重复周期的状态。
 
-## 六、当日计划事项
+但产品层不应把它直接解释为用户主语。
 
-这是某一天真正显示在决策模式或 todo 模式里的事项实例。
+用户看到的应该是：
+- 当前这条重复 Todo
+- 是否未完成
+- 是否已完成
+- 是否应继续
+
+而不是：
+- 当前命中了哪一个内部 instance
+
+### 重构方向
+
+V2.1-4 需要重点处理的问题是：
+- 如何让日历型 recurrence 不再制造难理解的多 occurrence 堆叠
+- 是否让同一重复规则在任意时刻最多只有一个 active occurrence
+
+当前推荐答案：
+- 采用“同一重复模板最多一个 active pending occurrence”
+- carryover 出来的 repeating Todo 仍属于同一 occurrence
+- 不把 carryover 视为新 occurrence
+- V2.1-4 当前已按该方向实现第一版
+
+当前结构判断：
+- 暂不推荐新增字段
+- 推荐继续复用：
+  - `RecurringTaskInstance.status`
+  - `DayPlanItem.recurringInstanceId`
+  - `DayPlanItem.rootItemId / continuationOfItemId / carriedFromDate`
+  - `DayPlanItem.consumesDateTrigger`
+
+其中：
+- `RecurringTaskInstance` 继续承担“这一次 recurrence occurrence 是否 pending / completed / ended”的主状态
+- `DayPlanItem` 继续承担“这一次 occurrence 在哪一天显示给用户”
+- `consumesDateTrigger` 当前仍可继续承担“本次命中已被消费/跳过，不要在同一 targetDate 再自动生成”的内部语义
+
+本轮先记规则，不改结构。
+
+---
+
+## 六、DayPlanItem 的 V2.1 口径
 
 type DayPlanItem = {
   id: string
@@ -212,205 +288,173 @@ type DayPlanItem = {
   completedAt?: string
 }
 
-说明：
+### V2.1 解释
 
-source 决定该事项来自哪里
-manual_temporary 类型通常没有 templateId
-decision_selected 通常来自某个 TaskTemplate
-auto_generated 通常来自两类情况：
-- 自动进入当天计划的必要事项
-- 按日期规则触发的非必要重复任务
-- 命中当天日期的非必要一次性条目
-targetDate 表示该事项关联的目标日期：
-- 对正常当天事项，通常与 `date` 相同
-- 对提前手动选入的未来事项，`date` 是实际安排/完成日，`targetDate` 是原目标日期
-timeBlock 只区分白天 / 晚上两种语境
-timeBlockSource 用于区分：
-- 明确映射到白天
-- 默认归到白天
-- 明确映射到晚上
-- 因用户拖动进入晚间语境
-若默认白天条目被重新拖回白天区域，则应恢复为白天语境
-sortOrder 用于持久化当天计划中的显示顺序
-status 用于控制 todo 显示与历史状态
-progressPercent 为实例级进度字段，范围为 0-100
-对于非分次任务，可在完成前保持为 0，完成后置为 100
-consumesDateTrigger 用于表达该 `DayPlanItem` 是否消费了某个模板在某个目标日期上的自动触发机会
-写入策略：
-- 只要该 `DayPlanItem` 在完成后会抵消模板于 `targetDate` 当天的自动出现，就写入 `consumesDateTrigger = true`
-- 这包括：
-  - 当天正常自动触发并完成
-  - 提前手动完成未来 `targetDate` 的事项
-- 临时事项或不抵消任何目标日期触发机会的普通手动事项，不写入 `consumesDateTrigger = true`
-若某 `RecurringTaskInstance` 在当天被触发且其模板为非必要重复任务，则通常应存在一个关联的 `DayPlanItem`，并通过 `recurringInstanceId` 建立关系
-若某条目因“必要事项”或“命中当天日期的一次性事项”自动进入当天计划，则其 `DayPlanItem` 可不依赖 `recurringInstanceId`
-若未来日期的一次性非必要条目被提前手动选入并完成，则原目标日期不应再自动出现该条目
+`DayPlanItem` 仍可继续作为当天实例层存在。
 
-分次链字段：
+但它在 V2.1 中应被理解为：
+- Todo 的底层落地对象
+
+而不是：
+- UI 直接消费并据此做产品分支的对象
+
+### 需要降级为内部实现说明的字段
+
+以下字段继续允许保留，但不应再被产品规则直接引用：
+- `source`
+- `templateId`
+- `recurringInstanceId`
+- `consumesDateTrigger`
 - `rootItemId`
-  - 表示该事项所属分次链的根实例 id
-  - 对链路起点本身，推荐写为自身 `id`
 - `continuationOfItemId`
-  - 表示该实例直接延续自哪一条上一实例
-  - 用于精确表达“今天这条是昨天那条继续做”
 - `carriedFromDate`
-  - 表示该实例是从哪一天自动延续而来
-  - 主要用于防止重复延续与便于 UI 提示
 
-推荐原因：
-- `manual_temporary` 没有 `templateId`，必须有实例链字段才能可靠继承进度
-- `decision_selected` 虽然通常有 `templateId`，但用户可能编辑标题、重复加入同模板、删除中间某天实例，因此仅靠模板或标题都不够稳
-- 相比独立 chain 表，直接挂在 `DayPlanItem` 上更适合当前单人、本地、轻量的数据结构，也更容易移植到 iOS
+这些字段可用于：
+- 同步自动生成
+- 同步 carryover
+- 保证重复规则消费语义
+- 支撑历史兼容
 
-轻量建模建议：
-- V1 采用“实例层承载消费语义”的方案，不单独新增完整的 occurrence / trigger 记录表
-- 推荐用 `targetDate + consumesDateTrigger` 表达“本次触发已被消费”
-- 这样可以保持：
-  - 模板层仍然只描述长期规则
-  - 实例层承载某次实际安排与完成
-  - 实现复杂度低于新增独立触发记录层
+V2.1-3 当前复用的 carryover 链字段仍是：
+- `rootItemId`
+- `continuationOfItemId`
+- `carriedFromDate`
 
-## 七、临时事项
+本轮未新增任何字段。
 
-V1 可直接复用 DayPlanItem，不必单独建表。
-只需满足：
+V2.1-4 当前推荐：
+- 对 repeating Todo 先复用上述链字段，不新增专门 active occurrence 字段
+- 若后续实现证明仅靠现有字段无法稳定表达“跳过本次”和“下一次可再生成”，再单独评估字段扩展
 
-source = manual_temporary
-templateId 为空
-title 仅为一行文字
+但它们不应直接决定：
+- UI 上有哪些按钮
+- 普通 Todo 是否能跨日延续
+- 从种草加入的 Todo 是否算普通 Todo
 
-补充：临时重复 Todo
-- 若临时 Todo 开启重复规则，则不再只是单条 `DayPlanItem`。
-- 推荐写入两层数据：
-  - 当天的 `DayPlanItem`
-  - 一条 `templateKind = 'todo_recurring'` 的 `TaskTemplate`
-- 未来重复实例仍由模板层自动生成，不在 `DayPlanItem` 上单独新增第二套 recurrence 语义。
+---
 
-补充：分次链与进度继承
-- `manual_temporary` 若开启分次，后续自动延续与进度继承推荐完全依赖 `DayPlanItem` 链路字段。
-- 重新从种草加入的 `decision_selected` 分次事项：
-  - 若命中同 `templateId` 的最近未完成分次链
-  - 推荐新实例继承该链的 `rootItemId`
-  - 并把 `continuationOfItemId` 指向该链最近一条实例
-- 自动延续生成的新实例：
-  - 复制上一条实例的 `rootItemId`
-  - `continuationOfItemId = 上一条实例.id`
-  - `carriedFromDate = 上一条实例.date`
-  - `progressPercent` 继承上一条实例
-  - `progressState` 推荐继承为 `in_progress`
-- 当某条链路达到 `progressPercent = 100` 时：
-  - 该链结束
-  - 后续不再自动生成 continuation
+## 七、普通 Todo 的 V2.1 行为映射
 
-## 八、兼容策略
+### 1. 普通未完成 Todo 默认跨日延续
 
-### 1. 现有数据兼容
-- 现有历史 `TaskTemplate` 默认视为：
-  - `templateKind = 'grass'`
-- 现有历史模板通常都已有：
-  - `activityTypeId`
-  - `interestLevel`
-  - `sceneTagIds`
-- 因此旧数据可以平滑迁移，不需要修改既有业务语义。
+V2.1 规则要求：
+- 一次性 Todo 未完成时，默认延续到明天
 
-### 2. 当前 schema 兼容策略
-- 新增 `templateKind` 字段：
-  - 历史数据回填为 `grass`
-- 将 `activityTypeId` 从“无条件必填”调整为：
-  - `grass` 必填
-  - `todo_recurring` 可为空
-- `interestLevel` 可继续保留必填，`todo_recurring` 创建时默认写 `2`
+当前推荐解释为：
+- 底层可继续通过 `DayPlanItem` 实例链表达
+- 但产品心智不再称之为“分次 continuation 专属能力”
+- 而应理解为“Todo carryover”
 
-### 3. 后续逻辑过滤点
-- 自动生成：
-  - `grass` 和 `todo_recurring` 都可参与
-- 拔草推荐：
-  - 只允许 `grass`
-- 种草区列表 / 种草管理：
-  - 只展示 `grass`
-- Todo 重复规则管理入口：
-  - 单独处理 `todo_recurring`
+### 2. 删除语义
 
-### 4. 分次延续兼容策略
-- 历史 `DayPlanItem` 默认没有：
-  - `rootItemId`
-  - `continuationOfItemId`
-  - `carriedFromDate`
-- 因此 schema 应允许这些字段缺省。
-- 旧数据可继续按“没有分次链”的普通实例解释，不需要做破坏性迁移。
-- 新建分次事项时：
-  - 若是链路起点，推荐写入 `rootItemId = 当前实例 id`
-  - 其余两个字段留空
-- 自动延续或手动重新加入既有分次链时：
-  - 才写入 `continuationOfItemId` 与 `carriedFromDate`
+普通一次性 Todo 的删除，产品上表示：
+- 结束这条 Todo
+- 停止未来延续
 
-## 九、设置项
-type AppSettings = {
-  initialized: boolean
+底层可继续保留内部链路字段，但删除行为不应再被解释为：
+- 只是某种内部 source 的删除
 
-  tieBreakerOrder: 'asc' | 'desc'
+### 3. 分次语义
 
-  weatherEnabled: boolean
+分次 Todo 在产品上只是一条带 `progressPercent` 的普通 Todo。
 
-  createdAt: string
-  updatedAt: string
-}
+当前推荐解释为：
+- 仍允许底层通过 continuation 链保存历史
+- 但 UI 只看：
+  - 当前进度
+  - 是否完成
+  - 是否来自昨天
 
-说明：
+---
 
-initialized：是否完成首次初始化
-tieBreakerOrder：兴趣程度相同时按加入时间正序或倒序
-weatherEnabled：V1 不启用真实天气，但预留开关
+## 八、种草与 Todo 的边界
 
-## 九、推荐逻辑输入输出
+### 1. 种草只是来源，不是前置流程
 
-为了让推荐逻辑更清晰，建议单独抽象输入输出结构。
+从种草加入 Todo 后：
+- 这条 Todo 按普通 Todo 行为工作
+- 编辑不回写原种草
+- 删除不删除原种草
 
-type RecommendationInput = {
-  date: string
-  timeBlock: 'day' | 'night'
-  activityTypeId: string
-  sceneTagIds: string[]
-}
-type RecommendationResult = {
-  recommended: TaskTemplate | null
-  candidates: TaskTemplate[]
-}
+### 2. `decision_selected` 降级
 
-说明：
+`decision_selected` 可继续作为底层来源值保留。
 
-sceneTagIds 表示当前决策语境下由系统自动推导出的场景条件
-当前时段语境只区分白天 / 晚上
-V1 不做打分，只做筛选 + 排序
+但它在 V2.1 中只表示：
+- 这条 Todo 最初来自种草
 
-## 十、建议的本地存储结构
-type AppData = {
-  settings: AppSettings
-  sceneTags: SceneTag[]
-  activityTypes: ActivityType[]
-  taskTemplates: TaskTemplate[]
-  recurringTaskInstances: RecurringTaskInstance[]
-  dayPlanItems: DayPlanItem[]
-}
+它不应决定：
+- 能不能编辑
+- 能不能删除
+- 能不能完成
+- 能不能取消完成
 
-## 十一、必须遵守的数据规则
-每个决策库条目必须有一个活动类型
-时间场景可以为空
-临时事项不能回写模板状态
-分次任务不预设总次数
-百分比进度只保存在实例层，不保存在模板层
-重复任务必须通过周期实例追踪状态
-所有必要事项必须自动生成对应的当日实例
-按日期规则触发的非必要重复任务必须自动生成对应的当日实例
-命中当天日期的非必要一次性条目必须自动生成对应的当日实例
-所有条目都必须有日期字段
-重复任务必须以模板日期作为重复锚点
-Todo 模式显示的是实例，不直接显示模板
-决策推荐的对象是模板，加入计划后才生成实例
-同一模板在同一天的同一时段语境内不能重复生成实例
+---
 
-补充说明：
-- 当前数据模型已经可以表达“模板仍存在，但某次当日计划已完成”
-- 为了表达“未来日期的一次性非必要条目被提前完成后，其原目标日期这次触发已被消费”，推荐在实例层使用 `targetDate` 与 `consumesDateTrigger`
-- 当前不建议为 V1 单独引入完整的 occurrence / trigger 记录表，除非后续规则继续显著变复杂
-- 不应将该语义实现为 `TaskTemplate.isArchived = true`
+## 九、重复 Todo 的边界
+
+### 1. `todo_recurring` 降级
+
+`todo_recurring` 可继续保留为内部模板类型。
+
+它的职责是：
+- 标记某条重复 Todo 的后台托管模板
+
+它不应成为用户的主要理解对象。
+
+### 2. 删除当天实例 与 停止重复
+
+产品规则必须区分：
+
+1. 删除当天实例
+- 只跳过本次
+
+2. 停止重复
+- 结束未来重复
+
+底层可继续通过：
+- `templateKind`
+- `recurringInstanceId`
+- `consumesDateTrigger`
+
+等字段配合实现，但这些都属于技术实现层。
+
+---
+
+## 十、兼容策略
+
+### 1. 历史字段继续保留
+
+当前所有既有字段继续保留，不做删除式迁移。
+
+### 2. 文档口径先切换
+
+V2.1 当前先切换：
+- 产品规则
+- UI 视图模型规划
+- 任务拆分
+
+不立即切换：
+- schema
+- storage
+- 业务实现
+
+### 3. 后续实现策略
+
+推荐后续通过“映射层优先”推进：
+1. 先引入 `TodoViewModel`
+2. 再逐步把 UI 从 `DayPlanItem` 分支迁出
+3. 再重构 carryover 与 recurrence
+
+---
+
+## 十一、必须遵守的 V2.1 数据规则
+
+- Todo 是产品主语
+- UI 不直接根据 `source / templateKind / recurringInstanceId / consumesDateTrigger / continuation` 决定交互
+- 普通未完成 Todo 默认跨日延续
+- 普通 Todo 删除表示结束整条 Todo
+- 重复 Todo 必须区分“删除当天实例”和“停止重复”
+- 分次只是进度属性，不是独立产品子系统
+- 必要与需要准备只是 UI 属性
+- 种草只是来源之一，不是普通 Todo 的前置流程

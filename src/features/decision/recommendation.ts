@@ -215,17 +215,13 @@ export async function createDecisionSelectedDayPlanItem({
     requiresPreparation: template.requiresPreparation,
     preparationNotes: template.preparationNotes,
     isSegmented: template.isSegmented,
-    progressState: carryover ? 'in_progress' : 'not_started',
+    progressState: carryover && carryover.progressPercent > 0 ? 'in_progress' : 'not_started',
     progressPercent: carryover?.progressPercent ?? 0,
     status: 'pending',
     rootItemId: carryover ? carryover.rootItemId ?? carryover.id : undefined,
     continuationOfItemId: carryover?.id,
     carriedFromDate: carryover?.date,
   })
-
-  if (!template.isSegmented) {
-    return createdItem
-  }
 
   if (carryover) {
     return createdItem

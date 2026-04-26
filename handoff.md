@@ -1,186 +1,80 @@
 # 项目交接摘要
 
 ## 当前版本目标
-- 当前已从 V1 可试用 MVP 完成 V2 主路径迁移与试用前收口。
-- V2 的核心目标不再是“所有事务都进入决策库”，而是：
-  - 普通 Todo List
-  - 种草清单
-  - 有空时帮你拔草
+- 当前已从 V2 试用修复阶段，进入 V2.1：Todo 行为重构准备阶段。
+- 本轮核心目标不是继续堆功能，而是重写产品规则，让 Todo 成为唯一主语。
 
 ## 当前阶段结论
-- V1 第一版已完成，并已通过真实试用发现核心概念问题。
-- 当前应视为“V2 可正式试用阶段”。
-- 初始化、主页主路径、Todo 添加入口融合、Todo UI 轻量化与试用前收口已完成。
-- 当前已开始进入试用反馈修复阶段，优先补 Todo 基础交互与低风险实例层缺口。
-- 当前已完成试用修复 1，下一阶段重点转向“临时重复 Todo”的规则与建模。
-- 当前已完成 V2 临时重复 Todo 的最小可用版本。
-- 当前已完成 V2-8 分次跨天延续与进度继承的最小可用版本。
+- 当前 UI 已基本具备 Todo 外观，但产品规则、数据模型口径与关键实现仍偏向模板 / 实例 / 来源分支中心。
+- V2 试用后确认：当前系统虽然功能很多，但基础 Todo List 心智不对。
+- V2.1 的首要任务是把“像 Todo”提升为“本质上就是 Todo”。
 
-## V1 试用后确认的问题
-- 把太多普通日常事务都放进“决策库”。
-- 导致用户为了记录简单待办，也要经过模板 / 推荐 / 选入流程。
-- 使用门槛过高，Todo 部分过于简略。
-- 真正有价值的不是“所有事务都进入决策库”，而是“普通 Todo List + 种草清单 + 有空时推荐拔草”。
+## V2.1 核心表达
+- Todo 是一等公民。
+- 普通未完成 Todo 默认跨日延续。
+- 普通 Todo 删除 = 结束这条 Todo。
+- 重复 Todo 需要区分“删除当天实例”和“停止重复”。
+- 分次只是 Todo 的 progress 属性。
+- 必要与需要准备只是 UI 属性。
+- 种草只是 Todo 来源之一。
+- UI 后续应基于 `TodoViewModel`，而不是直接根据底层来源字段分支。
 
-## 当前 V2 核心表达
-- Todo 成为主页面主体。
-- 种草成为独立清单，不再承担普通待办职责。
-- 拔草推荐成为“有空时”的增强能力。
-- 页面后续改为：
-  1. 头部
-  2. 日期
-  3. Todo
-  4. 种草
+## 当前旧实现的核心问题
+- UI 上看到的是 Todo。
+- 但系统真实主语仍然偏向：
+  - `TaskTemplate`
+  - `DayPlanItem`
+  - `RecurringTaskInstance`
+  - `continuation`
+- 用户行为仍被以下内部字段分叉：
+  - `source`
+  - `templateKind`
+  - `recurringInstanceId`
+  - `consumesDateTrigger`
+  - `rootItemId / continuationOfItemId`
 
-## 当前保留的 V1 价值
-- 单人、本地网页应用
-- 初始化流程
+## 本轮文档迁移结论
+- `product-rules.md` 已切到 V2.1 口径。
+- `app-structure.md` 已明确 Todo 区应基于 `TodoViewModel` 工作。
+- `data-model.md` 已把 `source / templateKind / recurringInstanceId / consumesDateTrigger / continuation` 降级为内部实现说明。
+- `task-list.md` 已改为 V2.1-1 到 V2.1-4 四个任务包。
+- `manual-test-checklist.md` 已改为以 Todo 直觉为中心的手测口径。
+
+## 哪些旧规则被处理
+
+### 已废弃为产品主规则
+- “UI 直接消费 DayPlanItem，并按来源决定交互”
+- “未完成跨日主要是分次专属能力”
+- “种草是普通 Todo 的前置流程”
+- “重复 Todo 的产品主语是模板与实例”
+
+### 已降级为内部实现说明
+- `source`
+- `templateKind`
+- `recurringInstanceId`
+- `consumesDateTrigger`
+- `continuation`
+- `decision_selected`
+- `todo_recurring`
+
+### 当前继续保留
 - 白天 / 晚上语境
-- 临时事项
-- 必要事项
-- 重复规则
-- 需要准备
-- 分次事项
-- 设置与基础分类管理
+- 日历型重复基础结构
+- 种草清单
+- 必要标记
+- 准备备注
+- 分次进度表达
 
-## 当前概念迁移
-- `决策库` → `种草清单`
-- `决策推荐` → `拔草推荐`
-- `活动类型` → 产品表达上更接近“种草分类”
-- `时间场景` → 产品表达上更接近“有空就做场景”
-- `决策模式 / Todo 模式` → 后续迁移为单页结构中的不同区域
-
-## 初始化页后续方向
-- 标题：
-  - 哪怕你是一个100%的J人，想必也会有……
-- 种草清单默认项目：
-  - 阅读
-  - 观影
-  - 旅游
-- 有空就做默认项目：
-  - 工作日晚上
-  - 周末
-  - 长假
-
-## 当前推荐的后续任务顺序
-1. V2-2：初始化页文案与默认项调整（已完成）
-2. V2-3：主页面从“双模式”迁移为“Todo + 种草”单页结构（已完成）
-3. V2-4：Todo 添加入口融合临时事项与种草推荐（已完成）
-4. V2-5：Todo list UI 轻量化（已完成）
-5. V2-6：根据实现结果补充边界验证（已完成）
-
-## V2-6 当前完成情况
-- 已扫描并清理当前实现中的 V1 旧口径残留，用户可见主路径不再暴露“决策模式 / 决策库 / 增加安排”等旧词。
-- 已确认主页当前为 `Todo + 种草` 结构，Todo 为第一主体，种草区保持较低视觉优先级。
-- Todo 统一添加入口当前支持：
-  - 直接创建普通临时 Todo
-  - 展开“更多”后从种草添加
-  - 为本次 Todo 设置必要事项、需要准备、准备备注、分次事项
-- 设置页当前保留：
-  - 推荐并列排序
-  - 测试用重置
-  - 不再重复保留时间场景 / 活动类型管理 section
-- 已新增手动验证清单：
-  - `manual-test-checklist.md`
-- 当前版本可进入正式试用，但仍保留若干明确延后项。
-
-## V2-5 当前完成情况
-- Todo 视觉层级已压轻，主页面第一眼更接近日常 Todo list，而不是功能面板集合。
-- Todo 添加入口已收口为更轻的输入栏形态：
-  - 输入框为主
-  - 白天 / 晚上 segmented 更轻
-  - “更多”降为次级动作
-  - `+` 保留为主要动作但更克制
-- “更多”展开区已降权，不再像两张大卡片，而是输入栏下方的轻量扩展层。
-- Todo 条目已从强卡片感收为更接近连续列表的视觉。
-- 白天 / 晚上分组仍保留，但已退回轻量分隔层。
-- 种草区仍保留能力，但视觉权重已低于 Todo。
-- 本轮未改任何业务逻辑，仅做 UI 轻量化收口。
-
-## V2-4 当前完成情况
-- Todo 顶部添加区已融合为统一入口：
-  - 默认可直接输入文字、选择白天 / 晚上并创建普通临时 Todo
-  - 展开“更多”后，可从种草中添加，也可为本次 Todo 设置实例属性
-- 默认临时 Todo 仍创建为 `manual_temporary`，不回写模板层。
-- “从种草添加”继续复用既有推荐函数和 `decision_selected` 语义。
-- 原独立拔草辅助区已移除，避免页面出现两个入口。
-- 本轮暂不支持临时 Todo 的重复规则；重复仍通过种草 / 模板层保留，后续若需要需单独设计。
-
-## V2-3 当前完成情况
-- 主页面已从“决策 / Todo 双模式”迁移为“Todo + 种草”单页结构。
-- Todo 现在常驻显示，并成为主页面主体。
-- 原“决策库”区域已改为“种草”，继续复用 V1 的 `TaskTemplate` 模板层能力。
-- 原“增加安排 / 决策推荐”已最小迁移为“拔草 / 从种草中添加”入口。
-- 拔草推荐仍暂时复用既有推荐函数和 `decision_selected` 语义，后续在 V2-4 再融合进 Todo 添加入口。
-
-## V2-2 当前完成情况
-- 初始化页已切换到 V2 语言：
-  - `activityTypes` 对用户表达为“种草清单”
-  - `sceneTags` 对用户表达为“有空就做”
-- 底层仍复用 `activityTypes` 与 `sceneTags`，未改类型名、字段名或 schema。
-- 初始化默认项已调整为：
-  - 种草清单：阅读、观影、旅游
-  - 有空就做：工作日晚上、周末、长假
-- 主页面仍保持 V1 结构，后续进入 V2-3 迁移。
-
-## data-model / constraints 当前处理结论
-- `data-model.md` 本轮不改：
-  - 因为当前已明确底层仍沿用 `activityTypes` 与 `sceneTags`
-  - 本轮没有进入数据结构调整阶段
-- `constraints.md` 本轮不改：
-  - 当前边界仍以“单人、本地、轻量、不过度扩写”为主
-  - V2 本轮改的是产品概念与页面重心，而不是产品边界
+## 推荐的后续任务顺序
+1. V2.1-1：规则与文档重写（已完成）
+2. V2.1-2：TodoViewModel 收口（已完成第一版）
+3. V2.1-3：未完成 Todo 自然跨日延续（已完成第一版）
+4. V2.1-4：重复 Todo 规则重构（已完成第一版）
 
 ## 当前已知风险
-- 当前版本已可试用，但尚未补自动化业务测试，回归仍主要依赖手动清单。
-- `activityTypes` / `sceneTags` 仍沿用既有数据口径，当前可支撑 V2 表达，但后续若继续深化种草与 Todo 的关系，仍可能需要额外语义收口。
-- 种草区默认仍是展开式工具层，而不是更深度的产品化单独页面，后续仍可继续压缩体验。
-- 非分次 `auto_generated` 条目当前完成后仍未与 `RecurringTaskInstance` 做对称回滚，本轮因此未放开其取消完成。
-- 临时重复 Todo、分次跨天延续与进度继承仍需单独设计，不能直接在现有实例层里拼补。
-- 分次跨天延续当前推荐方向已明确：
-  - 不靠标题推断
-  - 推荐给 `DayPlanItem` 新增链路字段
-  - 推荐新增独立 continuation 同步模块
-  - 不建议把 continuation 逻辑塞进 `TodoModePanel`
-- 分次跨天延续当前已按以下方向落地：
-  - `DayPlanItem.rootItemId / continuationOfItemId / carriedFromDate`
-  - 先同步 auto-generated，再同步 segmented continuation，再读取当天 Todo
-  - 删除当天延续实例只跳过当天，不结束链路
-  - recurrence 新周期不继承旧周期进度
-- 临时重复 Todo 当前已按模板中心化落地：
-  - 通过后台托管的 Todo 重复模板接入
-  - `templateKind = 'grass' | 'todo_recurring'`
-  - 不进入种草区，不参与拔草推荐
-- 当前时段锚定仍依赖现有 scene tag 映射：
-  - 若初始化数据中不存在精确的白天 / 晚上内置 tag
-  - `todo_recurring` 的未来实例可能退回默认白天
-
-## 当前试用修复 1 完成情况
-- Todo 条目完成后已支持：
-  - 标题删除线
-  - 条目内容整体降透明
-  - checkbox 保持清晰可识别
-- Todo 条目当前已支持轻量标题编辑：
-  - `manual_temporary`
-  - `decision_selected`
-- 编辑只更新当天实例的 `DayPlanItem.title`：
-  - 不回写种草
-  - 不改 `TaskTemplate.title`
-- Todo 条目当前已支持低风险删除边界：
-  - `manual_temporary` 可删除
-  - `decision_selected` 可删除当天实例
-  - `auto_generated` 仍不可删除
-- 非分次条目当前已支持取消完成：
-  - 仅对 `manual_temporary` 与 `decision_selected` 放开
-  - 回滚 `status`、`completedAt`、`progressState`、`progressPercent`、`consumesDateTrigger`
-- 准备备注当前改为直接灰字直显，不再需要“查看准备”按钮。
-- 分次条目当前已补：
-  - 可视化进度条
-  - 百分比显示
-  - 临时分次事项推进
-- 本轮仍未处理：
-  - 分次事项取消完成的专门回滚规则
-  - continuation 链路的更完整历史展示
+- 当前 UI 已新增 ViewModel 防腐层，但 action handler 内仍保留少量底层判断以维持既有行为。
+- 当前 repeating Todo 已接入 active occurrence 与 carryover 第一版，但旧历史数据若已经堆出多个 pending occurrence，迁移期表现仍可能不够完美。
+- `RecurringTaskInstance.status = expired` 当前同时承担“历史过期”和“本次跳过/结束”的内部语义，后续若要继续细化需要再评估。
 
 ## 当前明确未实现
 - `decision_selected` 转重复
@@ -193,48 +87,44 @@
 
 ## 关键文件位置
 - `AGENTS.md`
-- `README.md`
 - `product-rules.md`
 - `app-structure.md`
+- `data-model.md`
 - `task-list.md`
+- `manual-test-checklist.md`
 - `handoff.md`
 - `dev-log.md`
 
 ## 最近一次完成的 task
-- 完成 V2-8 最小版本：
-  - 分次跨天延续
-  - 从种草重新加入时的进度继承
-  - `DayPlanItem` 分次链路字段
-  - continuation 独立同步模块
-  - recurrence 新周期不继承旧周期进度
-- 完成 V2-7 最小版本：
-  - 临时重复 Todo
-  - `templateKind` 模型与 schema 兼容
-  - `todo_recurring` 的种草 / 推荐过滤
-  - Todo 添加区重复规则入口
-  - 最小“停止重复”入口
-- 完成 V2 试用修复 1：
-  - Todo 完成态视觉补齐
-  - Todo 标题编辑
-  - 普通取消完成
-  - 准备备注直显
-  - `decision_selected` 删除放开
-  - 临时分次事项推进
-  - 分次进度条图像化
-- 完成 V2-6：
-  - 试用前收口
-  - V1 旧口径清理
-  - V2 主路径核对
-  - 手动验证清单补齐
-
-## 下一步建议
-- 继续评估是否需要单独进入规则补充轮：
-  - 分次事项取消完成与回滚规则
-  - continuation 历史链路展示
-  - `decision_selected` 转重复
-- 若继续修复完成/取消完成链路，应优先补 `auto_generated` 与 `RecurringTaskInstance` 的对称状态规则。
-
-## 最近一次验证结果
-- `pnpm run build`：通过
-  - 存在既有的 Vite chunk size warning，但不影响构建成功
-- `pnpm run lint`：通过
+- 完成 V2.1-4 第一版：
+  - 全部 recurrence 类型统一为“同模板最多一个 active pending occurrence”
+  - `auto-generated` 生成前先检查 active occurrence
+  - repeating Todo 可通过 carryover 延续到后续日期
+  - 删除 repeating carryover 等价于结束/跳过本次 occurrence
+  - 停止重复继续仅通过归档模板完成
+  - 未新增字段、未改 schema
+- 完成 V2.1-4 规则方案确认：
+  - 推荐 repeating Todo 采用“同一重复模板最多一个 active pending occurrence”
+  - 明确 carryover repeating Todo 仍属于同一 occurrence
+  - 明确删除当天实例 = 结束本次 / 跳过本次，未来命中仍可继续生成
+  - 明确停止重复 = 归档模板，历史保留，未来不再生成
+  - 当前推荐继续复用现有字段，不新增 schema
+- 完成 V2.1-3 第一版：
+  - `continuation` 改造成通用 todo carryover 同步
+  - 普通未完成 Todo 自动跨日延续
+  - 分次 Todo 并入同一套 carryover 机制
+  - 普通 Todo 删除后通过链结束规则阻止未来继续延续
+  - 重复 Todo 深层规则保持不变
+- 完成 V2.1-2 第一版：
+  - 新增 `TodoViewModel` 映射层
+  - `TodoModePanel` 改为先映射 `DayPlanItem` 再渲染
+  - `canEdit / canDelete / canComplete / canUncomplete / canStopRepeating` 收口到映射层
+  - 来源标签、重复判断、carry hint 收口到映射层
+- 完成 V2.1-1：
+  - Todo 一等公民规则重写
+  - 普通未完成 Todo 自动跨日延续规则写入
+  - 删除语义重写
+  - 分次降级为 progress 属性
+  - 种草降级为来源
+  - TodoViewModel 规划写入文档
+  - 旧来源字段降级为内部实现说明
