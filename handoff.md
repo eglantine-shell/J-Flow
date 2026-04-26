@@ -11,6 +11,10 @@
 - V1 第一版已完成，并已通过真实试用发现核心概念问题。
 - 当前应视为“V2 可正式试用阶段”。
 - 初始化、主页主路径、Todo 添加入口融合、Todo UI 轻量化与试用前收口已完成。
+- 当前已开始进入试用反馈修复阶段，优先补 Todo 基础交互与低风险实例层缺口。
+- 当前已完成试用修复 1，下一阶段重点转向“临时重复 Todo”的规则与建模。
+- 当前已完成 V2 临时重复 Todo 的最小可用版本。
+- 当前已完成 V2-8 分次跨天延续与进度继承的最小可用版本。
 
 ## V1 试用后确认的问题
 - 把太多普通日常事务都放进“决策库”。
@@ -131,9 +135,55 @@
 - 当前版本已可试用，但尚未补自动化业务测试，回归仍主要依赖手动清单。
 - `activityTypes` / `sceneTags` 仍沿用既有数据口径，当前可支撑 V2 表达，但后续若继续深化种草与 Todo 的关系，仍可能需要额外语义收口。
 - 种草区默认仍是展开式工具层，而不是更深度的产品化单独页面，后续仍可继续压缩体验。
+- 非分次 `auto_generated` 条目当前完成后仍未与 `RecurringTaskInstance` 做对称回滚，本轮因此未放开其取消完成。
+- 临时重复 Todo、分次跨天延续与进度继承仍需单独设计，不能直接在现有实例层里拼补。
+- 分次跨天延续当前推荐方向已明确：
+  - 不靠标题推断
+  - 推荐给 `DayPlanItem` 新增链路字段
+  - 推荐新增独立 continuation 同步模块
+  - 不建议把 continuation 逻辑塞进 `TodoModePanel`
+- 分次跨天延续当前已按以下方向落地：
+  - `DayPlanItem.rootItemId / continuationOfItemId / carriedFromDate`
+  - 先同步 auto-generated，再同步 segmented continuation，再读取当天 Todo
+  - 删除当天延续实例只跳过当天，不结束链路
+  - recurrence 新周期不继承旧周期进度
+- 临时重复 Todo 当前已按模板中心化落地：
+  - 通过后台托管的 Todo 重复模板接入
+  - `templateKind = 'grass' | 'todo_recurring'`
+  - 不进入种草区，不参与拔草推荐
+- 当前时段锚定仍依赖现有 scene tag 映射：
+  - 若初始化数据中不存在精确的白天 / 晚上内置 tag
+  - `todo_recurring` 的未来实例可能退回默认白天
+
+## 当前试用修复 1 完成情况
+- Todo 条目完成后已支持：
+  - 标题删除线
+  - 条目内容整体降透明
+  - checkbox 保持清晰可识别
+- Todo 条目当前已支持轻量标题编辑：
+  - `manual_temporary`
+  - `decision_selected`
+- 编辑只更新当天实例的 `DayPlanItem.title`：
+  - 不回写种草
+  - 不改 `TaskTemplate.title`
+- Todo 条目当前已支持低风险删除边界：
+  - `manual_temporary` 可删除
+  - `decision_selected` 可删除当天实例
+  - `auto_generated` 仍不可删除
+- 非分次条目当前已支持取消完成：
+  - 仅对 `manual_temporary` 与 `decision_selected` 放开
+  - 回滚 `status`、`completedAt`、`progressState`、`progressPercent`、`consumesDateTrigger`
+- 准备备注当前改为直接灰字直显，不再需要“查看准备”按钮。
+- 分次条目当前已补：
+  - 可视化进度条
+  - 百分比显示
+  - 临时分次事项推进
+- 本轮仍未处理：
+  - 分次事项取消完成的专门回滚规则
+  - continuation 链路的更完整历史展示
 
 ## 当前明确未实现
-- 临时重复 Todo
+- `decision_selected` 转重复
 - 拖动排序 / 拖动改变晚间语境
 - 导出 / 导入
 - 已归档种草恢复
@@ -151,16 +201,38 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 完成 V2-8 最小版本：
+  - 分次跨天延续
+  - 从种草重新加入时的进度继承
+  - `DayPlanItem` 分次链路字段
+  - continuation 独立同步模块
+  - recurrence 新周期不继承旧周期进度
+- 完成 V2-7 最小版本：
+  - 临时重复 Todo
+  - `templateKind` 模型与 schema 兼容
+  - `todo_recurring` 的种草 / 推荐过滤
+  - Todo 添加区重复规则入口
+  - 最小“停止重复”入口
+- 完成 V2 试用修复 1：
+  - Todo 完成态视觉补齐
+  - Todo 标题编辑
+  - 普通取消完成
+  - 准备备注直显
+  - `decision_selected` 删除放开
+  - 临时分次事项推进
+  - 分次进度条图像化
 - 完成 V2-6：
   - 试用前收口
   - V1 旧口径清理
   - V2 主路径核对
   - 手动验证清单补齐
-- 继续做正式试用前 UI 收口：
-  - 初始化页减重
-  - 主页顶部减重
-  - Todo 展开区减重
-  - Todo 条目更像真实 list
+
+## 下一步建议
+- 继续评估是否需要单独进入规则补充轮：
+  - 分次事项取消完成与回滚规则
+  - continuation 历史链路展示
+  - `decision_selected` 转重复
+- 若继续修复完成/取消完成链路，应优先补 `auto_generated` 与 `RecurringTaskInstance` 的对称状态规则。
 
 ## 最近一次验证结果
 - `pnpm run build`：通过

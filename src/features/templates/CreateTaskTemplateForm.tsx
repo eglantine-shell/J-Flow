@@ -175,6 +175,7 @@ export function CreateTaskTemplateForm() {
 
     try {
       const created = await appDataRepository.taskTemplates.create({
+        templateKind: 'grass',
         date: getEffectiveTemplateDate(formState),
         activityTypeId: formState.activityTypeId,
         title: formState.title.trim(),

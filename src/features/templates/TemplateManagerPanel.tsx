@@ -13,7 +13,7 @@ import type { TaskTemplate } from '@/types'
 
 const toFormState = (template: TaskTemplate): TaskTemplateFormState => ({
   date: template.date,
-  activityTypeId: template.activityTypeId,
+  activityTypeId: template.activityTypeId || '',
   title: template.title,
   sceneTagIds: template.sceneTagIds,
   interestLevel: template.interestLevel,
@@ -52,7 +52,7 @@ export function TemplateManagerPanel() {
     })
     setTemplates(
       allTemplates
-        .filter((template) => !template.isArchived)
+        .filter((template) => template.templateKind === 'grass' && !template.isArchived)
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     )
   }

@@ -37,9 +37,10 @@ export const activityTypeSchema = z.object({
 
 export const taskTemplateSchema = z.object({
   id: z.string().min(1),
+  templateKind: z.enum(['grass', 'todo_recurring']).default('grass'),
   title: z.string().min(1),
   date: templateDateSchema,
-  activityTypeId: z.string().min(1),
+  activityTypeId: z.string().min(1).optional(),
   sceneTagIds: z.array(z.string().min(1)),
   interestLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   isNecessary: z.boolean(),
@@ -50,7 +51,15 @@ export const taskTemplateSchema = z.object({
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
   isArchived: z.boolean(),
-}) satisfies z.ZodType<TaskTemplate>
+}).superRefine((template, context) => {
+  if (template.templateKind === 'grass' && !template.activityTypeId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['activityTypeId'],
+      message: 'grass templates require activityTypeId',
+    })
+  }
+})
 
 export const recurringTaskInstanceSchema = z.object({
   id: z.string().min(1),
@@ -81,6 +90,9 @@ export const dayPlanItemSchema = z.object({
   templateId: z.string().min(1).optional(),
   recurringInstanceId: z.string().min(1).optional(),
   consumesDateTrigger: z.boolean().optional(),
+  rootItemId: z.string().min(1).optional(),
+  continuationOfItemId: z.string().min(1).optional(),
+  carriedFromDate: dateSchema.optional(),
   title: z.string().min(1),
   activityTypeId: z.string().min(1).optional(),
   isNecessary: z.boolean(),
@@ -109,10 +121,10 @@ export const appDataSchema = z.object({
   taskTemplates: z.array(taskTemplateSchema),
   recurringTaskInstances: z.array(recurringTaskInstanceSchema),
   dayPlanItems: z.array(dayPlanItemSchema),
-}) satisfies z.ZodType<AppData>
+})
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 1
+export const APP_DATA_SCHEMA_VERSION = 3
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

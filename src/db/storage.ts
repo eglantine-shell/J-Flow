@@ -167,6 +167,7 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
 
   return {
     id: input.id ?? createId('template'),
+    templateKind: input.templateKind ?? 'grass',
     title: input.title,
     date: input.date ?? todayDateString(),
     activityTypeId: input.activityTypeId,
@@ -212,6 +213,9 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     templateId: input.templateId,
     recurringInstanceId: input.recurringInstanceId,
     consumesDateTrigger: input.consumesDateTrigger,
+    rootItemId: input.rootItemId,
+    continuationOfItemId: input.continuationOfItemId,
+    carriedFromDate: input.carriedFromDate,
     title: input.title,
     activityTypeId: input.activityTypeId,
     isNecessary: input.isNecessary,

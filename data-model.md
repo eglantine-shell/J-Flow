@@ -1,7 +1,7 @@
 # 数据模型文档
 
-本文档定义 V1 的核心数据结构。
-V1 使用本地存储，因此需要明确区分“长期存在的模板数据”和“某一天实际出现的实例数据”。
+本文档定义当前版本的核心数据结构。
+应用使用本地存储，因此需要明确区分“长期存在的模板数据”和“某一天实际出现的实例数据”。
 
 字段名允许使用英文，说明文字使用中文。
 
@@ -64,12 +64,13 @@ type ActivityType = {
 说明：
 每条决策库条目必须有且只有一个主活动类型
 
-## 四、决策库条目
+## 四、模板条目
 type TaskTemplate = {
   id: string
+  templateKind: 'grass' | 'todo_recurring'
   title: string
   date: string
-  activityTypeId: string
+  activityTypeId?: string
   sceneTagIds: string[]
 
   interestLevel: 1 | 2 | 3
@@ -90,9 +91,14 @@ type TaskTemplate = {
 
 字段说明：
 
+templateKind：模板种类
+- `grass`：用户主动维护的种草模板
+- `todo_recurring`：从 Todo 添加区创建、由系统后台托管的重复 Todo 模板
 title：条目内容，例如“《abc》”“买牛奶”“整理书架”
 date：条目日期；仅在 `isNecessary = true` 或 `recurrence !== 'none'` 时写入，其他条目写空字符串 `''`
 activityTypeId：主活动类型
+- 对 `grass` 模板仍为必填
+- 对 `todo_recurring` 模板可为空，因为它不属于种草分类体系
 sceneTagIds：适用时间场景，可为空，可多选
 只有少数系统内置标签参与白天/晚上映射，其他标签仅作为筛选标签
 interestLevel：兴趣程度，1/2/3
@@ -113,6 +119,19 @@ V1 不支持“每隔 x 天 / 每隔 x 周 / 每隔 x 月”的间隔型重复
 若后续需要支持 interval-based recurrence，应扩展为另一套 recurrence 结构，而不是直接复用当前枚举语义
 isSegmented：是否分次
 isArchived：是否归档；仅表示用户主动停用该模板，不再参与决策与自动生成
+
+补充说明：
+- `grass` 模板：
+  - 可参与种草列表展示
+  - 可参与拔草推荐
+  - 可被用户主动维护
+- `todo_recurring` 模板：
+  - 不参与种草列表展示
+  - 不参与拔草推荐
+  - 主要服务于未来自动生成重复 Todo
+  - 推荐默认 `interestLevel = 2`
+  - 可复用 `requiresPreparation`、`preparationNotes`、`isSegmented`
+  - 其 `date` 为用户在 Todo 区创建该重复事项时的锚点日期
 
 ## 五、重复任务周期实例
 
@@ -172,6 +191,9 @@ type DayPlanItem = {
   templateId?: string
   recurringInstanceId?: string
   consumesDateTrigger?: boolean
+  rootItemId?: string
+  continuationOfItemId?: string
+  carriedFromDate?: string
 
   title: string
   activityTypeId?: string
@@ -224,6 +246,22 @@ consumesDateTrigger 用于表达该 `DayPlanItem` 是否消费了某个模板在
 若某条目因“必要事项”或“命中当天日期的一次性事项”自动进入当天计划，则其 `DayPlanItem` 可不依赖 `recurringInstanceId`
 若未来日期的一次性非必要条目被提前手动选入并完成，则原目标日期不应再自动出现该条目
 
+分次链字段：
+- `rootItemId`
+  - 表示该事项所属分次链的根实例 id
+  - 对链路起点本身，推荐写为自身 `id`
+- `continuationOfItemId`
+  - 表示该实例直接延续自哪一条上一实例
+  - 用于精确表达“今天这条是昨天那条继续做”
+- `carriedFromDate`
+  - 表示该实例是从哪一天自动延续而来
+  - 主要用于防止重复延续与便于 UI 提示
+
+推荐原因：
+- `manual_temporary` 没有 `templateId`，必须有实例链字段才能可靠继承进度
+- `decision_selected` 虽然通常有 `templateId`，但用户可能编辑标题、重复加入同模板、删除中间某天实例，因此仅靠模板或标题都不够稳
+- 相比独立 chain 表，直接挂在 `DayPlanItem` 上更适合当前单人、本地、轻量的数据结构，也更容易移植到 iOS
+
 轻量建模建议：
 - V1 采用“实例层承载消费语义”的方案，不单独新增完整的 occurrence / trigger 记录表
 - 推荐用 `targetDate + consumesDateTrigger` 表达“本次触发已被消费”
@@ -241,7 +279,72 @@ source = manual_temporary
 templateId 为空
 title 仅为一行文字
 
-## 八、设置项
+补充：临时重复 Todo
+- 若临时 Todo 开启重复规则，则不再只是单条 `DayPlanItem`。
+- 推荐写入两层数据：
+  - 当天的 `DayPlanItem`
+  - 一条 `templateKind = 'todo_recurring'` 的 `TaskTemplate`
+- 未来重复实例仍由模板层自动生成，不在 `DayPlanItem` 上单独新增第二套 recurrence 语义。
+
+补充：分次链与进度继承
+- `manual_temporary` 若开启分次，后续自动延续与进度继承推荐完全依赖 `DayPlanItem` 链路字段。
+- 重新从种草加入的 `decision_selected` 分次事项：
+  - 若命中同 `templateId` 的最近未完成分次链
+  - 推荐新实例继承该链的 `rootItemId`
+  - 并把 `continuationOfItemId` 指向该链最近一条实例
+- 自动延续生成的新实例：
+  - 复制上一条实例的 `rootItemId`
+  - `continuationOfItemId = 上一条实例.id`
+  - `carriedFromDate = 上一条实例.date`
+  - `progressPercent` 继承上一条实例
+  - `progressState` 推荐继承为 `in_progress`
+- 当某条链路达到 `progressPercent = 100` 时：
+  - 该链结束
+  - 后续不再自动生成 continuation
+
+## 八、兼容策略
+
+### 1. 现有数据兼容
+- 现有历史 `TaskTemplate` 默认视为：
+  - `templateKind = 'grass'`
+- 现有历史模板通常都已有：
+  - `activityTypeId`
+  - `interestLevel`
+  - `sceneTagIds`
+- 因此旧数据可以平滑迁移，不需要修改既有业务语义。
+
+### 2. 当前 schema 兼容策略
+- 新增 `templateKind` 字段：
+  - 历史数据回填为 `grass`
+- 将 `activityTypeId` 从“无条件必填”调整为：
+  - `grass` 必填
+  - `todo_recurring` 可为空
+- `interestLevel` 可继续保留必填，`todo_recurring` 创建时默认写 `2`
+
+### 3. 后续逻辑过滤点
+- 自动生成：
+  - `grass` 和 `todo_recurring` 都可参与
+- 拔草推荐：
+  - 只允许 `grass`
+- 种草区列表 / 种草管理：
+  - 只展示 `grass`
+- Todo 重复规则管理入口：
+  - 单独处理 `todo_recurring`
+
+### 4. 分次延续兼容策略
+- 历史 `DayPlanItem` 默认没有：
+  - `rootItemId`
+  - `continuationOfItemId`
+  - `carriedFromDate`
+- 因此 schema 应允许这些字段缺省。
+- 旧数据可继续按“没有分次链”的普通实例解释，不需要做破坏性迁移。
+- 新建分次事项时：
+  - 若是链路起点，推荐写入 `rootItemId = 当前实例 id`
+  - 其余两个字段留空
+- 自动延续或手动重新加入既有分次链时：
+  - 才写入 `continuationOfItemId` 与 `carriedFromDate`
+
+## 九、设置项
 type AppSettings = {
   initialized: boolean
 

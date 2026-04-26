@@ -152,6 +152,118 @@
 
 ---
 
+## V2-7：临时重复 Todo 建模与接入
+
+### 目标
+让用户可以直接在 Todo 添加区创建重复事项，而不必先进入种草区创建种草模板。
+
+### 核心方向
+- 采用“模板中心化”方案
+- 不在 `DayPlanItem` 上新增第二套重复系统
+- 通过后台托管的 Todo 重复模板复用现有自动生成链路
+- 避免污染“种草”心智
+
+### 要求
+- Todo 添加区允许为新建事项设置：
+  - `none`
+  - `daily`
+  - `weekly`
+  - `monthly`
+  - `yearly`
+- 当用户从 Todo 区创建重复事项时：
+  - 当天写入一条 `DayPlanItem`
+  - 同时写入一条后台托管的 `TaskTemplate`
+- 该模板：
+  - 不进入普通种草列表
+  - 不参与拔草推荐
+  - 不参与“从种草添加”
+- 删除某一天实例：
+  - 只删除当天实例
+  - 不影响未来重复
+- 停用整条重复 Todo：
+  - 作用于后台托管模板
+
+### 建议拆分
+1. 文档与规则补充
+2. 数据模型与 schema 兼容
+3. Todo 添加区重复规则 UI
+4. 创建后台托管重复模板
+5. 自动生成接入
+6. 种草区 / 推荐过滤
+7. 重复 Todo 的最小停用入口
+8. 手动验证清单更新
+
+### 交付物
+- 重复 Todo 规则文档
+- 模型迁移方案
+- 过滤边界说明
+- 手动验证场景
+
+### 当前状态
+- 已完成最小可用版本：
+  - `templateKind = 'grass' | 'todo_recurring'`
+  - Todo 添加区重复规则 UI
+  - 后台托管重复模板创建
+  - 自动生成接入
+  - 种草区 / 推荐过滤
+  - 最小“停止重复”入口
+- 后续仍待补：
+  - 分次跨天延续
+  - 进度继承
+  - `decision_selected` 转重复
+
+---
+
+## V2-8：分次跨天延续与进度继承
+
+### 目标
+让未完成的分次事项在次日继续出现，并继承已有进度；同时让“重新从种草加入”也能接回最近未完成分次链，而不是从 `0%` 重来。
+
+### 推荐方向
+- 不依赖标题推断。
+- 不给 `DayPlanItem` 再塞第二套 recurrence。
+- 推荐新增 `DayPlanItem` 链路字段，而不是独立 chain 表：
+  - `rootItemId`
+  - `continuationOfItemId`
+  - `carriedFromDate`
+- continuation 同步推荐独立成模块，而不是塞进 `TodoModePanel` 或直接并入 `auto-generated.ts`。
+
+### 规则建议
+- 只自动延续 `progressPercent = 1-99` 的分次事项。
+- `0%` 不延续，`100%` 结束链路。
+- 删除某一天延续实例只跳过当天，不关闭整条链。
+- 重新从种草加入同一 `templateId` 的分次事项时，继承最近未完成分次链。
+- 对受 `RecurringTaskInstance` 管控的重复事项，推荐继续遵守“旧周期未完成记为 `expired`，不滚入新周期”的既有规则。
+
+### 建议拆分
+1. 文档与规则确认
+2. `DayPlanItem` 链路字段与 schema 兼容
+3. continuation 同步模块
+4. Todo / Home 加载链路接入
+5. 从种草重新加入时的进度继承
+6. 与 `RecurringTaskInstance` 的边界校验
+7. 手动验证清单补充
+
+### 交付物
+- 分次 continuation 规则文档
+- 数据模型变更方案
+- continuation 同步顺序说明
+- 手动验证场景
+
+### 当前状态
+- 已完成最小可用版本：
+  - `DayPlanItem.rootItemId / continuationOfItemId / carriedFromDate`
+  - continuation 独立同步模块
+  - Todo 日期加载顺序接入
+  - 从种草重新加入时的最近进度继承
+  - recurrence 新周期不继承旧周期进度
+- 后续仍待补：
+  - 分次事项取消完成的专门回滚规则
+  - continuation 的历史链路展示
+  - `decision_selected` 转重复
+
+---
+
 ## 暂不进入本轮的事项
 
 以下内容当前只记录，不在本轮实现：

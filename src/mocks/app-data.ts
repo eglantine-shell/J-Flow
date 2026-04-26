@@ -77,6 +77,7 @@ export const mockAppData: AppData = {
   taskTemplates: [
     {
       id: 'template-read-book',
+      templateKind: 'grass',
       title: '读《深度工作》',
       date: '2026-04-20',
       activityTypeId: 'activity-reading',
@@ -93,6 +94,7 @@ export const mockAppData: AppData = {
     },
     {
       id: 'template-clean-desk',
+      templateKind: 'grass',
       title: '整理书桌',
       date: '2026-04-17',
       activityTypeId: 'activity-home',
@@ -109,6 +111,7 @@ export const mockAppData: AppData = {
     },
     {
       id: 'template-pay-rent',
+      templateKind: 'grass',
       title: '交房租',
       date: '2026-04-17',
       activityTypeId: 'activity-home',
@@ -125,6 +128,7 @@ export const mockAppData: AppData = {
     },
     {
       id: 'template-study-english',
+      templateKind: 'grass',
       title: '复习英语单词',
       date: '2026-04-17',
       activityTypeId: 'activity-study',
@@ -141,6 +145,7 @@ export const mockAppData: AppData = {
     },
     {
       id: 'template-archived-magazine',
+      templateKind: 'grass',
       title: '读完过期杂志',
       date: '2026-04-01',
       activityTypeId: 'activity-reading',

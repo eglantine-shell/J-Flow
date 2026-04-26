@@ -1,5 +1,7 @@
 export type InterestLevel = 1 | 2 | 3
 
+export type TemplateKind = 'grass' | 'todo_recurring'
+
 export type RecurrenceRule = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
 
 export type TimeBlock = 'day' | 'night'
@@ -51,9 +53,10 @@ export interface ActivityType {
 
 export interface TaskTemplate {
   id: string
+  templateKind: TemplateKind
   title: string
   date: string
-  activityTypeId: string
+  activityTypeId?: string
   sceneTagIds: string[]
   interestLevel: InterestLevel
   isNecessary: boolean
@@ -90,6 +93,9 @@ export interface DayPlanItem {
   templateId?: string
   recurringInstanceId?: string
   consumesDateTrigger?: boolean
+  rootItemId?: string
+  continuationOfItemId?: string
+  carriedFromDate?: string
   title: string
   activityTypeId?: string
   isNecessary: boolean

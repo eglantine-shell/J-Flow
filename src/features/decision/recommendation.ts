@@ -1,4 +1,5 @@
 import { appDataRepository } from '@/db'
+import { findLatestSegmentedTemplateCarryover } from '@/features/continuation'
 import type {
   ActivityType,
   DayPlanItem,
@@ -117,7 +118,7 @@ export async function getDecisionRecommendations({
   )
 
   const candidates = appData.taskTemplates.reduce<RecommendationCandidate[]>((list, template) => {
-    if (template.isArchived || template.isNecessary) {
+    if (template.templateKind !== 'grass' || template.isArchived || template.isNecessary) {
       return list
     }
 
@@ -191,7 +192,16 @@ export async function createDecisionSelectedDayPlanItem({
       ? 1
       : Math.max(...existingItems.map((item) => item.sortOrder)) + 1
 
-  return appDataRepository.dayPlanItems.create({
+  const carryover =
+    template.isSegmented && template.id
+      ? findLatestSegmentedTemplateCarryover({
+          appData,
+          templateId: template.id,
+          beforeDate: selectedDate,
+        })
+      : null
+
+  const createdItem = await appDataRepository.dayPlanItems.create({
     date: selectedDateKey,
     targetDate: template.date || undefined,
     timeBlock,
@@ -205,9 +215,25 @@ export async function createDecisionSelectedDayPlanItem({
     requiresPreparation: template.requiresPreparation,
     preparationNotes: template.preparationNotes,
     isSegmented: template.isSegmented,
-    progressState: 'not_started',
-    progressPercent: 0,
+    progressState: carryover ? 'in_progress' : 'not_started',
+    progressPercent: carryover?.progressPercent ?? 0,
     status: 'pending',
+    rootItemId: carryover ? carryover.rootItemId ?? carryover.id : undefined,
+    continuationOfItemId: carryover?.id,
+    carriedFromDate: carryover?.date,
+  })
+
+  if (!template.isSegmented) {
+    return createdItem
+  }
+
+  if (carryover) {
+    return createdItem
+  }
+
+  return appDataRepository.dayPlanItems.update({
+    id: createdItem.id,
+    rootItemId: createdItem.id,
   })
 }
 
