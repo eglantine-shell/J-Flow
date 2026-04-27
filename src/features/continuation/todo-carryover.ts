@@ -81,18 +81,6 @@ const getTemplateKindMap = (appData: AppData) =>
     return map
   }, {})
 
-const getActiveRecurringInstanceMapByTemplate = (appData: AppData) =>
-  appData.recurringTaskInstances
-    .filter((instance) => instance.status === 'pending')
-    .sort((left, right) => left.dateKey.localeCompare(right.dateKey))
-    .reduce<Record<string, RecurringTaskInstance>>((map, instance) => {
-      if (!map[instance.templateId]) {
-        map[instance.templateId] = instance
-      }
-
-      return map
-    }, {})
-
 const isRepeatingItem = (
   item: DayPlanItem,
   templateKindsById: Record<string, TaskTemplate['templateKind']>,
@@ -128,7 +116,6 @@ const isCarryableTodoItem = (
   selectedDateKey: string,
   templateKindsById: Record<string, TaskTemplate['templateKind']>,
   recurringInstancesById: Record<string, RecurringTaskInstance>,
-  activeRecurringInstancesByTemplate: Record<string, RecurringTaskInstance>,
 ) => {
   if (item.status !== 'pending') {
     return false
@@ -144,12 +131,10 @@ const isCarryableTodoItem = (
     }
 
     const recurringInstance = recurringInstancesById[item.recurringInstanceId]
-    const activeRecurringInstance = activeRecurringInstancesByTemplate[item.templateId]
 
     return Boolean(
       recurringInstance &&
-        recurringInstance.status === 'pending' &&
-        activeRecurringInstance?.id === recurringInstance.id,
+        recurringInstance.status === 'pending',
     )
   }
 
@@ -160,14 +145,6 @@ const isCarryableTodoItem = (
   return true
 }
 
-const resolveCarryoverProgressState = (item: DayPlanItem) => {
-  if (!item.isSegmented) {
-    return 'not_started' as const
-  }
-
-  return item.progressPercent > 0 ? ('in_progress' as const) : ('not_started' as const)
-}
-
 const findLatestCarryableItemsByRoot = (
   appData: AppData,
   selectedDateKey: string,
@@ -176,7 +153,6 @@ const findLatestCarryableItemsByRoot = (
   const latestByRoot = new Map<string, DayPlanItem>()
   const latestItemsByRoot = getLatestItemsByRootBeforeDate(appData.dayPlanItems, selectedDateKey)
   const recurringInstancesById = getRecurringInstanceMap(appData)
-  const activeRecurringInstancesByTemplate = getActiveRecurringInstanceMapByTemplate(appData)
 
   latestItemsByRoot.forEach((item, rootItemId) => {
     if (
@@ -185,7 +161,6 @@ const findLatestCarryableItemsByRoot = (
         selectedDateKey,
         templateKindsById,
         recurringInstancesById,
-        activeRecurringInstancesByTemplate,
       )
     ) {
       latestByRoot.set(rootItemId, item)
@@ -247,7 +222,6 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
       ? parseDate(selectedDateInput)
       : new Date(selectedDateInput)
   const selectedDateKey = toDateString(selectedDate)
-  const nowIso = new Date().toISOString()
   const appData = await appDataRepository.get()
   const templateKindsById = getTemplateKindMap(appData)
   const latestByRoot = findLatestCarryableItemsByRoot(appData, selectedDateKey, templateKindsById)
@@ -280,16 +254,9 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
     return appData
   }
 
-  const ordinaryRolloverItems = carryoverItems.filter(
-    (item) => !isRepeatingItem(item, templateKindsById),
-  )
-  const repeatingCarryoverItems = carryoverItems.filter((item) =>
-    isRepeatingItem(item, templateKindsById),
-  )
-
   let nextAppData = appData
 
-  ordinaryRolloverItems.forEach((item) => {
+  carryoverItems.forEach((item) => {
     const sortOrder = nextSortOrder[item.timeBlock]
     nextSortOrder[item.timeBlock] += 1
 
@@ -305,45 +272,6 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
             }
           : dayPlanItem,
       ),
-    }
-  })
-
-  repeatingCarryoverItems.forEach((item) => {
-    const rootItemId = getRootItemId(item)
-    const sortOrder = nextSortOrder[item.timeBlock]
-    nextSortOrder[item.timeBlock] += 1
-
-    const carryoverItem: DayPlanItem = {
-      id: `day-plan-item-carryover-${rootItemId}-${selectedDateKey}-${item.timeBlock}`,
-      date: selectedDateKey,
-      originDate: resolveOriginDate(item),
-      targetDate: item.targetDate,
-      timeBlock: item.timeBlock,
-      timeBlockSource: item.timeBlockSource,
-      sortOrder,
-      source: item.source,
-      templateId: item.templateId,
-      recurringInstanceId: item.recurringInstanceId,
-      consumesDateTrigger: item.consumesDateTrigger,
-      rootItemId,
-      continuationOfItemId: item.id,
-      carriedFromDate: item.date,
-      title: item.title,
-      activityTypeId: item.activityTypeId,
-      isNecessary: item.isNecessary,
-      requiresPreparation: item.requiresPreparation,
-      preparationNotes: item.preparationNotes,
-      isSegmented: item.isSegmented,
-      progressState: resolveCarryoverProgressState(item),
-      progressPercent: item.progressPercent,
-      status: 'pending',
-      createdAt: nowIso,
-      completedAt: undefined,
-    }
-
-    nextAppData = {
-      ...nextAppData,
-      dayPlanItems: [...nextAppData.dayPlanItems, carryoverItem],
     }
   })
 

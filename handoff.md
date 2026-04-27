@@ -73,12 +73,12 @@
 1. V2.1-A：文档规则重写（已完成）
 2. V2.1-B：Todo rollover 模型确认（已完成方案确认）
 3. V2.1-C：普通 Todo 顺延搬移实现（已完成第一版）
-4. V2.1-D：重复 Todo occurrence 生成重构
+4. V2.1-D：重复 Todo occurrence 生成重构（已完成第一版）
 5. V2.1-E：UI 文案与 ViewModel 调整
 
 ## 当前已知风险
 - 当前 UI 已新增 ViewModel 防腐层，但 action handler 内仍保留少量底层判断以维持既有行为。
-- 普通 Todo 已切到 date 搬移式 rollover，但 repeating Todo 仍带有旧 carryover / active occurrence 心智。
+- 普通 Todo 与 repeating Todo 都已切到 date 搬移式 rollover，但 repeating 的更细状态语义与旧数据兼容仍需继续清理。
 - 旧数据虽然可兼容回退 `originDate ?? targetDate ?? date`，但历史数据的一次性清理与旧链字段降级还没做完。
 
 ## 当前明确未实现
@@ -101,6 +101,13 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 完成 V2.1-D 第一版：
+  - `auto-generated` 已废弃 single active occurrence 阻断
+  - 改为按 `templateId + targetDate/originDate` 去重
+  - 不同命中日的 repeating occurrence 现在可并存
+  - repeating occurrence 已参与 date 搬移式 rollover
+  - 删除 repeating Todo 继续只结束本次 occurrence，不停止整条重复规则
+  - 停止重复仍仅通过归档模板完成
 - 完成 V2.1-C 第一版：
   - `DayPlanItem.originDate` 已落地到 model / schema / storage
   - 手动创建、从种草加入、auto-generated、手动创建 repeating 当天实例都已写入 `originDate`

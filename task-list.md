@@ -142,7 +142,11 @@
 
 ### 当前状态
 
-- 待开始
+- 本轮完成第一版
+- `auto-generated` 已改为按 `templateId + targetDate/originDate` 去重
+- 不同命中日的 repeating occurrence 现在可并存
+- repeating occurrence 已可参与 date 搬移式 rollover
+- 删除本次 occurrence 与停止重复继续保持分离
 
 ---
 

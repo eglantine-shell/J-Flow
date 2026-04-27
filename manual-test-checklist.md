@@ -82,6 +82,7 @@
 - 并存的 repeating Todo 应靠“创建于 M/D”区分。
 - 删除某条 repeating occurrence 应只结束这一条，不停止整条重复规则。
 - “停止重复”后，未来命中日不应再生成新的 occurrence，但历史 occurrence 应保留。
+- 同一模板 + 同一命中日，不应重复生成第二条 occurrence。
 
 ## 8. UI 交互一致性
 - Todo 列表中的编辑、完成、取消完成、删除按钮，不应因为来源不同而出现难理解差异。

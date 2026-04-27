@@ -1,5 +1,68 @@
 # Dev Log
 
+## 2026-04-27（V2.1-D：repeating occurrence 重构）
+
+### 本轮目标
+- 废弃 repeating Todo 的 single active occurrence 阻断
+- 同一模板 + 同一命中日最多一条 occurrence
+- 不同命中日的 occurrence 可以并存
+- repeating occurrence 未完成时直接搬移自己的 `date`
+- 删除本次 occurrence 与停止重复保持分离
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `task-list.md`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/continuation/todo-carryover.ts`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+
+### 本轮关键判断
+- 旧的 active occurrence 阻断会错误阻止新命中日 occurrence 生成，不符合当前产品规则。
+- repeating occurrence 的核心是“同命中日去重”，不是“同模板全局只留一个 pending”。
+- repeating rollover 与普通 Todo 一样改成搬移 `date` 后，才符合“每个 occurrence 都是一条普通 Todo”的规则。
+
+### 本轮关键决策
+- `auto-generated` 不再查“同模板最早 pending occurrence”。
+- 改为：
+  - 同模板 + 同一命中日只生成一次
+  - 若该命中日已有 pending/completed occurrence，则复用并同步已有条目
+  - 若该命中日已有 deleted occurrence，则不重新生成
+- `todo-carryover` 不再为 repeating 复制副本
+- deleting repeating Todo 继续：
+  - `DayPlanItem.status = deleted`
+  - `RecurringTaskInstance.status = expired`
+  - 不归档模板
+
+### 本轮修改
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - 去掉 single active occurrence 阻断
+  - 改为按 `templateId + targetDate/originDate` 去重
+- 更新 `src/features/continuation/todo-carryover.ts`
+  - repeating 也改成 date 搬移式 rollover
+  - 不再创建 repeating carryover 副本
+- 更新文档：
+  - `dev-log.md`
+  - `handoff.md`
+  - `task-list.md`
+  - `manual-test-checklist.md`
+
+### 本轮刻意未做
+- 未重构 repeating 的取消完成状态机
+- 未删除旧 continuation 字段
+- 未处理“不能创建过去 Todo”的问题
+- 未做 UI polish
+
+### 当前风险与待确认问题
+- 若历史数据里已经存在旧的 repeating carryover 副本链，本轮不会主动清洗旧副本，只保证新行为不再继续扩展它们。
+- 删除某个 repeating occurrence 后，如果该命中日不存在对应 `RecurringTaskInstance`，当前只能依赖 `DayPlanItem.status = deleted` 阻止再显示。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-C：originDate 落地 + 普通 Todo 顺延搬移）
 
 ### 本轮目标
