@@ -5,6 +5,7 @@ import { SettingsIcon } from '@/components/ui/Icons'
 export function AppShell() {
   const location = useLocation()
   const showSettingsEntry = location.pathname !== '/setup'
+  const isSettingsPage = location.pathname === '/settings'
 
   return (
     <div className="app-shell">
@@ -13,13 +14,10 @@ export function AppShell() {
         {showSettingsEntry ? (
           <div className="app-shell__actions">
             <Link
-              className={
-                location.pathname === '/settings'
-                  ? 'icon-button icon-button--toolbar icon-button--active'
-                  : 'icon-button icon-button--toolbar'
-              }
-              to="/settings"
-              aria-label="打开设置"
+              className={isSettingsPage ? 'icon-button icon-button--toolbar icon-button--active' : 'icon-button icon-button--toolbar'}
+              to={isSettingsPage ? '/' : '/settings'}
+              aria-label={isSettingsPage ? '返回主页' : '打开设置'}
+              title={isSettingsPage ? '返回主页' : '打开设置'}
             >
               <SettingsIcon className="icon-button__icon" />
             </Link>

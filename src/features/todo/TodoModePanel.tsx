@@ -4,6 +4,7 @@ import {
   CheckIcon,
   CloseIcon,
   EditIcon,
+  ImportantIcon,
   MoonIcon,
   MoreIcon,
   PlusIcon,
@@ -868,20 +869,18 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                         </>
                       ) : (
                         <>
-                          <h5>{viewModel.title}</h5>
-                          {viewModel.canEdit ? (
-                            <button
-                              className="todo-item-card__icon-button"
-                              type="button"
-                              aria-label="编辑标题"
-                              title="编辑标题"
-                              onClick={() => {
-                                startEditingItem(viewModel)
-                              }}
-                            >
-                              <EditIcon className="todo-item-card__icon" />
-                            </button>
-                          ) : null}
+                          <div className="todo-item-card__title-main">
+                            <h5>{viewModel.title}</h5>
+                            {viewModel.isNecessary ? (
+                              <span
+                                className="todo-item-card__important"
+                                aria-label="必要事项"
+                                title="必要事项"
+                              >
+                                <ImportantIcon className="todo-item-card__icon todo-item-card__important-icon" />
+                              </span>
+                            ) : null}
+                          </div>
                         </>
                       )}
                     </div>
@@ -891,11 +890,9 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                         <span
                           key={tag}
                           className={
-                            tag === '必要'
-                              ? 'status-chip status-chip--necessary'
-                              : tag.startsWith('完成于') || tag === '已完成'
-                                ? 'status-chip status-chip--completed'
-                                : 'status-chip'
+                            tag.startsWith('完成于') || tag === '已完成'
+                              ? 'status-chip status-chip--completed'
+                              : 'status-chip'
                           }
                         >
                           {tag}
@@ -916,15 +913,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
                   {viewModel.isSegmented ? (
                     <div className="segmented-progress-panel">
-                      <div
-                        className="segmented-progress-panel__bar"
-                        aria-label={`当前进度 ${viewModel.progressPercent}%`}
-                      >
-                        <div
-                          className="segmented-progress-panel__bar-fill"
-                          style={{ width: `${viewModel.progressPercent}%` }}
-                        />
-                      </div>
                       <input
                         className="segmented-progress-panel__range"
                         type="range"
@@ -960,6 +948,20 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     </button>
                   ) : null}
 
+                  {viewModel.canEdit && editingItemId !== viewModel.id ? (
+                    <button
+                      className="todo-item-card__icon-button"
+                      type="button"
+                      aria-label="编辑标题"
+                      title="编辑标题"
+                      onClick={() => {
+                        startEditingItem(viewModel)
+                      }}
+                    >
+                      <EditIcon className="todo-item-card__icon" />
+                    </button>
+                  ) : null}
+
                   <button
                     className={
                       viewModel.isCompleted
@@ -978,11 +980,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     onClick={() => {
                       void completeItem(viewModel)
                     }}
-                  >
-                    {viewModel.isCompleted ? (
-                      <CheckIcon className="todo-check__icon" />
-                    ) : null}
-                  </button>
+                    >
+                      {viewModel.isCompleted ? (
+                        <CheckIcon className="todo-check__icon" />
+                      ) : null}
+                    </button>
 
                   <button
                     className={

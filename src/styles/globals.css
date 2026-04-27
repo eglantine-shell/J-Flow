@@ -975,6 +975,13 @@ button:hover:not(:disabled) {
   align-items: start;
 }
 
+.todo-item-card__title-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .todo-item-card__title-row h5 {
   min-width: 0;
 }
@@ -1063,6 +1070,19 @@ button:hover:not(:disabled) {
   color: var(--text-soft);
   font-size: 0.72rem;
   line-height: 1.4;
+}
+
+.todo-item-card__important {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--purple);
+  flex-shrink: 0;
+}
+
+.todo-item-card__important-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .todo-item-card__tag-row:empty {

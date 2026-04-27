@@ -1,5 +1,47 @@
 # Dev Log
 
+## 2026-04-27（V2.1-E：UI 小修二轮）
+
+### 本轮目标
+- 调整 repeating / 编辑按钮顺序
+- 将必要标记从 tag 改成标题区图标
+- 去掉分次事项重复显示的双进度条
+- 将设置页“打开设置 / 返回主页”收口为同一个头部按钮
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `src/app/shell/AppShell.tsx`
+- `src/features/settings/SettingsPanel.tsx`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- 本轮仅做 UI 小修，不改 Todo 数据、状态语义和任何业务逻辑。
+- 设置页已有头部设置按钮，返回主页入口应直接复用它，避免页面内再放一颗重复按钮。
+- 必要事项既然已从 tag 收口，就更适合用紧贴标题的轻量图标表达。
+
+### 本轮修改
+- 更新 `src/components/ui/Icons.tsx`
+  - 新增必要事项图标出口
+- 更新 `src/app/shell/AppShell.tsx`
+  - 设置按钮在 `/settings` 页改为跳回 `/`
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 删除页面内“返回主页”按钮
+- 更新 `src/features/todo/todo-view-model.ts`
+  - 去掉必要事项 tag 生成
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 右侧操作顺序改为：重复图标、编辑图标、checkbox、删除
+  - 必要事项改为标题旁图标
+  - 分次事项仅保留可拖动的进度条
+- 更新 `src/styles/globals.css`
+  - 补充标题图标和必要图标样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-E：UI 收口 + Todo 交互修正）
 
 ### 本轮目标

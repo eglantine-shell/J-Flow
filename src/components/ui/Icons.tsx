@@ -1,4 +1,5 @@
 import {
+  CircleAlert,
   Check,
   Ellipsis,
   Moon,
@@ -57,4 +58,8 @@ export function MoreIcon(props: IconProps) {
 
 export function RepeatIcon(props: IconProps) {
   return <Repeat2 {...defaultProps} {...props} />
+}
+
+export function ImportantIcon(props: IconProps) {
+  return <CircleAlert {...defaultProps} {...props} />
 }

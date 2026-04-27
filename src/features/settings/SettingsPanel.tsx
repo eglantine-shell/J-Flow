@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { SurfaceCard } from '@/components/ui/SurfaceCard'
 import { appDataRepository } from '@/db'
@@ -16,7 +15,6 @@ const initialViewState: SettingsViewState = {
 }
 
 export function SettingsPanel() {
-  const navigate = useNavigate()
   const [viewState, setViewState] = useState<SettingsViewState>(initialViewState)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -102,7 +100,7 @@ export function SettingsPanel() {
 
     await withSaving(async () => {
       await appDataRepository.reset()
-      navigate('/setup', { replace: true })
+      window.location.replace('/setup')
     })
   }
 
@@ -117,18 +115,6 @@ export function SettingsPanel() {
   return (
     <section className="page-grid page-grid--single">
       <SurfaceCard title="设置" description="整理排序设置与测试阶段工具。">
-        <div className="settings-toolbar">
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() => {
-              navigate('/', { replace: true })
-            }}
-          >
-            返回主页
-          </button>
-        </div>
-
         {errorMessage ? (
           <p className="form-message form-message--danger">{errorMessage}</p>
         ) : null}

@@ -214,10 +214,6 @@ export function buildRecurringInstancesById(instances: RecurringTaskInstance[]) 
 export function buildTodoTags(viewModel: TodoViewModel) {
   const tags: string[] = []
 
-  if (viewModel.isNecessary) {
-    tags.push('必要')
-  }
-
   if (viewModel.isCompleted) {
     tags.push(viewModel.completedLabel || '已完成')
   }
