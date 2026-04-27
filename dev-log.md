@@ -1,5 +1,38 @@
 # Dev Log
 
+## 2026-04-27（V2.1-D：修复当日重复事项完成后消失）
+
+### 本轮目标
+- 修复“当日 repeating Todo 打勾完成后直接消失”的问题
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/continuation/todo-carryover.ts`
+
+### 本轮关键判断
+- 问题不在 UI 过滤，而在 `auto-generated` 同步清理逻辑。
+- 当 repeating Todo 完成时，`consumesDateTrigger = true` 会让该模板当天不再进入 `syncedItems`。
+- 旧逻辑会把“当天未进入 syncedItems 的 auto_generated 条目”统一标成 `deleted`，连 `completed` 也一起误删。
+
+### 本轮关键决策
+- `auto-generated` 同步阶段只清理当天未同步到的 `pending` 自动事项。
+- 已完成的 repeating occurrence 必须继续留在当天列表，不能被误标成 `deleted`。
+
+### 本轮修改
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - `itemsToHide` 只处理 `status === 'pending'` 的自动事项
+
+### 当前风险与待确认问题
+- 本轮只修复“完成后被误删”的同步问题，没有扩展 repeating 的取消完成状态机。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-D：repeating occurrence 重构）
 
 ### 本轮目标

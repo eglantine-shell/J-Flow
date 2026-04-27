@@ -101,6 +101,10 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 修复 repeating Todo 完成后消失：
+  - 原因是 `consumesDateTrigger = true` 后，当天条目未进入 `syncedItems`
+  - `auto-generated` 旧清理逻辑会把这类条目统一标成 `deleted`
+  - 现已改成仅清理当天未同步到的 `pending auto_generated` 项
 - 完成 V2.1-D 第一版：
   - `auto-generated` 已废弃 single active occurrence 阻断
   - 改为按 `templateId + targetDate/originDate` 去重
