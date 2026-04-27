@@ -101,6 +101,10 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 修复停止重复后当天 repeating Todo 消失：
+  - 原因是模板归档后，当天 occurrence 不再进入 `syncedItems`
+  - `auto-generated` 旧清理逻辑会把这类未同步到的 `pending auto_generated` 项误标成 `deleted`
+  - 现已改成：若对应模板已归档，则当天 occurrence 保留；停止重复只影响未来命中日
 - 修复 repeating Todo 完成后消失：
   - 原因是 `consumesDateTrigger = true` 后，当天条目未进入 `syncedItems`
   - `auto-generated` 旧清理逻辑会把这类条目统一标成 `deleted`

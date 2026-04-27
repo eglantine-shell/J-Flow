@@ -1,5 +1,42 @@
 # Dev Log
 
+## 2026-04-27（V2.1-D：修复停止重复后当天事项消失）
+
+### 本轮目标
+- 修复“停止重复后，当天 repeating Todo 会消失”的问题
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `task-list.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/recurrence/auto-generated.ts`
+
+### 本轮关键判断
+- 停止重复当前只会把模板 `isArchived = true`，不应影响当天已存在的 occurrence。
+- 问题根因在 `auto-generated` 的清理逻辑：
+  - 模板归档后，当天 repeating occurrence 不再进入 `syncedItems`
+  - 旧逻辑会把这类未同步到的 `pending auto_generated` 条目直接标成 `deleted`
+- 这会导致：
+  - 当天未完成 repeating Todo 消失
+  - 当天已完成 repeating Todo 取消完成后重新变成 `pending`，再次消失
+
+### 本轮关键决策
+- 若某条当天 `auto_generated` repeating Todo 对应模板已归档，则应保留该 occurrence。
+- 停止重复只影响未来命中日，不影响当天已存在的 occurrence，无论它当前是完成还是未完成。
+
+### 本轮修改
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - `itemsToHide` 不再隐藏“模板已归档”的当天自动生成事项
+
+### 当前风险与待确认问题
+- 本轮只修复“停止重复后当天 occurrence 被误删”的问题，没有扩展停止重复后的更多批量处理策略。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-D：修复当日重复事项完成后消失）
 
 ### 本轮目标
