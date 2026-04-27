@@ -1,5 +1,28 @@
 # Dev Log
 
+## 2026-04-27（V2.1-E：修复设置页重置后 404）
+
+### 本轮目标
+- 修复设置页点击“重置应用（测试用）”后跳到 404 的问题
+
+### 开始前已阅读
+- `handoff.md`
+- `src/features/settings/SettingsPanel.tsx`
+- `src/app/router.tsx`
+
+### 本轮关键判断
+- 问题不是 reset 本身，而是 reset 后的跳转方式。
+- 当前应用使用 `createBrowserRouter` 且设置了 `basename`，直接调用 `window.location.replace('/setup')` 会绕过路由基路径，导致浏览器去请求错误的绝对地址。
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 将 reset 后跳转从 `window.location.replace('/setup')` 改回 `navigate('/setup', { replace: true })`
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-E：UI 小修二轮）
 
 ### 本轮目标

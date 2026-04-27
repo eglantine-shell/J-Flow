@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { SurfaceCard } from '@/components/ui/SurfaceCard'
 import { appDataRepository } from '@/db'
@@ -15,6 +16,7 @@ const initialViewState: SettingsViewState = {
 }
 
 export function SettingsPanel() {
+  const navigate = useNavigate()
   const [viewState, setViewState] = useState<SettingsViewState>(initialViewState)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -100,7 +102,7 @@ export function SettingsPanel() {
 
     await withSaving(async () => {
       await appDataRepository.reset()
-      window.location.replace('/setup')
+      navigate('/setup', { replace: true })
     })
   }
 
