@@ -101,6 +101,12 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 完成 V2.1-E 第一批小修：
+  - 过去日期不再允许新增 Todo
+  - 手动输入、从种草添加、创建 repeating Todo 都只允许在 `selectedDate >= localToday` 时进行
+  - “停止重复”改为可恢复，模板 `isArchived` 可在 true / false 间切换
+  - 只有当天命中的 `todo_recurring` occurrence 显示停止/恢复按钮
+  - 过去搬移到今天的 repeating occurrence 不显示该按钮
 - 修复顺延后的 repeating occurrence 回写旧日期：
   - 原因是查看历史日期时，`auto-generated` 会复用同命中日 occurrence，并把它的 `date` 强行写回旧命中日
   - 现已改成：若该 occurrence 已顺延到更晚日期，则保留当前落点，不回写旧日期

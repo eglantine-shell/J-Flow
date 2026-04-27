@@ -1,5 +1,50 @@
 # Dev Log
 
+## 2026-04-27（V2.1-E：过去日期禁止新增 + 停止重复可恢复）
+
+### 本轮目标
+- 禁止在过去日期新增 Todo
+- 将“停止重复”改成可恢复
+- 仅在当天命中的 repeating occurrence 上显示停止/恢复按钮
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `product-rules.md`
+- `task-list.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+
+### 本轮关键判断
+- 过去日期允许查看，但不应再允许新增普通 Todo、从种草加入或创建 repeating Todo。
+- “停止重复”应是模板归档状态切换，而不是一次性动作；归档后需要给用户恢复入口。
+- 若今天同时有“今天命中的 occurrence”和“过去搬移来的 occurrence”，停止/恢复按钮只能放在当天命中的那条上，避免误解。
+
+### 本轮关键决策
+- 使用本地日期字符串比较 `selectedDateKey < localTodayKey` 判定过去日期。
+- `TodoViewModel` 统一承担：
+  - `canStopRepeating`
+  - `isRecurringStopped`
+  - `recurringToggleLabel`
+- 只有 `todo_recurring` 且 `originDate === date` 的 auto-generated occurrence 才显示停止/恢复按钮。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 过去日期禁用新增输入区与更多选项入口
+  - 轻提示文案改为“过去日期不能新增 Todo”
+  - 停止重复按钮改成停止/恢复切换
+- 更新 `src/features/todo/todo-view-model.ts`
+  - 新增 repeating 停止状态与按钮文案映射
+  - 仅当天命中的 occurrence 暴露 `canStopRepeating`
+
+### 当前风险与待确认问题
+- 本轮没有改变历史 Todo 的完成/取消完成/删除能力，只限制了过去日期新增。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-D：修复顺延后的 repeating occurrence 回写旧日期）
 
 ### 本轮目标

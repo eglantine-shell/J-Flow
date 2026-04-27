@@ -214,6 +214,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const [editingTitleDrafts, setEditingTitleDrafts] = useState<EditingTitleDraftMap>({})
 
   const selectedDateKey = useMemo(() => toDateString(selectedDate), [selectedDate])
+  const localTodayKey = useMemo(() => toDateString(new Date()), [])
+  const isPastDate = selectedDateKey < localTodayKey
 
   useEffect(() => {
     let cancelled = false
@@ -400,6 +402,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }
 
   const createTemporaryItem = async () => {
+    if (isPastDate) {
+      setComposerErrorMessage('过去日期不能新增 Todo')
+      return
+    }
+
     const title = temporaryTitle.trim()
 
     if (!title) {
@@ -595,6 +602,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }
 
   const addFromTemplate = async (template: TaskTemplate) => {
+    if (isPastDate) {
+      setComposerErrorMessage('过去日期不能新增 Todo')
+      return
+    }
+
     try {
       await createDecisionSelectedDayPlanItem({
         selectedDate,
@@ -762,17 +774,20 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       return
     }
 
-    const shouldArchive = window.confirm(
-      `确认停止「${item.title}」的重复吗？已生成的历史实例会保留，但未来不再自动出现。`,
+    const nextArchivedState = !viewModel.isRecurringStopped
+    const confirmed = window.confirm(
+      nextArchivedState
+        ? `确认停止「${item.title}」的重复吗？已生成的历史实例会保留，但未来不再自动出现。`
+        : `确认恢复「${item.title}」的重复吗？未来命中日会重新自动出现。`,
     )
 
-    if (!shouldArchive) {
+    if (!confirmed) {
       return
     }
 
     await appDataRepository.taskTemplates.update({
       id: item.templateId,
-      isArchived: true,
+      isArchived: nextArchivedState,
     })
 
     await reloadItems()
@@ -925,7 +940,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                             void stopRecurringTemplate(viewModel)
                           }}
                         >
-                          停止重复
+                          {viewModel.recurringToggleLabel}
                         </button>
                       ) : null}
                     </div>
@@ -938,7 +953,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                           void stopRecurringTemplate(viewModel)
                         }}
                       >
-                        停止重复
+                        {viewModel.recurringToggleLabel}
                       </button>
                     </div>
                   ) : null}
@@ -1083,6 +1098,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             className="temporary-composer__input"
             type="text"
             value={temporaryTitle}
+            disabled={isPastDate}
             onChange={(event) => {
               setTemporaryTitle(event.target.value)
             }}
@@ -1092,7 +1108,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 void createTemporaryItem()
               }
             }}
-            placeholder="输入一条 Todo"
+            placeholder={isPastDate ? '过去日期不能新增 Todo' : '输入一条 Todo'}
           />
 
           <div className="segmented-control temporary-composer__segmented" aria-label="Todo 时段">
@@ -1103,6 +1119,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                   : 'segmented-control__button'
               }
               type="button"
+              disabled={isPastDate}
               onClick={() => {
                 setTemporaryTimeBlock('day')
               }}
@@ -1117,6 +1134,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                   : 'segmented-control__button'
               }
               type="button"
+              disabled={isPastDate}
               onClick={() => {
                 setTemporaryTimeBlock('night')
               }}
@@ -1129,6 +1147,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           <button
             className="ghost-button ghost-button--compact temporary-composer__more-toggle"
             type="button"
+            disabled={isPastDate}
             onClick={() => {
               setComposerErrorMessage(null)
 
@@ -1145,7 +1164,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           <button
             className="primary-button"
             type="button"
-            disabled={temporaryTitle.trim().length === 0}
+            disabled={isPastDate || temporaryTitle.trim().length === 0}
             onClick={() => {
               void createTemporaryItem()
             }}
@@ -1154,13 +1173,14 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           </button>
         </div>
 
-        {showMoreOptions ? (
+        {showMoreOptions && !isPastDate ? (
           <div className="temporary-composer__more">
             <div className="temporary-composer__section">
               <div className="temporary-composer__action-row">
                 <button
                   className="ghost-button"
                   type="button"
+                  disabled={isPastDate}
                   onClick={() => {
                     void openRecommendationPanel()
                   }}
@@ -1261,6 +1281,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
         {composerErrorMessage ? (
           <p className="form-message form-message--danger">{composerErrorMessage}</p>
+        ) : isPastDate ? (
+          <p className="form-message">过去日期不能新增 Todo</p>
         ) : null}
       </div>
 
