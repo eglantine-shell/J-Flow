@@ -38,12 +38,35 @@ const toDateKey = (date: Date, recurrence: Exclude<RecurrenceRule, 'none'>) => {
 
 const getRootItemId = (item: DayPlanItem) => item.rootItemId ?? item.id
 
+const resolveOriginDate = (item: Pick<DayPlanItem, 'originDate' | 'targetDate' | 'date'>) =>
+  item.originDate ?? item.targetDate ?? item.date
+
 const compareItemsByDateDesc = (left: DayPlanItem, right: DayPlanItem) => {
   if (left.date !== right.date) {
     return right.date.localeCompare(left.date)
   }
 
   return right.createdAt.localeCompare(left.createdAt)
+}
+
+const getLatestItemsByRootBeforeDate = (
+  items: DayPlanItem[],
+  selectedDateKey: string,
+) => {
+  const latestByRoot = new Map<string, DayPlanItem>()
+
+  items
+    .filter((item) => item.date < selectedDateKey)
+    .sort(compareItemsByDateDesc)
+    .forEach((item) => {
+      const rootItemId = getRootItemId(item)
+
+      if (!latestByRoot.has(rootItemId)) {
+        latestByRoot.set(rootItemId, item)
+      }
+    })
+
+  return latestByRoot
 }
 
 const getRecurringInstanceMap = (appData: AppData) =>
@@ -100,18 +123,6 @@ const hasRootItemOnDate = (
 ) =>
   items.some((item) => item.date === selectedDateKey && getRootItemId(item) === rootItemId)
 
-const hasEndedChainBeforeDate = (
-  items: DayPlanItem[],
-  selectedDateKey: string,
-  rootItemId: string,
-) =>
-  items.some(
-    (item) =>
-      (item.status === 'deleted' || item.status === 'completed') &&
-      item.date < selectedDateKey &&
-      getRootItemId(item) === rootItemId,
-  )
-
 const isCarryableTodoItem = (
   item: DayPlanItem,
   selectedDateKey: string,
@@ -163,27 +174,23 @@ const findLatestCarryableItemsByRoot = (
   templateKindsById: Record<string, TaskTemplate['templateKind']>,
 ) => {
   const latestByRoot = new Map<string, DayPlanItem>()
+  const latestItemsByRoot = getLatestItemsByRootBeforeDate(appData.dayPlanItems, selectedDateKey)
   const recurringInstancesById = getRecurringInstanceMap(appData)
   const activeRecurringInstancesByTemplate = getActiveRecurringInstanceMapByTemplate(appData)
 
-  appData.dayPlanItems
-    .filter((item) =>
+  latestItemsByRoot.forEach((item, rootItemId) => {
+    if (
       isCarryableTodoItem(
         item,
         selectedDateKey,
         templateKindsById,
         recurringInstancesById,
         activeRecurringInstancesByTemplate,
-      ),
-    )
-    .sort(compareItemsByDateDesc)
-    .forEach((item) => {
-      const rootItemId = getRootItemId(item)
-
-      if (!latestByRoot.has(rootItemId)) {
-        latestByRoot.set(rootItemId, item)
-      }
-    })
+      )
+    ) {
+      latestByRoot.set(rootItemId, item)
+    }
+  })
 
   return latestByRoot
 }
@@ -201,20 +208,7 @@ export function findLatestTodoCarryover({
     typeof beforeDate === 'string' ? parseDate(beforeDate) : new Date(beforeDate)
   const selectedDateKey = toDateString(selectedDate)
   const templateKindsById = getTemplateKindMap(appData)
-  const recurringInstancesById = getRecurringInstanceMap(appData)
-  const activeRecurringInstancesByTemplate = getActiveRecurringInstanceMapByTemplate(appData)
-
-  const candidates = appData.dayPlanItems
-    .filter((item) =>
-      isCarryableTodoItem(
-        item,
-        selectedDateKey,
-        templateKindsById,
-        recurringInstancesById,
-        activeRecurringInstancesByTemplate,
-      ),
-    )
-    .filter((item) => !hasEndedChainBeforeDate(appData.dayPlanItems, selectedDateKey, getRootItemId(item)))
+  const candidates = [...findLatestCarryableItemsByRoot(appData, selectedDateKey, templateKindsById).values()]
     .filter((item) => (predicate ? predicate(item) : true))
     .sort(compareItemsByDateDesc)
 
@@ -274,7 +268,6 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
 
   const carryoverItems = [...latestByRoot.values()]
     .filter((item) => !hasRootItemOnDate(appData.dayPlanItems, selectedDateKey, getRootItemId(item)))
-    .filter((item) => !hasEndedChainBeforeDate(appData.dayPlanItems, selectedDateKey, getRootItemId(item)))
     .sort((left, right) => {
       if (left.timeBlock !== right.timeBlock) {
         return left.timeBlock === 'day' ? -1 : 1
@@ -287,9 +280,35 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
     return appData
   }
 
+  const ordinaryRolloverItems = carryoverItems.filter(
+    (item) => !isRepeatingItem(item, templateKindsById),
+  )
+  const repeatingCarryoverItems = carryoverItems.filter((item) =>
+    isRepeatingItem(item, templateKindsById),
+  )
+
   let nextAppData = appData
 
-  carryoverItems.forEach((item) => {
+  ordinaryRolloverItems.forEach((item) => {
+    const sortOrder = nextSortOrder[item.timeBlock]
+    nextSortOrder[item.timeBlock] += 1
+
+    nextAppData = {
+      ...nextAppData,
+      dayPlanItems: nextAppData.dayPlanItems.map((dayPlanItem) =>
+        dayPlanItem.id === item.id
+          ? {
+              ...dayPlanItem,
+              date: selectedDateKey,
+              originDate: resolveOriginDate(dayPlanItem),
+              sortOrder,
+            }
+          : dayPlanItem,
+      ),
+    }
+  })
+
+  repeatingCarryoverItems.forEach((item) => {
     const rootItemId = getRootItemId(item)
     const sortOrder = nextSortOrder[item.timeBlock]
     nextSortOrder[item.timeBlock] += 1
@@ -297,6 +316,7 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
     const carryoverItem: DayPlanItem = {
       id: `day-plan-item-carryover-${rootItemId}-${selectedDateKey}-${item.timeBlock}`,
       date: selectedDateKey,
+      originDate: resolveOriginDate(item),
       targetDate: item.targetDate,
       timeBlock: item.timeBlock,
       timeBlockSource: item.timeBlockSource,

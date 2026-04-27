@@ -85,6 +85,7 @@ export interface RecurringTaskInstance {
 export interface DayPlanItem {
   id: string
   date: string
+  originDate?: string
   targetDate?: string
   timeBlock: TimeBlock
   timeBlockSource: TimeBlockSource

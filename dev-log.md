@@ -1,5 +1,306 @@
 # Dev Log
 
+## 2026-04-27（V2.1-C：originDate 落地 + 普通 Todo 顺延搬移）
+
+### 本轮目标
+- 给 `DayPlanItem` 增加 `originDate`
+- 所有新建 Todo 写入 `originDate`
+- 把普通一次性 Todo 的跨日逻辑从“复制 carryover”改成“搬移 date”
+- UI 提示从“延续自”改为“创建于”
+- 不重构 repeating occurrence 生成规则
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `data-model.md`
+- `app-structure.md`
+- `task-list.md`
+- `manual-test-checklist.md`
+- `src/types/models.ts`
+- `src/db/schema.ts`
+- `src/db/storage.ts`
+- `src/features/continuation/todo-carryover.ts`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/todo/todo-view-model.ts`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/decision/recommendation.ts`
+
+### 本轮关键判断
+- `originDate` 必须落到模型、schema、storage 和创建路径，才能让“创建于”不再依赖 root 链反查。
+- 普通 Todo 的 rollover 可以先安全切成 date 搬移，而 repeating Todo 本轮继续保守沿用旧 carryover 逻辑。
+- 旧数据兼容最稳的方式，是统一回退到 `originDate ?? targetDate ?? date`。
+
+### 本轮关键决策
+- 新增 `DayPlanItem.originDate?: string`
+- schema version 升到 `4`
+- storage 在读取与持久化前统一补全旧数据 `originDate`
+- 普通 rollover 只更新原条目：
+  - `date`
+  - `sortOrder`
+  - 缺失时补 `originDate`
+- 新的普通 rollover 不再继续写 `continuationOfItemId / carriedFromDate`
+- `TodoViewModel.carryHint` 改为 `createdAtHint`
+
+### 本轮修改
+- 更新 `src/types/models.ts`
+  - 为 `DayPlanItem` 增加 `originDate`
+- 更新 `src/db/schema.ts`
+  - 为 `dayPlanItemSchema` 增加 `originDate`
+  - `APP_DATA_SCHEMA_VERSION` 升到 `4`
+- 更新 `src/db/storage.ts`
+  - 新增旧数据 `originDate` 回退兼容
+  - `normalizeDayPlanItem` 自动写入 `originDate`
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 手动创建与手动创建 repeating 当天实例写入 `originDate`
+  - UI 改读 `createdAtHint`
+- 更新 `src/features/decision/recommendation.ts`
+  - `decision_selected` 写入 `originDate`
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - `auto_generated` 写入并保留 `originDate`
+- 更新 `src/features/continuation/todo-carryover.ts`
+  - 普通 Todo 改成 date 搬移式 rollover
+  - repeating Todo 保留旧 carryover 副本逻辑，但会带上 `originDate`
+- 更新 `src/features/todo/todo-view-model.ts`
+  - `carryHint` 改为 `createdAtHint`
+  - UI 文案改成“创建于 M/D”
+  - `originLabel` 不再使用“延续”
+- 更新文档：
+  - `product-rules.md`
+  - `data-model.md`
+  - `app-structure.md`
+  - `task-list.md`
+  - `handoff.md`
+  - `dev-log.md`
+  - `manual-test-checklist.md`
+
+### 本轮刻意未做
+- 未重构 repeating occurrence 生成规则
+- 未废弃 repeating 的 active occurrence 旧逻辑
+- 未删除旧 continuation 字段
+- 未做大规模 UI polish
+- 未引入新依赖
+
+### 当前风险与待确认问题
+- repeating Todo 仍存在旧 carryover / single active occurrence 心智，等待 V2.1-D 处理。
+- 旧数据虽然能兼容补出 `originDate`，但若历史链已经很长，“创建于”未必总能回到最初第一次进入 Todo 列表的那天。
+- `decision_selected` 的旧兼容回退仍可能拿到 `targetDate` 而非真实加入日，这只会存在于老数据，后续新数据已改正。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
+## 2026-04-27（V2.1-B：Todo rollover 模型确认）
+
+### 本轮目标
+- 只确认 rollover 模型
+- 对比 `rootItemId`、`originDate`、`occurrenceDate` 等方案
+- 不改源码
+- 不改 schema
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `product-rules.md`
+- `data-model.md`
+- `app-structure.md`
+- `task-list.md`
+- `manual-test-checklist.md`
+- `src/types/models.ts`
+- `src/db/schema.ts`
+- `src/db/storage.ts`
+- `src/features/continuation/todo-carryover.ts`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/todo/todo-view-model.ts`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/decision/recommendation.ts`
+
+### 本轮关键判断
+- 现有 `rootItemId -> 根实例 date` 更像历史链兼容技巧，不适合作为长期 UI “创建于”来源。
+- 若采用真正的“顺延搬移”，`date` 必须收敛成“当前落点日期”，不能再同时承担原始创建日语义。
+- `targetDate` 当前主要服务 recurrence 命中与 `consumesDateTrigger`，不适合作为所有 Todo 的统一“创建于”来源。
+- 对 repeating Todo 单独加 `occurrenceDate` 会让普通 Todo 与 repeating Todo 分裂建模，不如 `originDate` 统一。
+
+### 本轮关键决策
+- 长期推荐在允许改 schema 时新增：
+  - `originDate?: string`
+- 字段语义：
+  - `date` = 当前落点日期
+  - `originDate` = 这条 Todo 或这条 occurrence 最初进入 Todo 列表的日期
+- `targetDate` 继续主要承担：
+  - recurrence 命中日
+  - 自动生成消费语义
+- `rootItemId / continuationOfItemId / carriedFromDate` 后续转向兼容层角色
+
+### 本轮修改
+- 更新 `data-model.md`
+  - 补充 V2.1-B 方案比较与推荐结论
+- 更新 `product-rules.md`
+  - 补充 `originDate` 作为长期“创建于”来源的方向
+- 更新 `app-structure.md`
+  - 补充 `TodoViewModel.createdAtHint` 后续优先基于 `originDate`
+- 更新 `task-list.md`
+  - 补充 V2.1-B 后续实现顺序
+- 更新 `handoff.md`
+  - 同步 `date / targetDate / originDate` 的推荐定位
+- 更新 `manual-test-checklist.md`
+  - 补充 `createdAtHint` 后续推荐读取 `originDate`
+- 更新 `dev-log.md`
+  - 记录本轮模型确认结论
+
+### 当前待确认问题
+- 未来是否直接命名为 `originDate`，还是在实现前再与 `createdForDate / originalDate` 做一次最终命名确认
+- 旧数据迁移时，是否用根实例 `date` 作为一次性回填来源
+- repeating occurrence 的 `originDate` 是否直接使用 `targetDate`，还是优先使用 `RecurringTaskInstance.dateKey` 转日历日
+
+### 验证结果
+- 本轮只修改文档
+- 未改源码
+- 未运行 `pnpm run build`
+- 未运行 `pnpm run lint`
+
+## 2026-04-26（V2.1-A：Todo 跨日逻辑产品规则重构）
+
+### 本轮目标
+- 只重写产品规则与文档口径
+- 把跨日逻辑从 carryover / continuation 副本心智改成顺延搬移心智
+- 废弃 repeating Todo 的 single active occurrence 规则
+- 不改源码
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `manual-test-checklist.md`
+
+### 本轮关键判断
+- “昨天一条、今天再复制一条延续副本”的模型，仍然不像成熟 Todo List。
+- 对一次性 Todo，更自然的用户理解是：没做完就搬到今天，而不是复制一个 continuation。
+- 对 repeating Todo，新的命中日 occurrence 不应被旧 occurrence 未完成阻止；不同命中日的 occurrence 可以并存。
+- UI 上“延续自某日”不再适合新模型，应该改为“创建于某日”。
+
+### 本轮关键决策
+- 普通一次性 Todo 改为“单实例流动”：
+  - 同一条 Todo 在任一时刻只保留一个当前实例
+  - 未完成时顺延搬移到今天
+- 分次 Todo 改为“普通 Todo + progress”：
+  - `progressPercent < 100` 时照常顺延搬移
+- repeating Todo 改为“多 occurrence，各 occurrence 单实例流动”：
+  - recurrence 只负责在命中日创建新的 occurrence
+  - 不同命中日 occurrence 可以并存
+- `continuation / carryover` 降级为历史实现说明，不再作为目标产品心智
+- “创建于某日”字段来源本轮只记录分析，不新增字段
+
+### 本轮修改
+- 更新 `product-rules.md`
+  - 普通 Todo 跨日规则改为顺延搬移
+  - 废弃 single active occurrence 规则
+  - repeating 改为多 occurrence 并存
+- 更新 `app-structure.md`
+  - Todo 区加载与展示心智改为 rollover / 顺延搬移
+  - UI 提示改为“创建于某日”
+- 更新 `data-model.md`
+  - `carryHint` 规划改为 `createdAtHint`
+  - 记录 `originDate / createdForDate / occurrenceDate` 的待确认分析
+- 更新 `task-list.md`
+  - 重排为 V2.1-A 到 V2.1-E
+- 更新 `manual-test-checklist.md`
+  - 手测口径改为顺延搬移与“创建于”
+- 更新 `handoff.md`
+  - 同步当前已确认的新规则与后续任务顺序
+- 更新 `dev-log.md`
+  - 记录本轮决策与旧口径废弃项
+
+### 本轮废弃的旧口径
+- carryover 生成副本
+- continuation 副本链是产品心智
+- 同一重复模板最多一个 active pending occurrence
+- 旧 occurrence 未完成时不生成下一次 occurrence
+- UI 显示“延续自某日”
+
+### 当前待确认问题
+- 普通 Todo 的“创建于某日”是否可稳定复用根实例 `date`
+- repeating occurrence 的“命中日”是否应复用 `targetDate` / `RecurringTaskInstance.dateKey`
+- 若现有字段不足，未来是否要新增 `originDate`、`createdForDate` 或 `occurrenceDate`
+
+### 验证结果
+- 本轮只修改文档
+- 未改源码
+- 未运行 `pnpm run build`
+- 未运行 `pnpm run lint`
+
+## 2026-04-26（V2.1：carryover 触发时机与 completed 链终止补丁）
+
+### 本轮目标
+- 修正 carryover 不应在“手动切到未来日期”时发生的问题
+- 修正已完成 Todo 不应继续 carryover 到后续日期的问题
+- 不改 recurrence 规则
+- 不改 TodoViewModel 架构
+- 不新增字段
+- 不改 schema
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/continuation/todo-carryover.ts`
+- `src/features/todo/TodoModePanel.tsx`
+
+### 本轮关键判断
+- carryover 的产品含义是“现实日期推进后的继续显示”，不是“用户手动浏览未来日期时的预写入”。
+- 旧逻辑按“最新 pending 候选”找 carryover，会忽略同 root 链更晚的 `completed` 或 `deleted`，从而把已经结束的链重新捞出。
+- 这轮只需要修正同步触发时机和 root 链状态判断，不需要碰 recurrence 生成规则。
+
+### 本轮关键决策
+- `syncTodoCarryoversForDate` 继续保留，但只在 `selectedDate === localToday` 时触发。
+- `localToday` 使用本地日期格式字符串，与项目现有 `YYYY-MM-DD` 格式一致，不引入 UTC 比较。
+- carryover 候选改为先按 `rootItemId ?? id` 分组，再取 `selectedDate` 之前每条链的最新条目。
+- 若普通 Todo 链最新条目状态为 `completed` 或 `deleted`，则整条链结束，不再 carryover。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 数据同步链路改为：
+    - 先执行 `syncAutoGeneratedDayPlanForDate(selectedDate)`
+    - 仅当 `selectedDate === localToday` 时执行 `syncTodoCarryoversForDate(selectedDate)`
+- 更新 `src/features/continuation/todo-carryover.ts`
+  - 新增“按 root 链取 selectedDate 之前最新条目”的筛选逻辑
+  - carryover 改为基于链最新状态决定，而不是基于较早的 pending 候选决定
+  - 避免 `completed` / `deleted` 后又从更早 pending 重新生成
+- 更新文档：
+  - `product-rules.md`
+  - `app-structure.md`
+  - `task-list.md`
+  - `handoff.md`
+  - `manual-test-checklist.md`
+  - `dev-log.md`
+
+### 本轮刻意未做
+- 未改 recurrence active occurrence 规则
+- 未改 `templateKind`
+- 未改 schema
+- 未新增字段
+- 未重构 TodoViewModel
+- 未做 UI 改版
+- 未引入新依赖
+
+### 当前风险与待确认问题
+- 本轮没有改 `auto-generated` 的日期查看逻辑，仍按既有 selectedDate 同步，这符合本轮“只修 carryover”边界。
+- repeating Todo 的删除语义与更细状态机本轮没有重构，只保证普通 Todo 已完成/已删除链不再被旧 pending 复活。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
 ## 2026-04-26（V2.1-4：repeating Todo active occurrence 重构）
 
 ### 本轮目标

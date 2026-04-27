@@ -4,8 +4,8 @@
 
 V2.1 的重要调整是：
 - 产品主语切换为 Todo
-- 模板、实例、来源、continuation 等概念降级为内部实现说明
-- 本轮不新增字段，不改 schema，不改 storage
+- 模板、实例、来源、continuation / carryover 等概念降级为内部实现说明
+- V2.1-C 已新增 `DayPlanItem.originDate`
 
 字段名允许使用英文，说明文字使用中文。
 
@@ -37,12 +37,14 @@ V2.1 后续实现应明确分成两层：
 
 UI 不应直接把底层实例字段当作产品规则。
 
-### 3. 当前不扩字段
+### 3. 当前字段策略
 
-本轮只重写规则与建模口径，不新增：
-- 新字段
-- 新 schema
-- 新 storage 结构
+当前已新增：
+- `DayPlanItem.originDate`
+
+它用于稳定表达：
+- 这条 Todo 最初进入 Todo 列表的日期
+- 或某条 repeating occurrence 的原始命中日
 
 若后续实现发现底层结构不足，应先补规则，再决定是否调整模型。
 
@@ -70,7 +72,7 @@ type TodoViewModel = {
   isNecessary: boolean
   preparationNotes: string
 
-  carryHint?: string
+  createdAtHint?: string
   originLabel?: string
 
   canEdit: boolean
@@ -128,13 +130,14 @@ V2.1 当前仍允许保留以下底层模型。
 
 仍可保留，用于支撑：
 - 某一天实际出现的 Todo 实例
-- 手动创建、从种草加入、重复生成、跨日延续后的实例落地
+- 手动创建、从种草加入、重复生成、以及当前所在日期的 Todo 落地
 
 但它不应继续直接承担 UI 主模型职责。
 
-V2.1-3 当前已进一步落地：
-- continuation 不再只服务分次事项
-- 而是作为通用 todo carryover 的内部同步机制存在
+新的文档方向下：
+- `continuation / carryover` 不再应被视为目标模型
+- 后续应从“复制一个跨日副本”改成“搬移当前 Todo 的 date”
+- 是否还需要保留 continuation 链字段，取决于后续实现是否仍要兼容历史数据
 
 ---
 
@@ -224,30 +227,139 @@ type RecurringTaskInstance = {
 
 ### 重构方向
 
-V2.1-4 需要重点处理的问题是：
-- 如何让日历型 recurrence 不再制造难理解的多 occurrence 堆叠
-- 是否让同一重复规则在任意时刻最多只有一个 active occurrence
+新的文档规则下：
+- recurrence 负责决定“哪些命中日要创建新的 occurrence”
+- 同一模板 + 同一命中日，最多创建一个 occurrence
+- 不同命中日创建出来的 occurrence 可以并存
+- 每个 occurrence 在创建后，都像普通 Todo 一样顺延搬移
 
-当前推荐答案：
-- 采用“同一重复模板最多一个 active pending occurrence”
-- carryover 出来的 repeating Todo 仍属于同一 occurrence
-- 不把 carryover 视为新 occurrence
-- V2.1-4 当前已按该方向实现第一版
+这意味着：
+- 旧的“single active occurrence”产品规则应废弃
+- 后续实现不应再因为旧 occurrence 未完成而阻止新命中日 occurrence 创建
 
 当前结构判断：
-- 暂不推荐新增字段
-- 推荐继续复用：
-  - `RecurringTaskInstance.status`
-  - `DayPlanItem.recurringInstanceId`
-  - `DayPlanItem.rootItemId / continuationOfItemId / carriedFromDate`
-  - `DayPlanItem.consumesDateTrigger`
+- `originDate` 已作为第一版长期来源落地
+- 但旧数据如何一次性回填与清理旧链字段，仍需后续继续推进
 
-其中：
-- `RecurringTaskInstance` 继续承担“这一次 recurrence occurrence 是否 pending / completed / ended”的主状态
-- `DayPlanItem` 继续承担“这一次 occurrence 在哪一天显示给用户”
-- `consumesDateTrigger` 当前仍可继续承担“本次命中已被消费/跳过，不要在同一 targetDate 再自动生成”的内部语义
+当前可选方案：
+1. 复用 `rootItemId` 指向的根实例 `date` 作为创建日
+2. 对 repeating Todo 复用 occurrence 首次创建时的 `targetDate` 或 `RecurringTaskInstance.dateKey`
+3. 若现有字段无法稳定表达，再评估未来新增：
+  - `originDate`
+  - `createdForDate`
+  - `occurrenceDate`
 
-本轮先记规则，不改结构。
+当前实现策略：
+- 新创建的 DayPlanItem 显式写入 `originDate`
+- 旧数据按 `originDate ?? targetDate ?? date` 兼容读取
+
+### V2.1-B 模型结论
+
+V2.1-C 已按该方案落地第一版字段实现。
+
+#### 方案 A：不新增字段，靠 `rootItemId` 找根实例 `date`
+
+优点：
+- 短期内不需要 schema 变化
+- 可最大化复用当前链字段
+
+问题：
+- 若顺延搬移模型成立，根实例本身也会被移动，根实例 `date` 会失去“原始创建日”意义
+- 若为了保留根实例 `date` 而不移动根实例，则会重新落回“保留旧副本”的旧心智
+- 删除、完成、重排、迁移历史链时，root 查询会越来越偏实现细节，不适合作为 UI 长期语义来源
+- 对 repeating Todo 不够清楚，因为 repeating 的每个 occurrence 都需要稳定区分“命中日 / 创建日”，只靠 root 链解释成本高
+
+结论：
+- 不推荐作为长期目标模型
+- 只适合作为短期兼容层，不适合作为最终“创建于”来源
+
+#### 方案 B：新增 `originDate`
+
+定义建议：
+- `date` = 当前显示日期 / 当前落点日期
+- `originDate` = 这条 Todo 或这条 occurrence 最初创建于哪一天
+
+映射建议：
+- 普通 Todo：创建时 `originDate = date`
+- 从种草加入：`originDate = selectedDate`
+- 分次 Todo：同普通 Todo
+- repeating occurrence：`originDate = 该次命中日`
+- 顺延搬移时：只更新 `date`，不更新 `originDate`
+
+优点：
+- 最符合产品心智
+- 普通 Todo、分次 Todo、从种草加入、repeating occurrence 全都可统一
+- UI “创建于 M/D” 读取路径简单直接
+- 对 iOS / 多端迁移友好，因为语义稳定，不依赖历史链反查
+- 后续即使逐步废弃 `continuationOfItemId / carriedFromDate`，`originDate` 仍然成立
+
+对现有链字段的影响：
+- `rootItemId` 仍可保留，用于表示同一条 Todo / occurrence 身份
+- `continuationOfItemId`、`carriedFromDate` 可在迁移期保留做兼容
+- 在顺延搬移模型稳定后，这两个字段可以逐步降级甚至废弃
+
+结论：
+- 推荐作为后续实现目标
+- 是当前最统一、最清晰的方案
+
+#### 方案 C：新增 `occurrenceDate`
+
+优点：
+- 对 repeating Todo 很直接
+- 能表达某次 repeating occurrence 的命中日
+
+问题：
+- 会让普通 Todo 与 repeating Todo 分裂建模
+- UI “创建于”将出现两套解释：
+  - 普通 Todo 靠 root / createdAt / 其他字段
+  - repeating Todo 靠 occurrenceDate
+- 后续 ViewModel 和客户端实现复杂度更高
+
+结论：
+- 不如 `originDate` 统一
+- 可作为 repeating 内部辅助概念，但不推荐单独作为唯一新增字段
+
+#### 方案 D：`createdForDate` / `scheduledDate` / `originalDate` 等命名比较
+
+- `createdForDate`
+  - 更像“原本计划给哪一天”
+  - 对从种草加入与 repeating occurrence 都还算能解释
+  - 但对用户文案“创建于”不够直观
+
+- `scheduledDate`
+  - 更像“计划日”
+  - 容易和当前 `date` 混淆
+  - 不适合表达“最初创建于哪一天”
+
+- `originalDate`
+  - 语义接近 `originDate`
+  - 但稍偏口语，内部字段读起来不如 `originDate` 稳定
+
+- `originDate`
+  - 最中性
+  - 既可表达普通 Todo 的原始创建日，也可表达 repeating occurrence 的原始命中日
+  - 最适合给 UI 文案“创建于 M/D”做统一来源
+
+命名结论：
+- 推荐未来新增字段名为 `originDate`
+
+### V2.1-B 推荐结论
+
+在后续允许改 schema / 加字段时，推荐新增：
+
+```ts
+originDate?: string
+```
+
+语义定义：
+- `date`：当前落点日期
+- `originDate`：这条 Todo 或这条 occurrence 最初创建于的日期
+
+在此方案下：
+- 普通 Todo、分次 Todo、从种草加入 Todo、repeating occurrence 全部统一
+- UI “创建于”有稳定来源
+- 顺延搬移不再依赖 root 链反查
+- `rootItemId` 更纯粹地承担“身份关联”职责，而不是“回头推断创建日”职责
 
 ---
 
@@ -311,45 +423,42 @@ type DayPlanItem = {
 
 这些字段可用于：
 - 同步自动生成
-- 同步 carryover
+- 同步 rollover / 顺延搬移
 - 保证重复规则消费语义
 - 支撑历史兼容
 
-V2.1-3 当前复用的 carryover 链字段仍是：
+当前历史实现中复用的链字段仍是：
 - `rootItemId`
 - `continuationOfItemId`
 - `carriedFromDate`
 
-本轮未新增任何字段。
-
-V2.1-4 当前推荐：
-- 对 repeating Todo 先复用上述链字段，不新增专门 active occurrence 字段
-- 若后续实现证明仅靠现有字段无法稳定表达“跳过本次”和“下一次可再生成”，再单独评估字段扩展
+V2.1-C 已新增：
+- `originDate`
 
 但它们不应直接决定：
 - UI 上有哪些按钮
-- 普通 Todo 是否能跨日延续
+- 普通 Todo 是否能顺延到今天
 - 从种草加入的 Todo 是否算普通 Todo
 
 ---
 
 ## 七、普通 Todo 的 V2.1 行为映射
 
-### 1. 普通未完成 Todo 默认跨日延续
+### 1. 普通未完成 Todo 默认顺延到今天
 
 V2.1 规则要求：
-- 一次性 Todo 未完成时，默认延续到明天
+- 一次性 Todo 未完成时，默认顺延到今天
 
 当前推荐解释为：
-- 底层可继续通过 `DayPlanItem` 实例链表达
-- 但产品心智不再称之为“分次 continuation 专属能力”
-- 而应理解为“Todo carryover”
+- 产品心智应优先理解为“date 搬移”
+- 不再把 continuation / carryover 副本视为目标实现
+- 若为了兼容历史数据暂时保留旧链字段，也应降级为过渡期技术说明
 
 ### 2. 删除语义
 
 普通一次性 Todo 的删除，产品上表示：
 - 结束这条 Todo
-- 停止未来延续
+- 停止未来顺延
 
 底层可继续保留内部链路字段，但删除行为不应再被解释为：
 - 只是某种内部 source 的删除
@@ -359,11 +468,11 @@ V2.1 规则要求：
 分次 Todo 在产品上只是一条带 `progressPercent` 的普通 Todo。
 
 当前推荐解释为：
-- 仍允许底层通过 continuation 链保存历史
+- 仍允许底层通过历史链字段兼容旧数据
 - 但 UI 只看：
   - 当前进度
   - 是否完成
-  - 是否来自昨天
+  - 创建于哪一天
 
 ---
 
@@ -402,12 +511,12 @@ V2.1 规则要求：
 
 它不应成为用户的主要理解对象。
 
-### 2. 删除当天实例 与 停止重复
+### 2. 删除某条 occurrence 与 停止重复
 
 产品规则必须区分：
 
-1. 删除当天实例
-- 只跳过本次
+1. 删除某条 occurrence
+- 只结束这一条 occurrence
 
 2. 停止重复
 - 结束未来重复
@@ -444,7 +553,7 @@ V2.1 当前先切换：
 推荐后续通过“映射层优先”推进：
 1. 先引入 `TodoViewModel`
 2. 再逐步把 UI 从 `DayPlanItem` 分支迁出
-3. 再重构 carryover 与 recurrence
+3. 再重构 rollover 与 recurrence
 
 ---
 
@@ -452,7 +561,7 @@ V2.1 当前先切换：
 
 - Todo 是产品主语
 - UI 不直接根据 `source / templateKind / recurringInstanceId / consumesDateTrigger / continuation` 决定交互
-- 普通未完成 Todo 默认跨日延续
+- 普通未完成 Todo 默认顺延到今天
 - 普通 Todo 删除表示结束整条 Todo
 - 重复 Todo 必须区分“删除当天实例”和“停止重复”
 - 分次只是进度属性，不是独立产品子系统

@@ -2,8 +2,8 @@
 
 本文档定义当前有效的产品规则。
 
-当前进入 V2.1：Todo 行为重构准备阶段。
-- 本轮目标是重写产品规则与任务拆分，不改源码实现
+当前进入 V2.1：Todo 行为重构实现阶段。
+- 当前文档描述 V2.1 最新已确认规则与实现方向
 - 若文档之间有冲突，以本文档为准
 - 若现有实现与本文档冲突，以本文档作为后续重构目标
 
@@ -33,7 +33,7 @@ J-Flow 首先是一个彻头彻尾的 Todo List。
 - 手动输入
 - 从种草加入
 - 重复规则生成
-- 未完成跨日延续
+- 未完成后顺延到今天
 
 只要它已经进入 Todo 列表，就都应像普通 Todo 一样：
 - 可编辑标题
@@ -52,7 +52,7 @@ J-Flow 首先是一个彻头彻尾的 Todo List。
 
 ### 2. Todo 基础行为优先于来源差异
 
-Todo 的编辑、完成、取消完成、删除、跨日延续，首先由“这是不是一条 Todo”决定，而不是由底层来源决定。
+Todo 的编辑、完成、取消完成、删除、顺延到今天，首先由“这是不是一条 Todo”决定，而不是由底层来源决定。
 
 产品规则中不应再把以下内部来源差异写成用户规则：
 - `manual_temporary`
@@ -73,7 +73,7 @@ UI 不应直接承担：
 - 模板类型判断
 - 来源分支判断
 - 重复实例判断
-- continuation 链路判断
+- 历史顺延实现判断
 
 ---
 
@@ -87,39 +87,42 @@ Todo 用于承载某一天真实要做的事项。
 - 普通一次性 Todo
 - 从种草加入的 Todo
 - 重复 Todo 的当前实例
-- 未完成后延续到今天的 Todo
+- 未完成后顺延到今天的 Todo
 
-### 2. 普通未完成 Todo 默认跨日延续
+### 2. 普通未完成 Todo 默认顺延到今天
 
 这是 V2.1 的核心规则。
 
-任意一次性 Todo，只要同时满足：
-- 未完成
-- 未删除
-- 不是未来日期上的新重复 occurrence
+任意一次性 Todo 在创建当天出现一条。
 
-就应在下一天继续出现，直到：
-- 用户完成它
-- 用户删除它
-- 用户主动改日期
-- 用户归档或停止
+若当天未完成，则在新的一天到来时：
+- 这条 Todo 直接顺延到今天
+- 心智应理解为“搬移 date”
+- 不应复制出一条 continuation / carryover 副本
+- 不应保留昨天那条仍然 pending 的独立副本
 
 这意味着：
-- 未完成跨日不再是“分次专属能力”
-- 它是普通 Todo 的基本行为
+- 同一条一次性 Todo 在任一时刻只有一个当前实例
+- 未完成跨日是普通 Todo 的基础行为，不是分次专属能力
 - 分次 Todo 与普通 Todo 在跨日规则上没有本质差异
 
-V2.1-3 当前已实现：
-- 普通一次性 Todo 会在次日自动生成 carryover Todo
-- 该机制底层继续复用实例链字段
-- `continuation` 在产品心智上已降级为 todo carryover 的内部实现机制
+顺延的触发边界：
+- 它是“现实日期推进”行为
+- 用户手动查看未来日期时，不应提前生成未来 Todo
+- 用户查看历史日期时，也不应为了历史浏览补写顺延结果
+
+V2.1-C 当前已实现第一步：
+- `DayPlanItem.originDate` 已落地
+- 普通 Todo 的 rollover 已从“复制 carryover 副本”改为“搬移 date”
+- 新的普通 rollover 不再继续扩展 `continuationOfItemId / carriedFromDate`
+- repeating occurrence 的深层重构仍留给 V2.1-D
 
 ### 3. 普通 Todo 删除 = 结束这条 Todo
 
 对普通一次性 Todo，包括：
 - 手动输入 Todo
 - 从种草加入 Todo
-- 普通未完成延续 Todo
+- 普通未完成后已顺延的 Todo
 
 删除表示：
 - 删除这条 Todo
@@ -135,7 +138,7 @@ V2.1-3 当前已实现：
 重复 Todo 需要区分两个动作：
 
 1. 删除当天实例
-- 只跳过这一次
+- 只结束这一条 occurrence
 - 不影响未来重复
 
 2. 停止重复
@@ -149,68 +152,32 @@ V2.1-3 当前已实现：
 重复规则定义的是：
 - 这条 Todo 在什么节奏下应该出现
 
-重复 Todo 应符合成熟 Todo List 的直觉：
-- 若当前 occurrence 未完成，它应继续显示为当前未完成事项或逾期事项
-- 不应因为进入下一个命中日期，就制造多条难以理解的重复堆叠
-- 用户完成当前 occurrence 后，系统再进入下一次 occurrence
+重复 Todo 的新规则应理解为：
+- recurrence 只负责决定哪些命中日会创建新的 occurrence
+- 同一模板 + 同一命中日，最多创建一个 occurrence
+- 不同命中日可以创建不同 occurrence
 
-V2.1-4 推荐方案：
-- 保留现有 calendar-based recurrence 作为底层实现基础
-- 但产品规则升级为：
-  - 同一重复模板在任一时刻，最多只有一个 active pending occurrence
-  - 若旧 occurrence 未完成，后续命中日不再无条件生成新的同类 occurrence
-  - 旧 occurrence 通过 carryover 出现在新日期
-  - 用户完成当前 occurrence 后，后续命中日再生成下一次 occurrence
+每个 occurrence 创建后，都应像一条普通 Todo：
+- 若未完成，则在之后的日期中继续顺延搬移
+- 若完成，则这一条 occurrence 结束
+- 若删除，则这一条 occurrence 结束
+- 它不会阻止下一次命中日再创建新的 occurrence
 
-推荐理由：
-- 更符合 Todo app，而不是 habit tracker 的默认心智
-- 用户看到的是“这条重复 Todo 还没做完”，而不是“一串同名待办堆叠”
-- 与 V2.1 已完成的普通 Todo carryover 规则保持一致
+因此：
+- repeating Todo 允许并存多条
+- 并存不是 bug
+- 它们代表不同命中日创建出来的不同 occurrence
 
-V2.1-4 明确不采用“每次命中都无条件堆新实例”作为默认规则。
-
-V2.1-4 当前已实现：
-- recurrence 生成前会先检查该模板是否已有 active pending occurrence
-- 若已有 active occurrence，则不生成新的 occurrence，由 carryover 负责把旧 occurrence 带到今天
-- `daily / weekly / monthly / yearly` 全部统一采用这套规则
-- carryover 出来的 repeating Todo 仍属于同一 occurrence
-
-### 5A. active occurrence 定义
-
-若采用上述方案，则：
-- active occurrence 指某个重复模板当前仍处于待处理状态的那一次 occurrence
-- 它可能最早生成于过去某个命中日
-- 也可能因为未完成而通过 carryover 出现在今天
-- active 的判断主语是 occurrence 本身，不是“今天是否命中”
-
-状态影响：
-- `pending`
-  - 该 occurrence 仍 active
-  - 后续命中日不再生成新的同模板 pending occurrence
-- `completed`
-  - 该 occurrence 结束 active 状态
-  - 之后命中日可再生成下一次 occurrence
-- `deleted`
-  - 对 repeating Todo 表示“本次已被跳过/结束”
-  - 当前 occurrence 失去 active 状态
-  - 未来命中日仍可生成新的 occurrence
-
-### 5B. carryover 与 repeating occurrence
-
-若采用上述方案：
-- carryover 出来的 repeating Todo 仍属于同一 occurrence
-- 它不是新的 recurrence occurrence
-- 只是同一 active occurrence 在新日期上的继续显示
-
-删除某天 carryover 出来的 repeating Todo：
-- 仍表示结束这一次 active occurrence
-- 不表示停止整条重复规则
-- 下一次命中日应允许生成新的 occurrence
+例如每周三重复：
+- 上周三创建的 occurrence 若一直未完成，会一路顺延到今天
+- 本周三到来时，仍然要创建本周三新的 occurrence
+- 用户今天可能同时看到两条同模板 Todo
+- 它们应靠“创建于某日”来区分，而不是靠“延续自某日”区分
 
 停止重复：
-- 表示停用整条重复规则
-- 历史实例保留
-- 未来不再生成新的 occurrence
+- 仅表示停用整条重复规则
+- 历史已存在的 occurrence 保留
+- 未来不再创建新的 occurrence
 
 ### 6. 完成与取消完成
 
@@ -239,11 +206,11 @@ V2.1-4 当前已实现：
 规则：
 - `progressPercent < 100` 时，视为未完成
 - `progressPercent = 100` 时，视为完成
-- 未完成时，与普通 Todo 一样自动跨日延续
+- 未完成时，与普通 Todo 一样自动顺延搬移到今天
 
 因此：
 - 分次不拥有独立产品心智
-- continuation 只是内部实现方式之一
+- continuation / carryover 只是历史实现方式之一
 - UI 上只表达“这条 Todo 现在有多少进度”
 
 ### 2. 必要只是 UI 标记
@@ -279,7 +246,7 @@ V2.1-4 当前已实现：
 - 可删除
 - 可完成
 - 可取消完成
-- 可跨日延续
+- 可顺延到今天
 
 编辑当天 Todo：
 - 不回写原种草
@@ -331,7 +298,7 @@ UI 层只根据 `TodoViewModel` 渲染和决定按钮状态。
 - `isRepeating`
 - `isNecessary`
 - `preparationNotes`
-- `carryHint`
+- `createdAtHint`
 - `originLabel`
 - `canEdit`
 - `canDelete`
@@ -362,7 +329,7 @@ UI 层只根据 `TodoViewModel` 渲染和决定按钮状态。
 - 手动添加
 - 来自种草
 - 重复
-- 延续自昨天
+- 创建于某日
 
 它不应控制核心交互能力。
 
@@ -381,7 +348,7 @@ UI 层只根据 `TodoViewModel` 渲染和决定按钮状态。
 
 这些概念的职责是：
 - 支撑底层存储与同步
-- 支撑重复与延续的内部链路
+- 支撑重复与顺延的内部链路
 - 支撑历史兼容与迁移
 
 它们不应再决定：
@@ -406,7 +373,7 @@ UI 层只根据 `TodoViewModel` 渲染和决定按钮状态。
 - 模板层
 - 重复实例层
 - 当日实例层
-- continuation 内部链路
+- 历史 continuation / carryover 内部链路
 
 但这些应服务于 Todo 产品心智，而不是取代 Todo 产品心智。
 
@@ -423,31 +390,29 @@ V2.1 规则重写阶段，不擅自新增：
 
 ## 九、V2.1 任务拆分原则
 
-为避免一次性改太多，V2.1 应拆为四个任务包：
+为避免一次性改太多，V2.1 应拆为五个任务包：
 
-### V2.1-1：规则与文档重写
-- 明确 Todo 一等公民
-- 明确普通未完成 Todo 自动延续
-- 明确删除语义
-- 明确分次只是 progress
-- 明确种草只是来源
+### V2.1-A：文档规则重写
+- 明确顺延搬移心智
+- 明确普通 Todo 单实例流动
+- 明确 repeating Todo 多 occurrence 并存
 
-### V2.1-2：TodoViewModel 收口
-- 新增 TodoViewModel 映射层
-- UI 不再直接根据底层来源字段分支
-- 统一 `canEdit / canDelete / canComplete / canUncomplete / canStopRepeating`
+### V2.1-B：Todo rollover 模型确认
+- 确认“创建于某日”的可靠来源
+- 确认是否需要新增字段
 
-### V2.1-3：未完成 Todo 自然跨日延续
-- 把当前 segmented continuation 扩展成通用 todo carryover
-- 普通未完成 Todo 也能自动延续
-- 删除普通 Todo 终止整条 Todo
-- 分次 Todo 只是带进度的普通 Todo
+### V2.1-C：普通 Todo 顺延搬移实现
+- 把复制式 carryover 改成 date 搬移
+- 分次 Todo 共用同一套顺延逻辑
 
-### V2.1-4：重复 Todo 规则重构
-- 避免同一重复规则制造多条难理解的 active occurrence
-- 明确“删除当天实例”与“停止重复”
-- 规划同一重复规则最多一个 active occurrence 的实现方案
-- 完成当前 occurrence 后，再进入下一次 due date
+### V2.1-D：重复 Todo occurrence 生成重构
+- 废弃 single active occurrence
+- 改为同模板同命中日最多一条 occurrence
+- 不同命中日 occurrence 可并存
+
+### V2.1-E：UI 文案与 ViewModel 调整
+- `carryHint` 改为 `createdAtHint`
+- UI 文案改成“创建于”
 
 ---
 
@@ -468,3 +433,27 @@ V2.1 规则重写阶段，不擅自新增：
 若后续实现阶段发现规则空白：
 - 先补本文档
 - 再进入实现
+
+---
+
+## 十一、V2.1-B / V2.1-C 模型结论
+
+V2.1-B 已确认模型方向，V2.1-C 已落地第一版字段实现。
+
+当前方案是：
+- 已新增 `originDate`
+- `date` 表示当前落点日期
+- `originDate` 表示这条 Todo 或这条 repeating occurrence 最初进入 Todo 列表的日期
+
+推荐原因：
+- 它最符合“顺延搬移”心智
+- 它能统一普通 Todo、分次 Todo、从种草加入 Todo、repeating occurrence
+- 它不依赖 root 链反查历史
+- 它最适合支撑 UI 的“创建于 M/D”
+
+当前不推荐长期依赖：
+- `rootItemId -> 根实例 date`
+- `carriedFromDate`
+- `continuationOfItemId`
+
+因为这些字段更适合历史兼容，不适合作为最终产品语义来源。

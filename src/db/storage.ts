@@ -56,6 +56,18 @@ const todayDateString = () => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+const resolveDayPlanItemOriginDate = (
+  item: Pick<DayPlanItem, 'originDate' | 'targetDate' | 'date'>,
+) => item.originDate ?? item.targetDate ?? item.date
+
+const normalizeLegacyAppData = (appData: AppData): AppData => ({
+  ...appData,
+  dayPlanItems: appData.dayPlanItems.map((item) => ({
+    ...item,
+    originDate: resolveDayPlanItemOriginDate(item),
+  })),
+})
+
 const createId = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`
@@ -64,7 +76,8 @@ const createId = (prefix: string) => {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-const parseAppData = (appData: AppData) => appDataSchema.parse(cloneAppData(appData))
+const parseAppData = (appData: AppData) =>
+  appDataSchema.parse(cloneAppData(normalizeLegacyAppData(appData)))
 
 const buildRecord = (payload: AppData): AppDataRecord =>
   appDataRecordSchema.parse({
@@ -81,7 +94,12 @@ async function readAppDataRecord() {
     return null
   }
 
-  return appDataRecordSchema.parse(record)
+  const parsedRecord = appDataRecordSchema.parse(record)
+
+  return {
+    ...parsedRecord,
+    payload: parseAppData(parsedRecord.payload),
+  }
 }
 
 async function persistAppData(appData: AppData) {
@@ -205,6 +223,7 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
   return {
     id: input.id ?? createId('day-plan-item'),
     date: input.date,
+    originDate: resolveDayPlanItemOriginDate(input),
     targetDate: input.targetDate,
     timeBlock: input.timeBlock,
     timeBlockSource: input.timeBlockSource,

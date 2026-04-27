@@ -77,6 +77,7 @@ export const recurringTaskInstanceSchema = z.object({
 export const dayPlanItemSchema = z.object({
   id: z.string().min(1),
   date: dateSchema,
+  originDate: dateSchema.optional(),
   targetDate: dateSchema.optional(),
   timeBlock: z.enum(['day', 'night']),
   timeBlockSource: z.enum([
@@ -124,7 +125,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 3
+export const APP_DATA_SCHEMA_VERSION = 4
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),
