@@ -126,15 +126,18 @@ const isCarryableTodoItem = (
   }
 
   if (isRepeatingItem(item, templateKindsById)) {
-    if (!item.templateId || !item.recurringInstanceId) {
+    if (!item.templateId) {
       return false
+    }
+
+    if (!item.recurringInstanceId) {
+      return true
     }
 
     const recurringInstance = recurringInstancesById[item.recurringInstanceId]
 
     return Boolean(
-      recurringInstance &&
-        recurringInstance.status === 'pending',
+      !recurringInstance || recurringInstance.status === 'pending',
     )
   }
 
