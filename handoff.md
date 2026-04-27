@@ -101,6 +101,9 @@
 - `dev-log.md`
 
 ## 最近一次完成的 task
+- 修复顺延后的 repeating occurrence 回写旧日期：
+  - 原因是查看历史日期时，`auto-generated` 会复用同命中日 occurrence，并把它的 `date` 强行写回旧命中日
+  - 现已改成：若该 occurrence 已顺延到更晚日期，则保留当前落点，不回写旧日期
 - 修复停止重复后当天 repeating Todo 消失：
   - 原因是模板归档后，当天 occurrence 不再进入 `syncedItems`
   - `auto-generated` 旧清理逻辑会把这类未同步到的 `pending auto_generated` 项误标成 `deleted`

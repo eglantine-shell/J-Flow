@@ -1,5 +1,48 @@
 # Dev Log
 
+## 2026-04-27（V2.1-D：修复顺延后的 repeating occurrence 回写旧日期）
+
+### 本轮目标
+- 修复“昨天未完成的每日重复 Todo 顺延到今天后，昨天仍残留一条”的问题
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/continuation/todo-carryover.ts`
+
+### 本轮关键判断
+- 问题不在 rollover 本身，而在历史日期的 `auto-generated` 同步回刷。
+- 同命中日已存在的 repeating occurrence 若已经顺延到更晚日期，旧逻辑在查看历史日期时仍会把它的 `date` 强行写回命中日。
+- 结果就是：
+  - 今天有一条昨天搬来的 occurrence
+  - 昨天视图里又重新残留一条，看起来像“搬移没有真正生效”
+
+### 本轮关键决策
+- 对同命中日已存在的 repeating occurrence：
+  - 若它当前 `date` 已经晚于命中日，则保留当前落点日期
+  - 不允许历史日期同步把它拉回旧日期
+- 同时保留它当前的 `timeBlock / timeBlockSource / sortOrder`，避免影响今天列表中的位置
+
+### 本轮修改
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - 复用已存在 occurrence 时，若它已顺延到更晚日期，则保留当前 `date`
+  - 不再把已搬移的 occurrence 回写到旧命中日
+
+### 当前风险与待确认问题
+- 本轮只修复“历史日期同步把已搬移 occurrence 拉回旧日期”的问题，没有扩展更多 recurring 排序策略。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-D：修复停止重复后当天事项消失）
 
 ### 本轮目标
