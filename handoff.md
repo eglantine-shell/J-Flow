@@ -4,6 +4,19 @@
 - 当前已从 V2 试用修复阶段，进入 V2.1：Todo 行为重构准备阶段。
 - 本轮核心目标不是继续堆功能，而是重写产品规则，让 Todo 成为唯一主语。
 
+## 最近一次完成的 task
+- 完成 V2.1-E UI 收口 + Todo 交互修正：
+  - 已引入 `lucide-react`，设置、初始化、Todo 新增区与 Todo list 已切到统一线条图标
+  - 过去日期已直接不渲染“新增 Todo”区，历史列表仍可查看
+  - 拔草推荐改为单按钮打开 / 收起，不再提供单独刷新入口
+  - 拔草推荐里的“种草清单”选择已由 `select` 改成 tag
+  - Todo list 已移除来源 / 重复 / 准备 / 分次标签，仅保留必要与完成态标签
+  - 完成事项标签已支持显示 `完成于 MM/DD HH:mm`
+  - repeating Todo 的停止 / 恢复已改为循环图标按钮，位于 checkbox 之前
+  - repeating Todo 现在可直接编辑当前 occurrence 标题，只改当前 `DayPlanItem.title`
+  - 分次 Todo 进度条已移到内容下方，并改成拖动即保存
+  - 分次拖到 `100` 会自动完成；完成后可取消完成并回到 `90%`
+
 ## 当前阶段结论
 - 当前 UI 已基本具备 Todo 外观，但产品规则、数据模型口径与关键实现仍偏向模板 / 实例 / 来源分支中心。
 - V2 试用后确认：当前系统虽然功能很多，但基础 Todo List 心智不对。
@@ -100,51 +113,10 @@
 - `handoff.md`
 - `dev-log.md`
 
-## 最近一次完成的 task
+## 上一轮完成的 task
 - 完成 V2.1-E 第一批小修：
   - 过去日期不再允许新增 Todo
   - 手动输入、从种草添加、创建 repeating Todo 都只允许在 `selectedDate >= localToday` 时进行
   - “停止重复”改为可恢复，模板 `isArchived` 可在 true / false 间切换
   - 只有当天命中的 `todo_recurring` occurrence 显示停止/恢复按钮
   - 过去搬移到今天的 repeating occurrence 不显示该按钮
-- 修复顺延后的 repeating occurrence 回写旧日期：
-  - 原因是查看历史日期时，`auto-generated` 会复用同命中日 occurrence，并把它的 `date` 强行写回旧命中日
-  - 现已改成：若该 occurrence 已顺延到更晚日期，则保留当前落点，不回写旧日期
-- 修复停止重复后当天 repeating Todo 消失：
-  - 原因是模板归档后，当天 occurrence 不再进入 `syncedItems`
-  - `auto-generated` 旧清理逻辑会把这类未同步到的 `pending auto_generated` 项误标成 `deleted`
-  - 现已改成：若对应模板已归档，则当天 occurrence 保留；停止重复只影响未来命中日
-- 修复 repeating Todo 完成后消失：
-  - 原因是 `consumesDateTrigger = true` 后，当天条目未进入 `syncedItems`
-  - `auto-generated` 旧清理逻辑会把这类条目统一标成 `deleted`
-  - 现已改成仅清理当天未同步到的 `pending auto_generated` 项
-- 完成 V2.1-D 第一版：
-  - `auto-generated` 已废弃 single active occurrence 阻断
-  - 改为按 `templateId + targetDate/originDate` 去重
-  - 不同命中日的 repeating occurrence 现在可并存
-  - repeating occurrence 已参与 date 搬移式 rollover
-  - 删除 repeating Todo 继续只结束本次 occurrence，不停止整条重复规则
-  - 停止重复仍仅通过归档模板完成
-- 完成 V2.1-C 第一版：
-  - `DayPlanItem.originDate` 已落地到 model / schema / storage
-  - 手动创建、从种草加入、auto-generated、手动创建 repeating 当天实例都已写入 `originDate`
-  - 普通一次性 Todo rollover 已从复制副本改成更新原条目 `date`
-  - UI 提示已从“延续自”切到“创建于”
-  - 普通 rollover 不再继续扩展 `continuationOfItemId / carriedFromDate`
-  - repeating occurrence 深层规则仍留给 V2.1-D
-- 完成 V2.1-B 方案确认：
-  - 对比了 `rootItemId -> 根实例 date`、`originDate`、`occurrenceDate` 等方案
-  - 确认 `rootItemId` 方案只适合作为短期兼容层，不适合作为长期“创建于”来源
-  - 确认 `occurrenceDate` 会让普通 Todo 与 repeating Todo 分裂建模
-  - 当前长期推荐在允许改 schema 时新增 `originDate`
-  - `originDate` 统一承担普通 Todo 与 repeating occurrence 的原始创建日 / 命中日语义
-  - `date` 未来应明确只表达当前落点日期
-  - `targetDate` 未来继续主要服务 recurrence 触发与 `consumesDateTrigger`
-- 完成 V2.1-A：
-  - 跨日逻辑产品规则从 carryover 副本心智改为顺延搬移心智
-  - 普通一次性 Todo 明确为“单实例流动”
-  - 分次 Todo 明确为“普通 Todo + progress”
-  - repeating Todo 改为“多 occurrence，各 occurrence 单实例流动”
-  - 废弃 single active occurrence 规则
-  - UI 日期提示从“延续自”改为“创建于”
-  - 后续任务拆分更新为 V2.1-B 到 V2.1-E

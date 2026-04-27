@@ -1,5 +1,78 @@
 # Dev Log
 
+## 2026-04-27（V2.1-E：UI 收口 + Todo 交互修正）
+
+### 本轮目标
+- 引入统一线条图标系统
+- 收口新增 Todo / 拔草推荐 / Todo list 的视觉表达
+- 修正 repeating Todo 编辑与停止/恢复入口
+- 修正分次 Todo 为直接拖动保存，并补齐完成后取消完成
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `product-rules.md`
+- `data-model.md`
+- `app-structure.md`
+- `task-list.md`
+- `manual-test-checklist.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+- `src/features/templates/TemplateFormFields.tsx`
+- `src/features/templates/CreateTaskTemplateForm.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/features/decision/recommendation.ts`
+- `src/styles/globals.css`
+- `package.json`
+
+### 本轮关键判断
+- 本轮只做 UI 收口和少量 Todo 交互修正，不改 rollover / recurrence / schema / storage。
+- `lucide-react` 应作为统一图标来源，现有初始化、设置、Todo、新增区共用同一出口，避免继续散落自画 SVG。
+- repeating Todo 标题编辑应与其他 Todo 对齐，但只改当前 `DayPlanItem.title`，不回写 `TaskTemplate`。
+- 分次 Todo 的产品心智应回到“进度就是这条 Todo 当前状态”，因此去掉推进/保存双步骤，直接拖动即保存，拖到 `100` 自动完成。
+
+### 本轮关键决策
+- `src/components/ui/Icons.tsx` 改为统一封装 `lucide-react` 图标，并保持一致的 `strokeWidth`。
+- 过去日期直接不渲染新增 Todo 区，而不是只禁用输入框。
+- 拔草推荐只保留“打开拔草推荐 / 收起拔草推荐”一个切换按钮；种草清单切换改用 tag。
+- Todo 条目仅保留“必要”和“完成于 MM/DD HH:mm”标签；来源 / 重复 / 准备 / 分次标签全部移除。
+- 分次 Todo 完成后允许点 checkbox 取消完成，并按规则回到：
+  - `status = pending`
+  - `completedAt = undefined`
+  - `progressState = in_progress`
+  - `progressPercent = 90`
+
+### 本轮修改
+- 更新 `package.json`、`pnpm-lock.yaml`
+  - 安装 `lucide-react`
+- 更新 `src/components/ui/Icons.tsx`
+  - 统一改为 `lucide-react` 图标出口
+- 更新 `src/features/todo/todo-view-model.ts`
+  - repeating Todo 现在也支持标题编辑能力
+  - 完成标签支持优先显示 `完成于 MM/DD HH:mm`
+  - 去掉来源 / 分次 / 准备标签生成
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 过去日期不再渲染新增 Todo 区
+  - 拔草推荐改为单按钮打开/收起
+  - 推荐区种草清单改为 tag 选择
+  - 删除白天 / 晚上区块标题
+  - repeating 停止/恢复改为 checkbox 前的循环图标按钮
+  - repeating Todo 标题支持直接编辑当前 occurrence
+  - 分次进度条移到内容下方，并改为拖动即保存
+  - 分次拖到 `100` 自动完成
+  - 分次完成后支持取消完成并回退到 `90%`
+- 更新 `src/styles/globals.css`
+  - 收口图标按钮、新增区、推荐区、Todo 条目、分次进度条样式
+
+### 当前风险与待确认问题
+- 分次进度当前使用 `range` 的 `onChange` 直接持久化，连续拖动会产生多次写入；实际体验应可接受，但本轮没有额外做防抖。
+- 完成时间使用前端本地时间格式化 `completedAt`，与当前应用其他日期展示方式保持一致。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-E：过去日期禁止新增 + 停止重复可恢复）
 
 ### 本轮目标

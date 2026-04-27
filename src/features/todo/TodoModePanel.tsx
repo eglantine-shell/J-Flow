@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { MoonIcon, SunIcon } from '@/components/ui/Icons'
+import {
+  CheckIcon,
+  CloseIcon,
+  EditIcon,
+  MoonIcon,
+  MoreIcon,
+  PlusIcon,
+  RepeatIcon,
+  SaveIcon,
+  SunIcon,
+} from '@/components/ui/Icons'
 import { appDataRepository } from '@/db'
 import { syncTodoCarryoversForDate } from '@/features/continuation'
 import {
@@ -42,8 +52,6 @@ type RecommendationPanelState = {
 }
 
 type TemporaryTimeBlock = 'day' | 'night'
-type ProgressDraftMap = Record<string, number>
-type ExpandedProgressMap = Record<string, boolean>
 type EditingTitleDraftMap = Record<string, string>
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -100,42 +108,34 @@ function RecommendationInlineCard({
   panelState,
   onActivityTypeChange,
   onConfirm,
-  onClose,
 }: {
   activityTypes: ActivityType[]
   panelState: RecommendationPanelState
   onActivityTypeChange: (activityTypeId: string) => void
   onConfirm: (template: TaskTemplate) => void
-  onClose: () => void
 }) {
   const visibleCandidates = panelState.candidates
 
   return (
     <div className="recommendation-card">
-      <div className="recommendation-card__header">
-        <span className="status-chip recommendation-card__context">
-          {panelState.timeBlock === 'day' ? '白天' : '晚上'}
-        </span>
-        <button className="ghost-button" type="button" onClick={onClose}>
-          收起
-        </button>
+      <div className="recommendation-card__activity-types" aria-label="种草清单">
+        {activityTypes.map((activityType) => (
+          <button
+            key={activityType.id}
+            className={
+              panelState.activityTypeId === activityType.id
+                ? 'tag-chip tag-chip--selected tag-chip--button'
+                : 'tag-chip tag-chip--button'
+            }
+            type="button"
+            onClick={() => {
+              onActivityTypeChange(activityType.id)
+            }}
+          >
+            <span className="tag-chip__label">{activityType.name}</span>
+          </button>
+        ))}
       </div>
-
-      <label className="editor-field">
-        <span>种草清单</span>
-        <select
-          value={panelState.activityTypeId}
-          onChange={(event) => {
-            onActivityTypeChange(event.target.value)
-          }}
-        >
-          {activityTypes.map((activityType) => (
-            <option key={activityType.id} value={activityType.id}>
-              {activityType.name}
-            </option>
-          ))}
-        </select>
-      </label>
 
       {panelState.isLoading ? (
         <p className="form-message">正在加载候选...</p>
@@ -208,8 +208,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const [preparationNotesDraft, setPreparationNotesDraft] = useState('')
   const [isSegmentedDraft, setIsSegmentedDraft] = useState(false)
   const [recommendationPanel, setRecommendationPanel] = useState<RecommendationPanelState | null>(null)
-  const [progressDrafts, setProgressDrafts] = useState<ProgressDraftMap>({})
-  const [expandedProgressItems, setExpandedProgressItems] = useState<ExpandedProgressMap>({})
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editingTitleDrafts, setEditingTitleDrafts] = useState<EditingTitleDraftMap>({})
 
@@ -295,32 +293,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setPreparationNotesDraft('')
     setIsSegmentedDraft(false)
     setRecommendationPanel(null)
-  }
-
-  const toggleProgressEditor = (viewModel: TodoViewModel) => {
-    const { item } = viewModel.internalRef
-
-    if (!viewModel.isSegmented || viewModel.isCompleted) {
-      return
-    }
-
-    setExpandedProgressItems((current) => ({
-      ...current,
-      [viewModel.id]: !current[viewModel.id],
-    }))
-    setProgressDrafts((current) => ({
-      ...current,
-      [viewModel.id]: current[viewModel.id] ?? item.progressPercent,
-    }))
-  }
-
-  const setProgressDraft = (itemId: string, nextValue: number) => {
-    const normalized = Math.max(0, Math.min(100, Number.isNaN(nextValue) ? 0 : nextValue))
-
-    setProgressDrafts((current) => ({
-      ...current,
-      [itemId]: normalized,
-    }))
   }
 
   const startEditingItem = (viewModel: TodoViewModel) => {
@@ -624,56 +596,50 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     }
   }
 
-  const saveSegmentedProgress = async (viewModel: TodoViewModel) => {
+  const updateSegmentedProgress = async (
+    viewModel: TodoViewModel,
+    nextProgressPercent: number,
+  ) => {
     const { item } = viewModel.internalRef
 
-    if (!viewModel.isSegmented || viewModel.isCompleted) {
+    if (!viewModel.isSegmented) {
       return
     }
 
-    const nextProgressPercent = Math.max(
-      item.progressPercent,
-      Math.min(100, progressDrafts[item.id] ?? item.progressPercent),
+    const normalizedProgressPercent = Math.max(
+      0,
+      Math.min(100, Number.isNaN(nextProgressPercent) ? item.progressPercent : nextProgressPercent),
     )
     const nextProgressState =
-      nextProgressPercent === 0
+      normalizedProgressPercent === 0
         ? 'not_started'
-        : nextProgressPercent === 100
+        : normalizedProgressPercent === 100
           ? 'completed'
           : 'in_progress'
     const nowIso = new Date().toISOString()
-    const isCompleted = nextProgressPercent === 100
+    const isCompleted = normalizedProgressPercent === 100
 
     await appDataRepository.dayPlanItems.update({
       id: item.id,
-      progressPercent: nextProgressPercent,
+      progressPercent: normalizedProgressPercent,
       progressState: nextProgressState,
-      status: isCompleted ? 'completed' : item.status,
-      completedAt: isCompleted ? nowIso : item.completedAt,
+      status: isCompleted ? 'completed' : 'pending',
+      completedAt: isCompleted ? nowIso : undefined,
       consumesDateTrigger:
         isCompleted && Boolean(item.templateId && item.targetDate)
           ? true
-          : item.consumesDateTrigger,
+          : false,
     })
 
     if (item.recurringInstanceId) {
       await appDataRepository.recurringTaskInstances.update({
         id: item.recurringInstanceId,
-        progressPercent: nextProgressPercent,
+        progressPercent: normalizedProgressPercent,
         progressState: nextProgressState,
-        status: isCompleted ? 'completed' : undefined,
+        status: isCompleted ? 'completed' : 'pending',
         completedAt: isCompleted ? nowIso : undefined,
       })
     }
-
-    setExpandedProgressItems((current) => ({
-      ...current,
-      [item.id]: false,
-    }))
-    setProgressDrafts((current) => ({
-      ...current,
-      [item.id]: nextProgressPercent,
-    }))
 
     await reloadItems()
   }
@@ -682,6 +648,30 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     const { item } = viewModel.internalRef
 
     if (viewModel.isSegmented) {
+      if (!viewModel.isCompleted) {
+        return
+      }
+
+      await appDataRepository.dayPlanItems.update({
+        id: item.id,
+        status: 'pending',
+        completedAt: undefined,
+        progressState: 'in_progress',
+        progressPercent: 90,
+        consumesDateTrigger: false,
+      })
+
+      if (item.recurringInstanceId) {
+        await appDataRepository.recurringTaskInstances.update({
+          id: item.recurringInstanceId,
+          status: 'pending',
+          progressState: 'in_progress',
+          progressPercent: 90,
+          completedAt: undefined,
+        })
+      }
+
+      await reloadItems()
       return
     }
 
@@ -807,6 +797,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         {items.map((viewModel) => {
           const { item } = viewModel.internalRef
           const tags = buildTodoTags(viewModel)
+          const nextProgressAriaLabel = `调整 ${viewModel.title} 的进度，当前 ${viewModel.progressPercent}%`
 
           return (
             <article
@@ -826,36 +817,33 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                   <div className="todo-item-card__main">
                     <div className="todo-item-card__title-row">
                       {editingItemId === viewModel.id ? (
-                        <input
-                          className="todo-item-card__title-input"
-                          type="text"
-                          value={editingTitleDrafts[viewModel.id] ?? viewModel.title}
-                          onChange={(event) => {
-                            updateEditingTitle(viewModel.id, event.target.value)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void saveItemTitle(viewModel)
-                            }
+                        <>
+                          <input
+                            className="todo-item-card__title-input"
+                            type="text"
+                            value={editingTitleDrafts[viewModel.id] ?? viewModel.title}
+                            onChange={(event) => {
+                              updateEditingTitle(viewModel.id, event.target.value)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                void saveItemTitle(viewModel)
+                              }
 
-                            if (event.key === 'Escape') {
-                              event.preventDefault()
-                              cancelEditingItem(viewModel)
-                            }
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <h5>{viewModel.title}</h5>
-                      )}
-
-                      {viewModel.canEdit ? (
-                        editingItemId === viewModel.id ? (
+                              if (event.key === 'Escape') {
+                                event.preventDefault()
+                                cancelEditingItem(viewModel)
+                              }
+                            }}
+                            autoFocus
+                          />
                           <div className="todo-item-card__title-actions">
                             <button
-                              className="ghost-button ghost-button--compact"
+                              className="todo-item-card__icon-button"
                               type="button"
+                              aria-label="保存标题"
+                              title="保存标题"
                               disabled={
                                 (editingTitleDrafts[viewModel.id] ?? viewModel.title).trim().length === 0
                               }
@@ -863,41 +851,49 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                                 void saveItemTitle(viewModel)
                               }}
                             >
-                              保存
+                              <SaveIcon className="todo-item-card__icon" />
                             </button>
                             <button
-                              className="ghost-button ghost-button--compact"
+                              className="todo-item-card__icon-button"
                               type="button"
+                              aria-label="取消编辑"
+                              title="取消编辑"
                               onClick={() => {
                                 cancelEditingItem(viewModel)
                               }}
                             >
-                              取消
+                              <CloseIcon className="todo-item-card__icon" />
                             </button>
                           </div>
-                        ) : (
-                          <button
-                            className="todo-item-card__edit"
-                            type="button"
-                            aria-label="编辑标题"
-                            onClick={() => {
-                              startEditingItem(viewModel)
-                            }}
-                          >
-                            ✎
-                          </button>
-                        )
-                      ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <h5>{viewModel.title}</h5>
+                          {viewModel.canEdit ? (
+                            <button
+                              className="todo-item-card__icon-button"
+                              type="button"
+                              aria-label="编辑标题"
+                              title="编辑标题"
+                              onClick={() => {
+                                startEditingItem(viewModel)
+                              }}
+                            >
+                              <EditIcon className="todo-item-card__icon" />
+                            </button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
 
-                    <div className="tag-row">
+                    <div className="tag-row todo-item-card__tag-row">
                       {tags.map((tag) => (
                         <span
                           key={tag}
                           className={
                             tag === '必要'
                               ? 'status-chip status-chip--necessary'
-                              : tag === '已完成'
+                              : tag.startsWith('完成于') || tag === '已完成'
                                 ? 'status-chip status-chip--completed'
                                 : 'status-chip'
                           }
@@ -914,52 +910,56 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
                   {viewModel.preparationNotes ? (
                     <div className="todo-item-card__notes">
-                      <p>{viewModel.preparationNotes}</p>
+                      <p>前置准备内容：{viewModel.preparationNotes}</p>
                     </div>
                   ) : null}
 
-                  {viewModel.isSegmented && !viewModel.isCompleted ? (
-                    <div className="todo-item-card__meta">
-                      {!expandedProgressItems[viewModel.id] ? (
-                        <button
-                          className="ghost-button ghost-button--compact"
-                          type="button"
-                          onClick={() => {
-                            toggleProgressEditor(viewModel)
-                          }}
-                        >
-                          推进
-                        </button>
-                      ) : null}
-
-                      {viewModel.canStopRepeating ? (
-                        <button
-                          className="ghost-button ghost-button--compact"
-                          type="button"
-                          onClick={() => {
-                            void stopRecurringTemplate(viewModel)
-                          }}
-                        >
-                          {viewModel.recurringToggleLabel}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : viewModel.canStopRepeating ? (
-                    <div className="todo-item-card__meta">
-                      <button
-                        className="ghost-button ghost-button--compact"
-                        type="button"
-                        onClick={() => {
-                          void stopRecurringTemplate(viewModel)
-                        }}
+                  {viewModel.isSegmented ? (
+                    <div className="segmented-progress-panel">
+                      <div
+                        className="segmented-progress-panel__bar"
+                        aria-label={`当前进度 ${viewModel.progressPercent}%`}
                       >
-                        {viewModel.recurringToggleLabel}
-                      </button>
+                        <div
+                          className="segmented-progress-panel__bar-fill"
+                          style={{ width: `${viewModel.progressPercent}%` }}
+                        />
+                      </div>
+                      <input
+                        className="segmented-progress-panel__range"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={viewModel.progressPercent}
+                        aria-label={nextProgressAriaLabel}
+                        disabled={viewModel.isCompleted}
+                        onChange={(event) => {
+                          void updateSegmentedProgress(viewModel, Number(event.target.value))
+                        }}
+                      />
                     </div>
                   ) : null}
                 </div>
 
                 <div className="todo-item-card__actions">
+                  {viewModel.canStopRepeating ? (
+                    <button
+                      className={
+                        viewModel.isRecurringStopped
+                          ? 'todo-item-card__icon-button todo-item-card__repeat-button todo-item-card__repeat-button--stopped'
+                          : 'todo-item-card__icon-button todo-item-card__repeat-button'
+                      }
+                      type="button"
+                      aria-label={viewModel.isRecurringStopped ? '恢复重复' : '停止重复'}
+                      title={viewModel.isRecurringStopped ? '恢复重复' : '停止重复'}
+                      onClick={() => {
+                        void stopRecurringTemplate(viewModel)
+                      }}
+                    >
+                      <RepeatIcon className="todo-item-card__icon" />
+                    </button>
+                  ) : null}
+
                   <button
                     className={
                       viewModel.isCompleted
@@ -969,15 +969,19 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     type="button"
                     aria-label={viewModel.isCompleted ? '取消完成' : '标记完成'}
                     disabled={
-                      viewModel.isCompleted ? !viewModel.canUncomplete : !viewModel.canComplete
+                      viewModel.isSegmented
+                        ? !viewModel.isCompleted
+                        : viewModel.isCompleted
+                          ? !viewModel.canUncomplete
+                          : !viewModel.canComplete
                     }
                     onClick={() => {
                       void completeItem(viewModel)
                     }}
                   >
-                    <span className="todo-check__mark" aria-hidden="true">
-                      {viewModel.isCompleted ? '✓' : ''}
-                    </span>
+                    {viewModel.isCompleted ? (
+                      <CheckIcon className="todo-check__icon" />
+                    ) : null}
                   </button>
 
                   <button
@@ -993,73 +997,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     }}
                     disabled={!viewModel.canDelete}
                   >
-                    ×
+                    <CloseIcon className="todo-item-card__icon" />
                   </button>
                 </div>
               </div>
-
-              {viewModel.isSegmented ? (
-                <div className="segmented-progress-panel">
-                  <div
-                    className="segmented-progress-panel__bar"
-                    aria-label={`当前进度 ${viewModel.progressPercent}%`}
-                  >
-                    <div
-                      className="segmented-progress-panel__bar-fill"
-                      style={{ width: `${viewModel.progressPercent}%` }}
-                    />
-                  </div>
-
-                  <div className="segmented-progress-panel__summary">
-                    <span className="status-chip">当前进度</span>
-                    <strong>{viewModel.progressPercent}%</strong>
-                  </div>
-
-                  {viewModel.isCompleted ? (
-                    <p className="form-message form-message--success">已完成</p>
-                  ) : expandedProgressItems[viewModel.id] ? (
-                    <>
-                      <div className="segmented-progress-panel__controls">
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={progressDrafts[viewModel.id] ?? viewModel.progressPercent}
-                          onChange={(event) => {
-                            setProgressDraft(viewModel.id, Number(event.target.value))
-                          }}
-                        />
-                        <input
-                          className="segmented-progress-panel__number"
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={progressDrafts[viewModel.id] ?? viewModel.progressPercent}
-                          onChange={(event) => {
-                            setProgressDraft(viewModel.id, Number(event.target.value))
-                          }}
-                        />
-                      </div>
-
-                      <div className="segmented-progress-panel__actions">
-                        <span className="status-chip">
-                          {progressDrafts[viewModel.id] ?? viewModel.progressPercent}%
-                        </span>
-                        <button
-                          className="primary-button"
-                          type="button"
-                          onClick={() => {
-                            void saveSegmentedProgress(viewModel)
-                          }}
-                        >
-                          保存进度
-                        </button>
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
             </article>
           )
         })}
@@ -1092,217 +1033,208 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
   return (
     <div className="mode-panel">
-      <div className="temporary-composer temporary-composer--compact">
-        <div className="temporary-composer__controls temporary-composer__controls--expanded">
-          <input
-            className="temporary-composer__input"
-            type="text"
-            value={temporaryTitle}
-            disabled={isPastDate}
-            onChange={(event) => {
-              setTemporaryTitle(event.target.value)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void createTemporaryItem()
-              }
-            }}
-            placeholder={isPastDate ? '过去日期不能新增 Todo' : '输入一条 Todo'}
-          />
+      {!isPastDate ? (
+        <div className="temporary-composer temporary-composer--compact">
+          <div className="temporary-composer__controls temporary-composer__controls--expanded">
+            <input
+              className="temporary-composer__input"
+              type="text"
+              value={temporaryTitle}
+              onChange={(event) => {
+                setTemporaryTitle(event.target.value)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void createTemporaryItem()
+                }
+              }}
+              placeholder="输入一条 Todo"
+            />
 
-          <div className="segmented-control temporary-composer__segmented" aria-label="Todo 时段">
+            <div className="segmented-control temporary-composer__segmented" aria-label="Todo 时段">
+              <button
+                className={
+                  temporaryTimeBlock === 'day'
+                    ? 'segmented-control__button segmented-control__button--active'
+                    : 'segmented-control__button'
+                }
+                type="button"
+                onClick={() => {
+                  setTemporaryTimeBlock('day')
+                }}
+                aria-label="白天"
+                title="白天"
+              >
+                <SunIcon className="segmented-control__icon" />
+              </button>
+              <button
+                className={
+                  temporaryTimeBlock === 'night'
+                    ? 'segmented-control__button segmented-control__button--active'
+                    : 'segmented-control__button'
+                }
+                type="button"
+                onClick={() => {
+                  setTemporaryTimeBlock('night')
+                }}
+                aria-label="晚上"
+                title="晚上"
+              >
+                <MoonIcon className="segmented-control__icon" />
+              </button>
+            </div>
+
             <button
-              className={
-                temporaryTimeBlock === 'day'
-                  ? 'segmented-control__button segmented-control__button--active'
-                  : 'segmented-control__button'
-              }
+              className="ghost-button ghost-button--compact temporary-composer__more-toggle"
               type="button"
-              disabled={isPastDate}
               onClick={() => {
-                setTemporaryTimeBlock('day')
+                setComposerErrorMessage(null)
+
+                if (showMoreOptions) {
+                  resetExpandedComposerState()
+                } else {
+                  setShowMoreOptions(true)
+                }
               }}
-              aria-label="白天"
+              aria-label={showMoreOptions ? '收起更多选项' : '打开更多选项'}
+              title={showMoreOptions ? '收起更多选项' : '打开更多选项'}
             >
-              <SunIcon className="segmented-control__icon" />
+              <MoreIcon className="temporary-composer__more-icon" />
             </button>
+
             <button
-              className={
-                temporaryTimeBlock === 'night'
-                  ? 'segmented-control__button segmented-control__button--active'
-                  : 'segmented-control__button'
-              }
+              className="primary-button primary-button--icon"
               type="button"
-              disabled={isPastDate}
+              disabled={temporaryTitle.trim().length === 0}
               onClick={() => {
-                setTemporaryTimeBlock('night')
+                void createTemporaryItem()
               }}
-              aria-label="晚上"
+              aria-label="新增 Todo"
+              title="新增 Todo"
             >
-              <MoonIcon className="segmented-control__icon" />
+              <PlusIcon className="temporary-composer__add-icon" />
             </button>
           </div>
 
-          <button
-            className="ghost-button ghost-button--compact temporary-composer__more-toggle"
-            type="button"
-            disabled={isPastDate}
-            onClick={() => {
-              setComposerErrorMessage(null)
+          {showMoreOptions ? (
+            <div className="temporary-composer__more">
+              <div className="temporary-composer__section">
+                <div className="temporary-composer__action-row">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => {
+                      if (recommendationPanel) {
+                        setRecommendationPanel(null)
+                        return
+                      }
 
-              if (showMoreOptions) {
-                resetExpandedComposerState()
-              } else {
-                setShowMoreOptions(true)
-              }
-            }}
-          >
-            {showMoreOptions ? '收起' : '更多'}
-          </button>
+                      void openRecommendationPanel()
+                    }}
+                  >
+                    {recommendationPanel ? '收起拔草推荐' : '打开拔草推荐'}
+                  </button>
+                </div>
 
-          <button
-            className="primary-button"
-            type="button"
-            disabled={isPastDate || temporaryTitle.trim().length === 0}
-            onClick={() => {
-              void createTemporaryItem()
-            }}
-          >
-            +
-          </button>
-        </div>
-
-        {showMoreOptions && !isPastDate ? (
-          <div className="temporary-composer__more">
-            <div className="temporary-composer__section">
-              <div className="temporary-composer__action-row">
-                <button
-                  className="ghost-button"
-                  type="button"
-                  disabled={isPastDate}
-                  onClick={() => {
-                    void openRecommendationPanel()
-                  }}
-                >
-                  {recommendationPanel ? '刷新拔草推荐' : '打开拔草推荐'}
-                </button>
+                {recommendationPanel ? (
+                  <RecommendationInlineCard
+                    activityTypes={activityTypes}
+                    panelState={recommendationPanel}
+                    onActivityTypeChange={(activityTypeId) => {
+                      void changeRecommendationActivityType(activityTypeId)
+                    }}
+                    onConfirm={(template) => {
+                      void addFromTemplate(template)
+                    }}
+                  />
+                ) : null}
               </div>
 
-              {recommendationPanel ? (
-                <RecommendationInlineCard
-                  activityTypes={activityTypes}
-                  panelState={recommendationPanel}
-                  onActivityTypeChange={(activityTypeId) => {
-                    void changeRecommendationActivityType(activityTypeId)
-                  }}
-                  onConfirm={(template) => {
-                    void addFromTemplate(template)
-                  }}
-                  onClose={() => {
-                    setRecommendationPanel(null)
-                  }}
-                />
-              ) : (
-                <div className="temporary-composer__hint-row">
-                  <span className="status-chip">需要时再从种草里挑一条</span>
+              <div className="temporary-composer__section temporary-composer__section--form">
+                <div className="template-form__row template-form__row--inline template-form__row--decision">
+                  <label className="toggle-chip">
+                    <input
+                      type="checkbox"
+                      checked={isNecessaryDraft}
+                      onChange={(event) => {
+                        setIsNecessaryDraft(event.target.checked)
+                      }}
+                    />
+                    <span>必要事项</span>
+                  </label>
+
+                  <select
+                    className="template-form__recurrence-select"
+                    value={recurrenceDraft}
+                    onChange={(event) => {
+                      setRecurrenceDraft(event.target.value as RecurrenceRule)
+                    }}
+                    aria-label="Todo 重复规则"
+                  >
+                    {recurringOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
+
+                <label className="toggle-chip">
+                  <input
+                    type="checkbox"
+                    checked={requiresPreparationDraft}
+                    onChange={(event) => {
+                      const nextChecked = event.target.checked
+                      setRequiresPreparationDraft(nextChecked)
+
+                      if (!nextChecked) {
+                        setPreparationNotesDraft('')
+                      }
+                    }}
+                  />
+                  <span>需要准备</span>
+                </label>
+
+                {requiresPreparationDraft ? (
+                  <textarea
+                    className="template-form__notes-input"
+                    rows={2}
+                    value={preparationNotesDraft}
+                    onChange={(event) => {
+                      setPreparationNotesDraft(event.target.value)
+                    }}
+                    placeholder="记录这次 Todo 的准备备注"
+                  />
+                ) : null}
+
+                <label className="toggle-chip">
+                  <input
+                    type="checkbox"
+                    checked={isSegmentedDraft}
+                    onChange={(event) => {
+                      setIsSegmentedDraft(event.target.checked)
+                    }}
+                  />
+                  <span>分次事项</span>
+                </label>
+              </div>
             </div>
+          ) : null}
 
-            <div className="temporary-composer__section">
-              <label className="toggle-chip">
-                <input
-                  type="checkbox"
-                  checked={isNecessaryDraft}
-                  onChange={(event) => {
-                    setIsNecessaryDraft(event.target.checked)
-                  }}
-                />
-                <span>必要事项</span>
-              </label>
-
-              <select
-                className="template-form__recurrence-select"
-                value={recurrenceDraft}
-                onChange={(event) => {
-                  setRecurrenceDraft(event.target.value as RecurrenceRule)
-                }}
-                aria-label="Todo 重复规则"
-              >
-                {recurringOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <label className="toggle-chip">
-                <input
-                  type="checkbox"
-                  checked={requiresPreparationDraft}
-                  onChange={(event) => {
-                    const nextChecked = event.target.checked
-                    setRequiresPreparationDraft(nextChecked)
-
-                    if (!nextChecked) {
-                      setPreparationNotesDraft('')
-                    }
-                  }}
-                />
-                <span>需要准备</span>
-              </label>
-
-              {requiresPreparationDraft ? (
-                <textarea
-                  className="template-form__notes-input"
-                  rows={2}
-                  value={preparationNotesDraft}
-                  onChange={(event) => {
-                    setPreparationNotesDraft(event.target.value)
-                  }}
-                  placeholder="记录这次 Todo 的准备备注"
-                />
-              ) : null}
-
-              <label className="toggle-chip">
-                <input
-                  type="checkbox"
-                  checked={isSegmentedDraft}
-                  onChange={(event) => {
-                    setIsSegmentedDraft(event.target.checked)
-                  }}
-                />
-                <span>分次事项</span>
-              </label>
-            </div>
-          </div>
-        ) : null}
-
-        {composerErrorMessage ? (
-          <p className="form-message form-message--danger">{composerErrorMessage}</p>
-        ) : isPastDate ? (
-          <p className="form-message">过去日期不能新增 Todo</p>
-        ) : null}
-      </div>
+          {composerErrorMessage ? (
+            <p className="form-message form-message--danger">{composerErrorMessage}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="todo-board">
         <section className="list-group" aria-label="白天事项">
-          <div className="list-group__header">
-            <div className="list-group__heading">
-              <p className="eyebrow">白天</p>
-            </div>
-          </div>
           <div className="list-group__divider" aria-hidden="true" />
           {renderItems(dayItems, 'day')}
         </section>
 
         <section className="list-group" aria-label="晚上事项">
-          <div className="list-group__header">
-            <div className="list-group__heading">
-              <p className="eyebrow">晚上</p>
-            </div>
-          </div>
           <div className="list-group__divider" aria-hidden="true" />
           {renderItems(nightItems, 'night')}
         </section>
