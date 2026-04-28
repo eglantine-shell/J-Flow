@@ -1,5 +1,52 @@
 # Dev Log
 
+## 2026-04-28（V2.1-N2：移动端与种草标题纠偏）
+
+### 本轮目标
+- 修正移动端“更多设置”没有按两行实现的问题
+- 修正移动端拔草候选项被压成两行的问题
+- 把种草区展开/收起按钮改回 `+ / -`
+- 修正“种草”与“种草清单”两个标题层级
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/pages/home/HomePage.tsx`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- 移动端“更多设置”走样的根因不是控件本身，而是第一行 settings row 没有声明三列网格。
+- 拔草候选在移动端分成两行的根因是通用媒体查询把 `.candidate-item` 一起改成了单列布局。
+- 顶层卡片标题应是 `种草`，列表面板内部标题才是 `种草清单`。
+
+### 本轮修改
+- 更新 `src/styles/globals.css`
+  - 给“必要 / 准备 / 分次”行补上三列网格
+  - 保持移动端重复规则为同一行五项
+  - 恢复候选项为“标题 + 最右加号”同一行
+- 更新 `src/pages/home/HomePage.tsx`
+  - 顶层标题改回 `种草`
+  - 两个展开/收起按钮改回 `+ / -`
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 补回列表面板标题 `种草清单`
+- 更新 `handoff.md`
+  - 记录标题层级与移动端修正
+- 更新 `manual-test-checklist.md`
+  - 补充 `+ / -` 与标题层级的手测口径
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-28（V2.1-N：Todo / 种草 UI 误解修正）
 
 ### 本轮目标

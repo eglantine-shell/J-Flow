@@ -928,10 +928,12 @@ button:hover:not(:disabled) {
 
 .temporary-composer__settings-row {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 .temporary-composer__settings-row--recurrence {
+  grid-template-columns: minmax(0, 1fr);
   padding-top: 2px;
 }
 
@@ -978,6 +980,12 @@ button:hover:not(:disabled) {
 
 .temporary-composer__more--grass {
   padding-top: 8px;
+}
+
+.recommendation-card .candidate-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .temporary-composer__hint-row,
@@ -1631,6 +1639,11 @@ button:hover:not(:disabled) {
   border-style: solid;
 }
 
+.template-manager__heading h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .template-manager__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1830,9 +1843,13 @@ button:hover:not(:disabled) {
   .template-manager__editor-header,
   .template-manager__intro,
   .item-card__header,
-  .candidate-item,
   .template-list-item__header {
     grid-template-columns: minmax(0, 1fr);
+    display: grid;
+  }
+
+  .recommendation-card .candidate-item {
+    grid-template-columns: minmax(0, 1fr) auto;
     display: grid;
   }
 
@@ -1927,8 +1944,13 @@ button:hover:not(:disabled) {
     gap: 8px;
   }
 
-  .temporary-composer__recurrence-group {
+  .temporary-composer__settings-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .temporary-composer__recurrence-group {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .temporary-composer__top-row {
@@ -1938,6 +1960,13 @@ button:hover:not(:disabled) {
   .template-list-item__controls {
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .temporary-composer__option-chip,
+  .temporary-composer__recurrence-option {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 0.76rem;
   }
 
   .setup-footer {

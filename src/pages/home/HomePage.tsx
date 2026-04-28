@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import {
-  ListIcon,
-  SaveIcon,
-} from '@/components/ui/Icons'
+import { SaveIcon } from '@/components/ui/Icons'
 import { CreateTaskTemplateForm, TemplateManagerPanel } from '@/features/templates'
 import { TodoModePanel } from '@/features/todo'
 
@@ -75,7 +72,7 @@ export function HomePage() {
       <section className="home-layout__composer">
         <div className="surface-card surface-card--compact">
           <div className="composer-entry composer-entry--toolbar">
-            <span className="composer-entry__title">种草清单</span>
+            <span className="composer-entry__title">种草</span>
             <div className="composer-entry__actions">
               <button
                 className="icon-button icon-button--toolbar"
@@ -85,7 +82,7 @@ export function HomePage() {
                   setShowComposer((current) => !current)
                 }}
               >
-                <ListIcon className="icon-button__icon" />
+                {showComposer ? '−' : '+'}
               </button>
 
               <button
@@ -106,7 +103,7 @@ export function HomePage() {
                   setShowTemplateManager((current) => !current)
                 }}
               >
-                <ListIcon className="icon-button__icon" />
+                {showTemplateManager ? '−' : '+'}
               </button>
             </div>
           </div>

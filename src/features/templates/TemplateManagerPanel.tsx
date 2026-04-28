@@ -178,6 +178,10 @@ export function TemplateManagerPanel() {
 
   return (
     <div className="template-manager">
+      <div className="template-manager__heading">
+        <h4>种草清单</h4>
+      </div>
+
       {errorMessage ? (
         <p className="form-message form-message--danger">{errorMessage}</p>
       ) : null}
