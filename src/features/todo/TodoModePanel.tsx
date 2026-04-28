@@ -46,6 +46,7 @@ type TodoViewState = {
 type RecommendationPanelState = {
   timeBlock: TimeBlock
   activityTypeId: string
+  sceneTagIds: string[]
   recommended: TaskTemplate | null
   candidates: TaskTemplate[]
   errorMessage: string | null
@@ -106,13 +107,17 @@ async function syncSelectedDateData(selectedDate: Date) {
 
 function RecommendationInlineCard({
   activityTypes,
+  sceneTags,
   panelState,
   onActivityTypeChange,
+  onSceneTagToggle,
   onConfirm,
 }: {
   activityTypes: ActivityType[]
+  sceneTags: SceneTag[]
   panelState: RecommendationPanelState
   onActivityTypeChange: (activityTypeId: string) => void
+  onSceneTagToggle: (sceneTagId: string) => void
   onConfirm: (template: TaskTemplate) => void
 }) {
   const visibleCandidates = panelState.candidates
@@ -134,6 +139,25 @@ function RecommendationInlineCard({
             }}
           >
             <span className="tag-chip__label">{activityType.name}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="recommendation-card__activity-types" aria-label="场景标签">
+        {sceneTags.map((sceneTag) => (
+          <button
+            key={sceneTag.id}
+            className={
+              panelState.sceneTagIds.includes(sceneTag.id)
+                ? 'tag-chip tag-chip--selected tag-chip--button'
+                : 'tag-chip tag-chip--button'
+            }
+            type="button"
+            onClick={() => {
+              onSceneTagToggle(sceneTag.id)
+            }}
+          >
+            <span className="tag-chip__label">{sceneTag.name}</span>
           </button>
         ))}
       </div>
@@ -202,6 +226,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const [temporaryTimeBlock, setTemporaryTimeBlock] = useState<TemporaryTimeBlock>('day')
   const [showMoreOptions, setShowMoreOptions] = useState(false)
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
+  const [sceneTags, setSceneTags] = useState<SceneTag[]>([])
   const [composerErrorMessage, setComposerErrorMessage] = useState<string | null>(null)
   const [isNecessaryDraft, setIsNecessaryDraft] = useState(false)
   const [recurrenceDraft, setRecurrenceDraft] = useState<RecurrenceRule>('none')
@@ -481,19 +506,23 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const loadRecommendationPanel = async ({
     timeBlock,
     activityTypeId,
+    sceneTagIds,
   }: {
     timeBlock: TimeBlock
     activityTypeId: string
+    sceneTagIds: string[]
   }) => {
     const recommendation = await getDecisionRecommendations({
       selectedDate,
       timeBlock,
       activityTypeId,
+      sceneTagIds,
     })
 
     setRecommendationPanel({
       timeBlock,
       activityTypeId,
+      sceneTagIds,
       recommended: recommendation.recommended,
       candidates: recommendation.candidates,
       errorMessage: null,
@@ -504,10 +533,21 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const openRecommendationPanel = async () => {
     try {
       let nextActivityTypes = activityTypes
+      let nextSceneTags = sceneTags
 
-      if (nextActivityTypes.length === 0) {
-        nextActivityTypes = await listDecisionActivityTypes()
+      if (nextActivityTypes.length === 0 || nextSceneTags.length === 0) {
+        const [loadedActivityTypes, loadedSceneTags] = await Promise.all([
+          nextActivityTypes.length === 0
+            ? listDecisionActivityTypes()
+            : Promise.resolve(nextActivityTypes),
+          nextSceneTags.length === 0
+            ? appDataRepository.sceneTags.list()
+            : Promise.resolve(nextSceneTags),
+        ])
+        nextActivityTypes = loadedActivityTypes
+        nextSceneTags = loadedSceneTags
         setActivityTypes(nextActivityTypes)
+        setSceneTags(nextSceneTags)
       }
 
       const defaultActivityTypeId = nextActivityTypes[0]?.id
@@ -521,6 +561,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       setRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId: defaultActivityTypeId,
+        sceneTagIds: [],
         recommended: null,
         candidates: [],
         errorMessage: null,
@@ -530,11 +571,13 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       await loadRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId: defaultActivityTypeId,
+        sceneTagIds: [],
       })
     } catch (error: unknown) {
       setRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId: activityTypes[0]?.id ?? '',
+        sceneTagIds: [],
         recommended: null,
         candidates: [],
         errorMessage:
@@ -560,11 +603,49 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       await loadRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId,
+        sceneTagIds: recommendationPanel.sceneTagIds,
       })
     } catch (error: unknown) {
       setRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId,
+        sceneTagIds: recommendationPanel.sceneTagIds,
+        recommended: null,
+        candidates: [],
+        errorMessage:
+          error instanceof Error ? error.message : '拔草候选读取失败，请稍后重试。',
+        isLoading: false,
+      })
+    }
+  }
+
+  const toggleRecommendationSceneTag = async (sceneTagId: string) => {
+    if (!recommendationPanel) {
+      return
+    }
+
+    const nextSceneTagIds = recommendationPanel.sceneTagIds.includes(sceneTagId)
+      ? recommendationPanel.sceneTagIds.filter((id) => id !== sceneTagId)
+      : [...recommendationPanel.sceneTagIds, sceneTagId]
+
+    setRecommendationPanel({
+      ...recommendationPanel,
+      sceneTagIds: nextSceneTagIds,
+      isLoading: true,
+      errorMessage: null,
+    })
+
+    try {
+      await loadRecommendationPanel({
+        timeBlock: temporaryTimeBlock,
+        activityTypeId: recommendationPanel.activityTypeId,
+        sceneTagIds: nextSceneTagIds,
+      })
+    } catch (error: unknown) {
+      setRecommendationPanel({
+        timeBlock: temporaryTimeBlock,
+        activityTypeId: recommendationPanel.activityTypeId,
+        sceneTagIds: nextSceneTagIds,
         recommended: null,
         candidates: [],
         errorMessage:
@@ -581,11 +662,79 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     }
 
     try {
-      await createDecisionSelectedDayPlanItem({
-        selectedDate,
-        timeBlock: temporaryTimeBlock,
-        template,
-      })
+      const preparationNotes = requiresPreparationDraft ? preparationNotesDraft.trim() : ''
+
+      if (recurrenceDraft === 'none') {
+        await createDecisionSelectedDayPlanItem({
+          selectedDate,
+          timeBlock: temporaryTimeBlock,
+          template,
+          options: {
+            isNecessary: isNecessaryDraft,
+            requiresPreparation: requiresPreparationDraft,
+            preparationNotes,
+            isSegmented: isSegmentedDraft,
+          },
+        })
+      } else {
+        const existingItemsInTimeBlock = viewState.items.filter(
+          (item) => item.timeBlock === temporaryTimeBlock && !item.isDeleted,
+        )
+        const sortOrder =
+          existingItemsInTimeBlock.length === 0
+            ? 1
+            : Math.max(...existingItemsInTimeBlock.map((item) => item.internalRef.item.sortOrder)) + 1
+        const recurringSceneTagIds = resolveRecurringSceneTagIds(sceneTags, temporaryTimeBlock)
+        const recurringTemplate = await appDataRepository.taskTemplates.create({
+          templateKind: 'todo_recurring',
+          date: selectedDateKey,
+          activityTypeId: undefined,
+          title: template.title,
+          sceneTagIds: recurringSceneTagIds,
+          interestLevel: 2,
+          isNecessary: isNecessaryDraft,
+          requiresPreparation: requiresPreparationDraft,
+          preparationNotes,
+          recurrence: recurrenceDraft,
+          isSegmented: isSegmentedDraft,
+          isArchived: false,
+        })
+
+        const createdItem = await appDataRepository.dayPlanItems.create({
+          date: selectedDateKey,
+          originDate: selectedDateKey,
+          targetDate: selectedDateKey,
+          timeBlock: temporaryTimeBlock,
+          timeBlockSource: temporaryTimeBlock === 'night' ? 'manual_night' : 'default_day',
+          sortOrder,
+          source: 'auto_generated',
+          templateId: recurringTemplate.id,
+          title: template.title,
+          activityTypeId: template.activityTypeId,
+          isNecessary: isNecessaryDraft,
+          requiresPreparation: requiresPreparationDraft,
+          preparationNotes,
+          isSegmented: isSegmentedDraft,
+          progressState: 'not_started',
+          progressPercent: 0,
+          status: 'pending',
+        })
+
+        if (isSegmentedDraft) {
+          await appDataRepository.dayPlanItems.update({
+            id: createdItem.id,
+            rootItemId: createdItem.id,
+          })
+        }
+
+        await appDataRepository.taskTemplates.update({
+          id: template.id,
+          grassStatus: 'picked',
+          isArchived: false,
+        })
+
+        await syncSelectedDateData(selectedDate)
+      }
 
       setComposerErrorMessage(null)
       setRecommendationPanel(null)
@@ -732,7 +881,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }
 
   const deleteTemporaryItem = async (viewModel: TodoViewModel) => {
-    const { item, templateKind } = viewModel.internalRef
+    const { item, templateKind, template } = viewModel.internalRef
 
     if (!viewModel.canDelete) {
       return
@@ -752,6 +901,19 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         id: item.recurringInstanceId,
         status: 'expired',
         completedAt: undefined,
+      })
+    }
+
+    if (
+      item.source === 'decision_selected' &&
+      templateKind === 'grass' &&
+      template?.grassStatus === 'picked' &&
+      item.templateId
+    ) {
+      await appDataRepository.taskTemplates.update({
+        id: item.templateId,
+        grassStatus: 'active',
+        isArchived: false,
       })
     }
 
@@ -1142,9 +1304,13 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 {recommendationPanel ? (
                   <RecommendationInlineCard
                     activityTypes={activityTypes}
+                    sceneTags={sceneTags}
                     panelState={recommendationPanel}
                     onActivityTypeChange={(activityTypeId) => {
                       void changeRecommendationActivityType(activityTypeId)
+                    }}
+                    onSceneTagToggle={(sceneTagId) => {
+                      void toggleRecommendationSceneTag(sceneTagId)
                     }}
                     onConfirm={(template) => {
                       void addFromTemplate(template)

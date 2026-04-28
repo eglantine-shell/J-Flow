@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { appDataRepository } from '@/db'
 import {
   createInitialTaskTemplateFormState,
-  getEffectiveTemplateDate,
   TaskTemplateFormFields,
   type TaskTemplateFormLoadState,
   type TaskTemplateFormState,
@@ -176,18 +175,17 @@ export function CreateTaskTemplateForm() {
     try {
       const created = await appDataRepository.taskTemplates.create({
         templateKind: 'grass',
-        date: getEffectiveTemplateDate(formState),
+        date: '',
         activityTypeId: formState.activityTypeId,
         title: formState.title.trim(),
         sceneTagIds: formState.sceneTagIds,
         interestLevel: formState.interestLevel,
-        isNecessary: formState.isNecessary,
-        requiresPreparation: formState.requiresPreparation,
-        preparationNotes: formState.requiresPreparation
-          ? formState.preparationNotes.trim()
-          : '',
-        recurrence: formState.recurrence,
-        isSegmented: formState.isSegmented,
+        isNecessary: false,
+        requiresPreparation: false,
+        preparationNotes: '',
+        recurrence: 'none',
+        isSegmented: false,
+        grassStatus: 'active',
         isArchived: false,
       })
 

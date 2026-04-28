@@ -2,9 +2,7 @@ import { appDataRepository } from '@/db'
 import { findLatestSegmentedTemplateCarryover } from '@/features/continuation'
 import type {
   ActivityType,
-  DayPlanItem,
   RecommendationResult,
-  SceneTag,
   TaskTemplate,
   TieBreakerOrder,
   TimeBlock,
@@ -13,7 +11,6 @@ import type {
 type RecommendationCandidate = {
   template: TaskTemplate
   matchedSceneTagIds: string[]
-  usesEmptySceneTags: boolean
   alreadyUsedInOtherTimeBlock: boolean
 }
 
@@ -21,44 +18,17 @@ type RecommendationContext = {
   selectedDate: Date
   timeBlock: TimeBlock
   activityTypeId: string
+  sceneTagIds: string[]
 }
 
 type RecommendationData = RecommendationResult & {
   sceneTagIds: string[]
 }
 
-const WEEKDAY_NAMES = new Set(['周中'])
-const WEEKEND_NAMES = new Set(['周末'])
-const DAY_CONTEXT_NAMES = new Set(['上午', '下午', '白天'])
-const NIGHT_CONTEXT_NAMES = new Set(['晚上', '夜间'])
-
 const pad = (value: number) => String(value).padStart(2, '0')
 
 const toDateString = (date: Date) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-
-const deriveSceneTagIds = (
-  sceneTags: SceneTag[],
-  selectedDate: Date,
-  timeBlock: TimeBlock,
-) => {
-  const isWeekend = [0, 6].includes(selectedDate.getDay())
-  const matchedNames = new Set<string>()
-
-  if (isWeekend) {
-    WEEKEND_NAMES.forEach((name) => matchedNames.add(name))
-  } else {
-    WEEKDAY_NAMES.forEach((name) => matchedNames.add(name))
-  }
-
-  ;(timeBlock === 'day' ? DAY_CONTEXT_NAMES : NIGHT_CONTEXT_NAMES).forEach((name) =>
-    matchedNames.add(name),
-  )
-
-  return sceneTags
-    .filter((sceneTag) => matchedNames.has(sceneTag.name))
-    .map((sceneTag) => sceneTag.id)
-}
 
 const compareByTieBreakerOrder = (
   left: TaskTemplate,
@@ -78,10 +48,6 @@ const sortCandidates = (
       return left.alreadyUsedInOtherTimeBlock ? 1 : -1
     }
 
-    if (left.usesEmptySceneTags !== right.usesEmptySceneTags) {
-      return left.usesEmptySceneTags ? 1 : -1
-    }
-
     if (left.template.interestLevel !== right.template.interestLevel) {
       return right.template.interestLevel - left.template.interestLevel
     }
@@ -93,10 +59,10 @@ export async function getDecisionRecommendations({
   selectedDate,
   timeBlock,
   activityTypeId,
+  sceneTagIds,
 }: RecommendationContext): Promise<RecommendationData> {
   const appData = await appDataRepository.get()
   const selectedDateKey = toDateString(selectedDate)
-  const derivedSceneTagIds = deriveSceneTagIds(appData.sceneTags, selectedDate, timeBlock)
 
   const dayPlanItems = appData.dayPlanItems.filter(
     (item) => item.date === selectedDateKey && item.status !== 'deleted',
@@ -118,7 +84,11 @@ export async function getDecisionRecommendations({
   )
 
   const candidates = appData.taskTemplates.reduce<RecommendationCandidate[]>((list, template) => {
-    if (template.templateKind !== 'grass' || template.isArchived || template.isNecessary) {
+    if (template.templateKind !== 'grass') {
+      return list
+    }
+
+    if (template.grassStatus !== 'active' || template.isArchived) {
       return list
     }
 
@@ -134,19 +104,14 @@ export async function getDecisionRecommendations({
       return list
     }
 
-    const matchedSceneTagIds = template.sceneTagIds.filter((sceneTagId) =>
-      derivedSceneTagIds.includes(sceneTagId),
-    )
-    const usesEmptySceneTags = template.sceneTagIds.length === 0
-
-    if (!usesEmptySceneTags && matchedSceneTagIds.length === 0) {
+    const matchedSceneTagIds = template.sceneTagIds.filter((sceneTagId) => sceneTagIds.includes(sceneTagId))
+    if (sceneTagIds.length > 0 && matchedSceneTagIds.length === 0) {
       return list
     }
 
     list.push({
       template,
       matchedSceneTagIds,
-      usesEmptySceneTags,
       alreadyUsedInOtherTimeBlock: otherTimeBlockTemplateIds.has(template.id),
     })
 
@@ -160,18 +125,27 @@ export async function getDecisionRecommendations({
   return {
     recommended: recommendedCandidate?.template ?? null,
     candidates: sortedCandidates.map((candidate) => candidate.template),
-    sceneTagIds: derivedSceneTagIds,
+    sceneTagIds,
   }
+}
+
+type DecisionSelectedOptions = {
+  isNecessary: boolean
+  requiresPreparation: boolean
+  preparationNotes: string
+  isSegmented: boolean
 }
 
 export async function createDecisionSelectedDayPlanItem({
   selectedDate,
   timeBlock,
   template,
+  options,
 }: {
   selectedDate: Date
   timeBlock: TimeBlock
   template: TaskTemplate
+  options: DecisionSelectedOptions
 }) {
   const appData = await appDataRepository.get()
   const selectedDateKey = toDateString(selectedDate)
@@ -193,7 +167,7 @@ export async function createDecisionSelectedDayPlanItem({
       : Math.max(...existingItems.map((item) => item.sortOrder)) + 1
 
   const carryover =
-    template.isSegmented && template.id
+    options.isSegmented && template.id
       ? findLatestSegmentedTemplateCarryover({
           appData,
           templateId: template.id,
@@ -212,10 +186,10 @@ export async function createDecisionSelectedDayPlanItem({
     templateId: template.id,
     title: template.title,
     activityTypeId: template.activityTypeId,
-    isNecessary: template.isNecessary,
-    requiresPreparation: template.requiresPreparation,
-    preparationNotes: template.preparationNotes,
-    isSegmented: template.isSegmented,
+    isNecessary: options.isNecessary,
+    requiresPreparation: options.requiresPreparation,
+    preparationNotes: options.preparationNotes,
+    isSegmented: options.isSegmented,
     progressState: carryover && carryover.progressPercent > 0 ? 'in_progress' : 'not_started',
     progressPercent: carryover?.progressPercent ?? 0,
     status: 'pending',
@@ -225,13 +199,27 @@ export async function createDecisionSelectedDayPlanItem({
   })
 
   if (carryover) {
+    await appDataRepository.taskTemplates.update({
+      id: template.id,
+      grassStatus: 'picked',
+      isArchived: false,
+    })
+
     return createdItem
   }
 
-  return appDataRepository.dayPlanItems.update({
+  const updatedItem = await appDataRepository.dayPlanItems.update({
     id: createdItem.id,
     rootItemId: createdItem.id,
   })
+
+  await appDataRepository.taskTemplates.update({
+    id: template.id,
+    grassStatus: 'picked',
+    isArchived: false,
+  })
+
+  return updatedItem
 }
 
 export async function listDecisionActivityTypes(): Promise<ActivityType[]> {

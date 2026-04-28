@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { appDataRepository } from '@/db'
 import {
   createInitialTaskTemplateFormState,
-  getEffectiveTemplateDate,
   TaskTemplateFormFields,
   type TaskTemplateFormLoadState,
   type TaskTemplateFormState,
@@ -12,16 +11,10 @@ import {
 import type { TaskTemplate } from '@/types'
 
 const toFormState = (template: TaskTemplate): TaskTemplateFormState => ({
-  date: template.date,
   activityTypeId: template.activityTypeId || '',
   title: template.title,
   sceneTagIds: template.sceneTagIds,
   interestLevel: template.interestLevel,
-  isNecessary: template.isNecessary,
-  requiresPreparation: template.requiresPreparation,
-  preparationNotes: template.preparationNotes,
-  recurrence: template.recurrence,
-  isSegmented: template.isSegmented,
 })
 
 export function TemplateManagerPanel() {
@@ -52,7 +45,9 @@ export function TemplateManagerPanel() {
     })
     setTemplates(
       allTemplates
-        .filter((template) => template.templateKind === 'grass' && !template.isArchived)
+        .filter(
+          (template) => template.templateKind === 'grass' && template.grassStatus === 'active',
+        )
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     )
   }
@@ -114,18 +109,10 @@ export function TemplateManagerPanel() {
     try {
       const updated: TaskTemplate = await appDataRepository.taskTemplates.update({
         id: editingTemplateId,
-        date: getEffectiveTemplateDate(formState),
         activityTypeId: formState.activityTypeId,
         title: formState.title.trim(),
         sceneTagIds: formState.sceneTagIds,
         interestLevel: formState.interestLevel,
-        isNecessary: formState.isNecessary,
-        requiresPreparation: formState.requiresPreparation,
-        preparationNotes: formState.requiresPreparation
-          ? formState.preparationNotes.trim()
-          : '',
-        recurrence: formState.recurrence,
-        isSegmented: formState.isSegmented,
       })
 
       await loadTemplates()
@@ -156,6 +143,7 @@ export function TemplateManagerPanel() {
     try {
       await appDataRepository.taskTemplates.update({
         id: template.id,
+        grassStatus: 'archived',
         isArchived: true,
       })
 
@@ -237,12 +225,9 @@ export function TemplateManagerPanel() {
 
                 <div className="template-list-item__meta">
                   <span className={template.isNecessary ? 'status-chip status-chip--necessary' : 'status-chip'}>
-                    {template.isNecessary ? '必要' : '普通'}
+                    活动中
                   </span>
                   <span className="status-chip">兴趣 {template.interestLevel}</span>
-                  <span className="status-chip">{template.recurrence}</span>
-                  {template.isSegmented ? <span className="status-chip">分次</span> : null}
-                  {template.requiresPreparation ? <span className="status-chip">准备</span> : null}
                   {template.sceneTagIds.length > 0 ? (
                     <span className="status-chip">{template.sceneTagIds.length} 个场景</span>
                   ) : (

@@ -12,6 +12,7 @@ import type {
   AppData,
   AppSettings,
   DayPlanItem,
+  GrassStatus,
   RecurringTaskInstance,
   SceneTag,
   TaskTemplate,
@@ -60,8 +61,30 @@ const resolveDayPlanItemOriginDate = (
   item: Pick<DayPlanItem, 'originDate' | 'targetDate' | 'date'>,
 ) => item.originDate ?? item.targetDate ?? item.date
 
+const resolveGrassStatus = (
+  item: Pick<TaskTemplate, 'templateKind' | 'isArchived'> & Partial<Pick<TaskTemplate, 'grassStatus'>>,
+): GrassStatus | undefined => {
+  if (item.templateKind !== 'grass') {
+    return undefined
+  }
+
+  if (item.grassStatus) {
+    return item.grassStatus
+  }
+
+  return item.isArchived ? 'archived' : 'active'
+}
+
 const normalizeLegacyAppData = (appData: AppData): AppData => ({
   ...appData,
+  taskTemplates: appData.taskTemplates.map((template) => ({
+    ...template,
+    grassStatus: resolveGrassStatus(template),
+    isArchived:
+      template.templateKind === 'grass'
+        ? resolveGrassStatus(template) === 'archived'
+        : template.isArchived,
+  })),
   dayPlanItems: appData.dayPlanItems.map((item) => ({
     ...item,
     originDate: resolveDayPlanItemOriginDate(item),
@@ -182,10 +205,19 @@ function normalizeActivityType(input: ActivityTypeCreateInput): ActivityType {
 
 function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
   const timestamp = nowIso()
+  const templateKind = input.templateKind ?? 'grass'
+  const grassStatus =
+    templateKind === 'grass'
+      ? resolveGrassStatus({
+          templateKind,
+          grassStatus: input.grassStatus,
+          isArchived: input.isArchived,
+        })
+      : undefined
 
   return {
     id: input.id ?? createId('template'),
-    templateKind: input.templateKind ?? 'grass',
+    templateKind,
     title: input.title,
     date: input.date ?? todayDateString(),
     activityTypeId: input.activityTypeId,
@@ -198,7 +230,11 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     isSegmented: input.isSegmented,
     createdAt: input.createdAt ?? timestamp,
     updatedAt: input.updatedAt ?? timestamp,
-    isArchived: input.isArchived,
+    grassStatus,
+    isArchived:
+      templateKind === 'grass'
+        ? grassStatus === 'archived'
+        : input.isArchived,
   }
 }
 
@@ -487,9 +523,28 @@ async function updateTaskTemplate(input: TaskTemplateUpdateInput) {
 
   await mutateAppData((current) => {
     const result = updateById(current.taskTemplates, input, (item, updates) => ({
-      ...item,
-      ...updates,
-      updatedAt: updates.updatedAt ?? nowIso(),
+      ...(() => {
+        const merged = {
+          ...item,
+          ...updates,
+          updatedAt: updates.updatedAt ?? nowIso(),
+        }
+
+        if (merged.templateKind !== 'grass') {
+          return {
+            ...merged,
+            grassStatus: undefined,
+          }
+        }
+
+        const grassStatus = resolveGrassStatus(merged)
+
+        return {
+          ...merged,
+          grassStatus,
+          isArchived: grassStatus === 'archived',
+        }
+      })(),
     }))
     entity = result.entity
 

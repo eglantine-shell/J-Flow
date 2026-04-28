@@ -1,4 +1,5 @@
 export type InterestLevel = 1 | 2 | 3
+export type GrassStatus = 'active' | 'picked' | 'archived'
 
 export type TemplateKind = 'grass' | 'todo_recurring'
 
@@ -66,6 +67,7 @@ export interface TaskTemplate {
   isSegmented: boolean
   createdAt: string
   updatedAt: string
+  grassStatus?: GrassStatus
   isArchived: boolean
 }
 

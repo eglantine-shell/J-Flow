@@ -20,6 +20,7 @@ const progressPercentSchema = z
   .number()
   .min(PROGRESS_PERCENT_MIN)
   .max(PROGRESS_PERCENT_MAX)
+const grassStatusSchema = z.enum(['active', 'picked', 'archived'])
 
 export const sceneTagSchema = z.object({
   id: z.string().min(1),
@@ -50,6 +51,7 @@ export const taskTemplateSchema = z.object({
   isSegmented: z.boolean(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
+  grassStatus: grassStatusSchema.optional(),
   isArchived: z.boolean(),
 }).superRefine((template, context) => {
   if (template.templateKind === 'grass' && !template.activityTypeId) {
@@ -125,7 +127,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 4
+export const APP_DATA_SCHEMA_VERSION = 5
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),
