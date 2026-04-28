@@ -866,13 +866,13 @@ button:hover:not(:disabled) {
 
 .temporary-composer__segmented--light {
   padding: 2px;
-  min-height: 34px;
+  min-height: var(--template-control-height);
   width: 98px;
   background: rgba(255, 255, 255, 0.56);
 }
 
 .temporary-composer__segmented--light .segmented-control__button {
-  min-height: 28px;
+  min-height: calc(var(--template-control-height) - 8px);
 }
 
 .temporary-composer__more-toggle {
@@ -1951,6 +1951,7 @@ button:hover:not(:disabled) {
 
   .temporary-composer__recurrence-group {
     display: grid;
+    grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: minmax(88px, calc((100% - 12px) / 3));
     gap: 6px;

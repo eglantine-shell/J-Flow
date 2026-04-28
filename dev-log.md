@@ -1,5 +1,31 @@
 # Dev Log
 
+## 2026-04-28（V2.1-N4：重复滚动修复、segmented 高度对齐、favicon）
+
+### 本轮目标
+- 修正移动端重复选项滚动总长度没有真正变长的问题
+- 只对齐顶部两组 segmented control 的高度
+- 将根目录 `logo.PNG` 设置为网页图标
+
+### 本轮关键判断
+- 上一轮失败的根因是移动端样式虽然新增了 `grid-auto-columns`，但没有覆盖掉桌面端的 `grid-template-columns: repeat(5, ...)`，所以浏览器仍在做 5 等分压缩。
+- 顶部两组 segmented control 高度不一致，根因是右侧日夜切换仍保留了更小的 `min-height`。
+
+### 本轮修改
+- 更新 `src/styles/globals.css`
+  - 在移动端明确清掉重复选项的 `grid-template-columns`
+  - 让重复选项真正按横向列流展开
+  - 对齐顶部两组 segmented control 的高度
+- 更新 `index.html`
+  - 增加 favicon 链接
+- 新增 `public/logo.PNG`
+  - 从根目录复制，用于网页图标
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-28（V2.1-N3：移动端重复选项与种草按钮修正）
 
 ### 本轮目标
