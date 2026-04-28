@@ -970,6 +970,7 @@ button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.8);
   color: var(--text-muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .temporary-composer__recurrence-option--active {
@@ -1949,8 +1950,16 @@ button:hover:not(:disabled) {
   }
 
   .temporary-composer__recurrence-group {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
     gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .temporary-composer__recurrence-group::-webkit-scrollbar {
+    display: none;
   }
 
   .temporary-composer__top-row {
@@ -1967,6 +1976,11 @@ button:hover:not(:disabled) {
     min-height: 32px;
     padding: 0 8px;
     font-size: 0.76rem;
+  }
+
+  .temporary-composer__recurrence-option {
+    flex: 0 0 auto;
+    min-width: fit-content;
   }
 
   .setup-footer {

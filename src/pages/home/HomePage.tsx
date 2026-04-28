@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { SaveIcon } from '@/components/ui/Icons'
+import { ListIcon, SaveIcon } from '@/components/ui/Icons'
 import { CreateTaskTemplateForm, TemplateManagerPanel } from '@/features/templates'
 import { TodoModePanel } from '@/features/todo'
 
@@ -103,7 +103,7 @@ export function HomePage() {
                   setShowTemplateManager((current) => !current)
                 }}
               >
-                {showTemplateManager ? '−' : '+'}
+                <ListIcon className="icon-button__icon" />
               </button>
             </div>
           </div>
