@@ -1,21 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { CloseIcon } from '@/components/ui/Icons'
 import { appDataRepository } from '@/db'
-import {
-  createInitialTaskTemplateFormState,
-  TaskTemplateFormFields,
-  type TaskTemplateFormLoadState,
-  type TaskTemplateFormState,
-  validateTaskTemplateForm,
-} from '@/features/templates/TemplateFormFields'
-import type { TaskTemplate } from '@/types'
+import type { TaskTemplateFormLoadState } from '@/features/templates/TemplateFormFields'
+import type { InterestLevel, TaskTemplate } from '@/types'
 
-const toFormState = (template: TaskTemplate): TaskTemplateFormState => ({
-  activityTypeId: template.activityTypeId || '',
-  title: template.title,
-  sceneTagIds: template.sceneTagIds,
-  interestLevel: template.interestLevel,
-})
+const INTEREST_LEVEL_MIN = 1
+const INTEREST_LEVEL_MAX = 3
+
+const clampInterestLevel = (value: number): InterestLevel =>
+  Math.min(INTEREST_LEVEL_MAX, Math.max(INTEREST_LEVEL_MIN, value)) as InterestLevel
 
 export function TemplateManagerPanel() {
   const [loadState, setLoadState] = useState<TaskTemplateFormLoadState>({
@@ -24,13 +18,12 @@ export function TemplateManagerPanel() {
   })
   const [templates, setTemplates] = useState<TaskTemplate[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
-  const [formState, setFormState] = useState<TaskTemplateFormState>(
-    createInitialTaskTemplateFormState,
-  )
+  const [selectedActivityTypeId, setSelectedActivityTypeId] = useState('')
+  const [selectedSceneTagIds, setSelectedSceneTagIds] = useState<string[]>([])
+  const [pendingInterestTemplateId, setPendingInterestTemplateId] = useState<string | null>(null)
+  const [pendingArchiveTemplateId, setPendingArchiveTemplateId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
 
   const loadTemplates = async () => {
     const [sceneTags, activityTypes, allTemplates] = await Promise.all([
@@ -43,12 +36,17 @@ export function TemplateManagerPanel() {
       sceneTags,
       activityTypes,
     })
+
     setTemplates(
       allTemplates
         .filter(
           (template) => template.templateKind === 'grass' && template.grassStatus === 'active',
         )
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    )
+
+    setSelectedActivityTypeId((current) =>
+      current || activityTypes[0]?.id || '',
     )
   }
 
@@ -74,69 +72,80 @@ export function TemplateManagerPanel() {
     }
   }, [])
 
-  const editingTemplate = templates.find((template) => template.id === editingTemplateId) ?? null
-  const validationMessage = formState ? validateTaskTemplateForm(formState) : null
-
-  const startEditing = (template: TaskTemplate) => {
-    setEditingTemplateId(template.id)
-    setFormState(toFormState(template))
-    setErrorMessage(null)
-    setSuccessMessage(null)
-  }
-
-  const cancelEditing = () => {
-    setEditingTemplateId(null)
-    setFormState(createInitialTaskTemplateFormState())
-  }
-
-  const saveTemplate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    if (!editingTemplateId || !formState) {
+  useEffect(() => {
+    if (
+      selectedActivityTypeId &&
+      loadState.activityTypes.some((activityType) => activityType.id === selectedActivityTypeId)
+    ) {
       return
     }
 
-    if (validationMessage) {
-      setErrorMessage(validationMessage)
-      setSuccessMessage(null)
+    setSelectedActivityTypeId(loadState.activityTypes[0]?.id || '')
+  }, [loadState.activityTypes, selectedActivityTypeId])
+
+  const filteredTemplates = useMemo(() => {
+    if (!selectedActivityTypeId) {
+      return templates
+    }
+
+    return templates.filter((template) => {
+      if (template.activityTypeId !== selectedActivityTypeId) {
+        return false
+      }
+
+      if (selectedSceneTagIds.length === 0) {
+        return true
+      }
+
+      return template.sceneTagIds.some((sceneTagId) => selectedSceneTagIds.includes(sceneTagId))
+    })
+  }, [selectedActivityTypeId, selectedSceneTagIds, templates])
+
+  const toggleSceneTag = (sceneTagId: string) => {
+    setSelectedSceneTagIds((current) =>
+      current.includes(sceneTagId)
+        ? current.filter((id) => id !== sceneTagId)
+        : [...current, sceneTagId],
+    )
+  }
+
+  const updateInterestLevel = async (template: TaskTemplate, nextInterestLevel: number) => {
+    const nextValue = clampInterestLevel(nextInterestLevel)
+
+    if (nextValue === template.interestLevel) {
       return
     }
 
-    setIsSaving(true)
+    setPendingInterestTemplateId(template.id)
     setErrorMessage(null)
     setSuccessMessage(null)
 
     try {
-      const updated: TaskTemplate = await appDataRepository.taskTemplates.update({
-        id: editingTemplateId,
-        activityTypeId: formState.activityTypeId,
-        title: formState.title.trim(),
-        sceneTagIds: formState.sceneTagIds,
-        interestLevel: formState.interestLevel,
+      const updated = await appDataRepository.taskTemplates.update({
+        id: template.id,
+        interestLevel: nextValue,
       })
 
-      await loadTemplates()
-      setEditingTemplateId(updated.id)
-      setFormState(toFormState(updated))
-      setSuccessMessage(`已更新种草：${updated.title}`)
+      setTemplates((current) =>
+        current.map((item) => (item.id === template.id ? updated : item)),
+      )
     } catch (error: unknown) {
       setErrorMessage(
-        error instanceof Error ? error.message : '种草保存失败，请稍后重试。',
+        error instanceof Error ? error.message : '兴趣程度更新失败，请稍后重试。',
       )
     } finally {
-      setIsSaving(false)
+      setPendingInterestTemplateId(null)
     }
   }
 
   const archiveTemplate = async (template: TaskTemplate) => {
-    const shouldArchive = window.confirm(
-      `确认停用「${template.title}」吗？停用后它将不再参与未来自动生成与拔草，但不会改动已有实例。`,
-    )
+    const shouldArchive = window.confirm(`确认从种草库移除「${template.title}」吗？`)
 
     if (!shouldArchive) {
       return
     }
 
+    setPendingArchiveTemplateId(template.id)
     setErrorMessage(null)
     setSuccessMessage(null)
 
@@ -147,16 +156,14 @@ export function TemplateManagerPanel() {
         isArchived: true,
       })
 
-      if (editingTemplateId === template.id) {
-        cancelEditing()
-      }
-
-      await loadTemplates()
+      setTemplates((current) => current.filter((item) => item.id !== template.id))
       setSuccessMessage(`已停用种草：${template.title}`)
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error ? error.message : '种草停用失败，请稍后重试。',
       )
+    } finally {
+      setPendingArchiveTemplateId(null)
     }
   }
 
@@ -171,14 +178,6 @@ export function TemplateManagerPanel() {
 
   return (
     <div className="template-manager">
-      <div className="template-manager__intro">
-        <div>
-          <p className="eyebrow">Grass</p>
-          <h4>种草清单</h4>
-        </div>
-        <p>{templates.length} 条种草</p>
-      </div>
-
       {errorMessage ? (
         <p className="form-message form-message--danger">{errorMessage}</p>
       ) : null}
@@ -187,89 +186,109 @@ export function TemplateManagerPanel() {
         <p className="form-message form-message--success">{successMessage}</p>
       ) : null}
 
-      <div className="template-manager__layout">
-        <div className="template-manager__list">
-          {templates.length === 0 ? (
-            <div className="empty-state-card">
-              <p>还没有种草</p>
-            </div>
-          ) : (
-            templates.map((template) => (
-              <article className="template-list-item" key={template.id}>
-                <div className="template-list-item__header">
-                  <div>
-                    <h5>{template.title}</h5>
-                    {template.date ? <p>{template.date}</p> : null}
-                  </div>
-                  <div className="template-list-item__actions">
+      {loadState.activityTypes.length > 0 ? (
+        <div className="selection-grid selection-grid--compact" aria-label="种草清单筛选">
+          {loadState.activityTypes.map((activityType) => (
+            <button
+              key={activityType.id}
+              className={
+                activityType.id === selectedActivityTypeId
+                  ? 'tag-chip tag-chip--button tag-chip--selected'
+                  : 'tag-chip tag-chip--button'
+              }
+              type="button"
+              onClick={() => {
+                setSelectedActivityTypeId(activityType.id)
+              }}
+              aria-pressed={activityType.id === selectedActivityTypeId}
+            >
+              <span className="tag-chip__label">{activityType.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {loadState.sceneTags.length > 0 ? (
+        <div className="selection-grid selection-grid--compact" aria-label="有空就做筛选">
+          {loadState.sceneTags.map((sceneTag) => (
+            <button
+              key={sceneTag.id}
+              className={
+                selectedSceneTagIds.includes(sceneTag.id)
+                  ? 'tag-chip tag-chip--button tag-chip--selected'
+                  : 'tag-chip tag-chip--button'
+              }
+              type="button"
+              onClick={() => {
+                toggleSceneTag(sceneTag.id)
+              }}
+              aria-pressed={selectedSceneTagIds.includes(sceneTag.id)}
+            >
+              <span className="tag-chip__label">{sceneTag.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="template-manager__list">
+        {filteredTemplates.length === 0 ? (
+          <div className="empty-state-card">
+            <p>当前筛选下还没有活动种草</p>
+          </div>
+        ) : (
+          filteredTemplates.map((template) => {
+            const isInterestPending = pendingInterestTemplateId === template.id
+            const isArchivePending = pendingArchiveTemplateId === template.id
+
+            return (
+              <article className="template-list-item template-list-item--compact" key={template.id}>
+                <div className="template-list-item__header template-list-item__header--compact">
+                  <h5>{template.title}</h5>
+
+                  <div className="template-list-item__controls">
+                    <div className="template-stepper" aria-label={`调整 ${template.title} 的兴趣程度`}>
+                      <button
+                        className="template-stepper__button"
+                        type="button"
+                        disabled={isInterestPending || template.interestLevel <= INTEREST_LEVEL_MIN}
+                        onClick={() => {
+                          void updateInterestLevel(template, template.interestLevel - 1)
+                        }}
+                        aria-label={`降低 ${template.title} 的兴趣程度`}
+                      >
+                        −
+                      </button>
+                      <span className="template-stepper__value">{template.interestLevel}</span>
+                      <button
+                        className="template-stepper__button"
+                        type="button"
+                        disabled={isInterestPending || template.interestLevel >= INTEREST_LEVEL_MAX}
+                        onClick={() => {
+                          void updateInterestLevel(template, template.interestLevel + 1)
+                        }}
+                        aria-label={`提高 ${template.title} 的兴趣程度`}
+                      >
+                        +
+                      </button>
+                    </div>
+
                     <button
-                      className="ghost-button ghost-button--compact"
+                      className="template-list-item__archive"
                       type="button"
-                      onClick={() => {
-                        startEditing(template)
-                      }}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      className="ghost-button ghost-button--compact"
-                      type="button"
+                      disabled={isArchivePending}
                       onClick={() => {
                         void archiveTemplate(template)
                       }}
+                      aria-label={`停用 ${template.title}`}
                     >
-                      停用
+                      <CloseIcon className="template-list-item__archive-icon" />
                     </button>
                   </div>
                 </div>
-
-                <div className="template-list-item__meta">
-                  <span className={template.isNecessary ? 'status-chip status-chip--necessary' : 'status-chip'}>
-                    活动中
-                  </span>
-                  <span className="status-chip">兴趣 {template.interestLevel}</span>
-                  {template.sceneTagIds.length > 0 ? (
-                    <span className="status-chip">{template.sceneTagIds.length} 个场景</span>
-                  ) : (
-                    <span className="status-chip">无场景</span>
-                  )}
-                </div>
               </article>
-            ))
-          )}
-        </div>
-
-        <div className="template-manager__editor">
-          {editingTemplate ? (
-            <form className="template-form" onSubmit={saveTemplate}>
-              <div className="template-manager__editor-header">
-                <div>
-                  <p className="eyebrow">编辑</p>
-                  <h4>{editingTemplate.title}</h4>
-                </div>
-                <button className="ghost-button" type="button" onClick={cancelEditing}>
-                  关闭
-                </button>
-              </div>
-
-              <TaskTemplateFormFields
-                formState={formState}
-                setFormState={setFormState}
-                loadState={loadState}
-              />
-
-              <div className="setup-actions">
-                <button className="primary-button" type="submit" disabled={isSaving}>
-                  {isSaving ? '保存中...' : '保存种草'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="empty-state-card">
-              <p>选择一条种草开始编辑</p>
-            </div>
-          )}
-        </div>
+            )
+          })
+        )}
       </div>
     </div>
   )

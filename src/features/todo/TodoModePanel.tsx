@@ -47,13 +47,13 @@ type RecommendationPanelState = {
   timeBlock: TimeBlock
   activityTypeId: string
   sceneTagIds: string[]
-  recommended: TaskTemplate | null
   candidates: TaskTemplate[]
   errorMessage: string | null
   isLoading: boolean
 }
 
 type TemporaryTimeBlock = 'day' | 'night'
+type ComposerMode = 'manual' | 'grass'
 type EditingTitleDraftMap = Record<string, string>
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -121,6 +121,15 @@ function RecommendationInlineCard({
   onConfirm: (template: TaskTemplate) => void
 }) {
   const visibleCandidates = panelState.candidates
+  const getInterestActionOpacity = (level: number, maxLevel = 3) => {
+    if (maxLevel <= 1) {
+      return 1
+    }
+
+    const normalized = Math.max(0, Math.min(1, (level - 1) / (maxLevel - 1)))
+
+    return 0.45 + normalized * 0.55
+  }
 
   return (
     <div className="recommendation-card">
@@ -175,35 +184,24 @@ function RecommendationInlineCard({
           ) : (
             <div className="candidate-list">
               {visibleCandidates.map((candidate) => {
-                const isRecommended = panelState.recommended?.id === candidate.id
+                const actionOpacity = getInterestActionOpacity(candidate.interestLevel)
 
                 return (
-                  <article
-                    className={
-                      isRecommended
-                        ? 'candidate-item candidate-item--recommended'
-                        : 'candidate-item'
-                    }
-                    key={candidate.id}
-                  >
+                  <article className="candidate-item" key={candidate.id}>
                     <div className="candidate-item__main">
                       <h6>{candidate.title}</h6>
-                      <div className="tag-row">
-                        {isRecommended ? <span className="status-chip">默认推荐</span> : null}
-                        <span className="status-chip">兴趣 {candidate.interestLevel}</span>
-                        {candidate.date ? (
-                          <span className="status-chip">{candidate.date}</span>
-                        ) : null}
-                      </div>
                     </div>
                     <button
-                      className={isRecommended ? 'primary-button' : 'ghost-button'}
+                      className="candidate-item__add-button"
                       type="button"
                       onClick={() => {
                         onConfirm(candidate)
                       }}
+                      aria-label={`添加 ${candidate.title}`}
+                      title="添加"
+                      style={{ opacity: actionOpacity }}
                     >
-                      添加
+                      <PlusIcon className="candidate-item__add-icon" />
                     </button>
                   </article>
                 )
@@ -222,6 +220,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     errorMessage: null,
     items: [],
   })
+  const [composerMode, setComposerMode] = useState<ComposerMode>('manual')
   const [temporaryTitle, setTemporaryTitle] = useState('')
   const [temporaryTimeBlock, setTemporaryTimeBlock] = useState<TemporaryTimeBlock>('day')
   const [showMoreOptions, setShowMoreOptions] = useState(false)
@@ -297,10 +296,18 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }, [selectedDate, selectedDateKey])
 
   useEffect(() => {
-    if (!showMoreOptions) {
+    if (!showMoreOptions && composerMode === 'manual') {
       setRecommendationPanel(null)
     }
-  }, [showMoreOptions])
+  }, [composerMode, showMoreOptions])
+
+  useEffect(() => {
+    if (composerMode !== 'grass' || isPastDate) {
+      return
+    }
+
+    void openRecommendationPanel()
+  }, [composerMode, temporaryTimeBlock, isPastDate])
 
   const dayItems = useMemo(
     () => viewState.items.filter((item) => item.timeBlock === 'day'),
@@ -523,7 +530,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       timeBlock,
       activityTypeId,
       sceneTagIds,
-      recommended: recommendation.recommended,
       candidates: recommendation.candidates,
       errorMessage: null,
       isLoading: false,
@@ -550,19 +556,21 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         setSceneTags(nextSceneTags)
       }
 
-      const defaultActivityTypeId = nextActivityTypes[0]?.id
+      const nextActivityTypeId =
+        recommendationPanel?.activityTypeId || nextActivityTypes[0]?.id
 
-      if (!defaultActivityTypeId) {
+      if (!nextActivityTypeId) {
         setComposerErrorMessage('当前还没有可用的种草清单。')
         return
       }
 
+      const nextSceneTagIds = recommendationPanel?.sceneTagIds ?? []
+
       setComposerErrorMessage(null)
       setRecommendationPanel({
         timeBlock: temporaryTimeBlock,
-        activityTypeId: defaultActivityTypeId,
-        sceneTagIds: [],
-        recommended: null,
+        activityTypeId: nextActivityTypeId,
+        sceneTagIds: nextSceneTagIds,
         candidates: [],
         errorMessage: null,
         isLoading: true,
@@ -570,15 +578,14 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
       await loadRecommendationPanel({
         timeBlock: temporaryTimeBlock,
-        activityTypeId: defaultActivityTypeId,
-        sceneTagIds: [],
+        activityTypeId: nextActivityTypeId,
+        sceneTagIds: nextSceneTagIds,
       })
     } catch (error: unknown) {
       setRecommendationPanel({
         timeBlock: temporaryTimeBlock,
         activityTypeId: activityTypes[0]?.id ?? '',
         sceneTagIds: [],
-        recommended: null,
         candidates: [],
         errorMessage:
           error instanceof Error ? error.message : '拔草候选读取失败，请稍后重试。',
@@ -610,7 +617,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         timeBlock: temporaryTimeBlock,
         activityTypeId,
         sceneTagIds: recommendationPanel.sceneTagIds,
-        recommended: null,
         candidates: [],
         errorMessage:
           error instanceof Error ? error.message : '拔草候选读取失败，请稍后重试。',
@@ -646,7 +652,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         timeBlock: temporaryTimeBlock,
         activityTypeId: recommendationPanel.activityTypeId,
         sceneTagIds: nextSceneTagIds,
-        recommended: null,
         candidates: [],
         errorMessage:
           error instanceof Error ? error.message : '拔草候选读取失败，请稍后重试。',
@@ -1199,24 +1204,43 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     <div className="mode-panel">
       {!isPastDate ? (
         <div className="temporary-composer temporary-composer--compact">
-          <div className="temporary-composer__controls temporary-composer__controls--expanded">
-            <input
-              className="temporary-composer__input"
-              type="text"
-              value={temporaryTitle}
-              onChange={(event) => {
-                setTemporaryTitle(event.target.value)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void createTemporaryItem()
+          <div className="temporary-composer__top-row">
+            <div className="segmented-control temporary-composer__mode-segmented" aria-label="新增模式">
+              <button
+                className={
+                  composerMode === 'manual'
+                    ? 'segmented-control__button segmented-control__button--active'
+                    : 'segmented-control__button'
                 }
-              }}
-              placeholder="输入一条 Todo"
-            />
+                type="button"
+                onClick={() => {
+                  setComposerMode('manual')
+                  setComposerErrorMessage(null)
+                  setRecommendationPanel(null)
+                }}
+              >
+                普通条目
+              </button>
+              <button
+                className={
+                  composerMode === 'grass'
+                    ? 'segmented-control__button segmented-control__button--active'
+                    : 'segmented-control__button'
+                }
+                type="button"
+                onClick={() => {
+                  setComposerMode('grass')
+                  setComposerErrorMessage(null)
+                }}
+              >
+                拔草条目
+              </button>
+            </div>
 
-            <div className="segmented-control temporary-composer__segmented" aria-label="Todo 时段">
+            <div
+              className="segmented-control temporary-composer__segmented temporary-composer__segmented--light"
+              aria-label="Todo 时段"
+            >
               <button
                 className={
                   temporaryTimeBlock === 'day'
@@ -1248,59 +1272,140 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 <MoonIcon className="segmented-control__icon" />
               </button>
             </div>
-
-            <button
-              className="ghost-button ghost-button--compact temporary-composer__more-toggle"
-              type="button"
-              onClick={() => {
-                setComposerErrorMessage(null)
-
-                if (showMoreOptions) {
-                  resetExpandedComposerState()
-                } else {
-                  setShowMoreOptions(true)
-                }
-              }}
-              aria-label={showMoreOptions ? '收起更多选项' : '打开更多选项'}
-              title={showMoreOptions ? '收起更多选项' : '打开更多选项'}
-            >
-              <MoreIcon className="temporary-composer__more-icon" />
-            </button>
-
-            <button
-              className="primary-button primary-button--icon"
-              type="button"
-              disabled={temporaryTitle.trim().length === 0}
-              onClick={() => {
-                void createTemporaryItem()
-              }}
-              aria-label="新增 Todo"
-              title="新增 Todo"
-            >
-              <PlusIcon className="temporary-composer__add-icon" />
-            </button>
           </div>
 
-          {showMoreOptions ? (
-            <div className="temporary-composer__more">
-              <div className="temporary-composer__section">
-                <div className="temporary-composer__action-row">
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => {
-                      if (recommendationPanel) {
-                        setRecommendationPanel(null)
-                        return
-                      }
-
-                      void openRecommendationPanel()
+          {composerMode === 'manual' ? (
+            <>
+              <div className="temporary-composer__controls">
+                <div className="temporary-composer__input-shell">
+                  <input
+                    className="temporary-composer__input temporary-composer__input--with-action"
+                    type="text"
+                    value={temporaryTitle}
+                    onChange={(event) => {
+                      setTemporaryTitle(event.target.value)
                     }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void createTemporaryItem()
+                      }
+                    }}
+                    placeholder="输入一条 Todo"
+                  />
+                  <button
+                    className="temporary-composer__input-action"
+                    type="button"
+                    disabled={temporaryTitle.trim().length === 0}
+                    onClick={() => {
+                      void createTemporaryItem()
+                    }}
+                    aria-label="新增 Todo"
+                    title="新增 Todo"
                   >
-                    {recommendationPanel ? '收起拔草推荐' : '打开拔草推荐'}
+                    <PlusIcon className="temporary-composer__add-icon" />
                   </button>
                 </div>
 
+                <button
+                  className="ghost-button ghost-button--compact temporary-composer__more-toggle"
+                  type="button"
+                  onClick={() => {
+                    setComposerErrorMessage(null)
+
+                    if (showMoreOptions) {
+                      resetExpandedComposerState()
+                    } else {
+                      setShowMoreOptions(true)
+                    }
+                  }}
+                  aria-label={showMoreOptions ? '收起更多选项' : '打开更多选项'}
+                  title={showMoreOptions ? '收起更多选项' : '打开更多选项'}
+                >
+                  <MoreIcon className="temporary-composer__more-icon" />
+                </button>
+              </div>
+
+              {showMoreOptions ? (
+                <div className="temporary-composer__more">
+                  <div className="temporary-composer__section temporary-composer__section--form">
+                    <div className="temporary-composer__option-grid">
+                      <label className="toggle-chip temporary-composer__option-chip">
+                        <input
+                          type="checkbox"
+                          checked={isNecessaryDraft}
+                          onChange={(event) => {
+                            setIsNecessaryDraft(event.target.checked)
+                          }}
+                        />
+                        <span>必要</span>
+                      </label>
+
+                      <div className="temporary-composer__recurrence-group" aria-label="Todo 重复规则">
+                        {recurringOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            className={
+                              recurrenceDraft === option.value
+                                ? 'temporary-composer__recurrence-option temporary-composer__recurrence-option--active'
+                                : 'temporary-composer__recurrence-option'
+                            }
+                            type="button"
+                            onClick={() => {
+                              setRecurrenceDraft(option.value)
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <label className="toggle-chip temporary-composer__option-chip">
+                        <input
+                          type="checkbox"
+                          checked={requiresPreparationDraft}
+                          onChange={(event) => {
+                            const nextChecked = event.target.checked
+                            setRequiresPreparationDraft(nextChecked)
+
+                            if (!nextChecked) {
+                              setPreparationNotesDraft('')
+                            }
+                          }}
+                        />
+                        <span>准备</span>
+                      </label>
+
+                      <label className="toggle-chip temporary-composer__option-chip">
+                        <input
+                          type="checkbox"
+                          checked={isSegmentedDraft}
+                          onChange={(event) => {
+                            setIsSegmentedDraft(event.target.checked)
+                          }}
+                        />
+                        <span>分次</span>
+                      </label>
+                    </div>
+
+                    {requiresPreparationDraft ? (
+                      <textarea
+                        className="template-form__notes-input"
+                        rows={2}
+                        value={preparationNotesDraft}
+                        onChange={(event) => {
+                          setPreparationNotesDraft(event.target.value)
+                        }}
+                        placeholder="记录这次 Todo 的准备备注"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="temporary-composer__more temporary-composer__more--grass">
+              <div className="temporary-composer__section">
                 {recommendationPanel ? (
                   <RecommendationInlineCard
                     activityTypes={activityTypes}
@@ -1316,79 +1421,12 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                       void addFromTemplate(template)
                     }}
                   />
-                ) : null}
-              </div>
-
-              <div className="temporary-composer__section temporary-composer__section--form">
-                <div className="template-form__row template-form__row--inline template-form__row--decision">
-                  <label className="toggle-chip">
-                    <input
-                      type="checkbox"
-                      checked={isNecessaryDraft}
-                      onChange={(event) => {
-                        setIsNecessaryDraft(event.target.checked)
-                      }}
-                    />
-                    <span>必要事项</span>
-                  </label>
-
-                  <select
-                    className="template-form__recurrence-select"
-                    value={recurrenceDraft}
-                    onChange={(event) => {
-                      setRecurrenceDraft(event.target.value as RecurrenceRule)
-                    }}
-                    aria-label="Todo 重复规则"
-                  >
-                    {recurringOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <label className="toggle-chip">
-                  <input
-                    type="checkbox"
-                    checked={requiresPreparationDraft}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked
-                      setRequiresPreparationDraft(nextChecked)
-
-                      if (!nextChecked) {
-                        setPreparationNotesDraft('')
-                      }
-                    }}
-                  />
-                  <span>需要准备</span>
-                </label>
-
-                {requiresPreparationDraft ? (
-                  <textarea
-                    className="template-form__notes-input"
-                    rows={2}
-                    value={preparationNotesDraft}
-                    onChange={(event) => {
-                      setPreparationNotesDraft(event.target.value)
-                    }}
-                    placeholder="记录这次 Todo 的准备备注"
-                  />
-                ) : null}
-
-                <label className="toggle-chip">
-                  <input
-                    type="checkbox"
-                    checked={isSegmentedDraft}
-                    onChange={(event) => {
-                      setIsSegmentedDraft(event.target.checked)
-                    }}
-                  />
-                  <span>分次事项</span>
-                </label>
+                ) : (
+                  <p className="form-message">正在加载候选...</p>
+                )}
               </div>
             </div>
-          ) : null}
+          )}
 
           {composerErrorMessage ? (
             <p className="form-message form-message--danger">{composerErrorMessage}</p>

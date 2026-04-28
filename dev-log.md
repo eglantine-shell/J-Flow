@@ -1,5 +1,149 @@
 # Dev Log
 
+## 2026-04-28（V2.1-M：种草区 UI 收口）
+
+### 本轮目标
+- 收缩种草输入区，去掉底部文字保存按钮
+- 把种草列表从“完整编辑后台”改成 backlog 风格列表
+- 为种草列表补齐和拔草模式一致的 tag 筛选
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/pages/home/HomePage.tsx`
+- `src/features/templates/CreateTaskTemplateForm.tsx`
+- `src/features/templates/TemplateFormFields.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- 本轮只改种草区 UI，不动 Todo 输入区、Todo 列表、schema/storage 和生命周期规则。
+- “种草”标题右侧工具区更适合作为新增保存入口，这样新增表单本身可以退回为轻量输入区域。
+- 种草列表既然当前只展示 `active grass`，就不应继续保留完整编辑后台，而应改成 backlog list。
+
+### 本轮关键决策
+- 种草内容输入改为单行 input。
+- 兴趣程度移到种草内容输入下方。
+- `保存种草` 文本按钮移除，改为标题工具区 `save icon`。
+- 种草列表不再支持完整编辑，只保留：
+  - 兴趣程度 stepper
+  - 删除 / 停用
+- 种草列表筛选改为：
+  - 种草清单 tag 单选
+  - 场景 tag 多选
+  - 不选场景时不过滤
+
+### 本轮修改
+- 更新 `src/pages/home/HomePage.tsx`
+  - 种草标题工具区改为：
+    - 展开 / 收起输入区 icon
+    - 保存 icon
+    - 展开 / 收起种草列表 icon
+  - 保存 icon 通过表单 `id` 直接触发种草保存
+- 更新 `src/components/ui/Icons.tsx`
+  - 补充标题工具区所需的展开 / 收起 / 列表 icon
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 移除底部 `保存种草` 按钮
+  - 向标题工具区暴露当前是否可保存 / 是否正在保存
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 种草内容改为单行输入
+  - 兴趣程度移到文本框下方
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 去掉完整编辑面板
+  - 去掉后台式说明文字
+  - 新增活动清单 tag 单选与场景 tag 多选筛选
+  - 条目改为标题 + 兴趣 stepper + 停用 `×`
+- 更新 `src/styles/globals.css`
+  - 为标题工具区 disabled icon、单行输入、种草列表 stepper 和停用按钮补样式
+  - 去掉种草列表的后台感虚线边框
+- 更新 `handoff.md`
+  - 记录种草区 UI 已收口到 backlog 视角
+- 更新 `manual-test-checklist.md`
+  - 增补种草输入区与种草列表筛选 / stepper 的手测口径
+
+### 当前风险与待确认问题
+- 当前保存 icon 仍依赖“新增种草输入区已展开”这一前提；收起状态下会禁用，这和当前工具区设计一致。
+- 种草列表目前仍只展示 `active`，`picked / archived` 的查看能力仍是后续任务。
+- 兴趣 stepper 目前仍按 1~3 限制，未来若扩到 5 级，需要同步调整类型与视觉节奏。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
+## 2026-04-28（V2.1-L：Todo 输入区 + 拔草面板 UI 收口）
+
+### 本轮目标
+- 将 Todo 输入区改为“普通条目 / 拔草条目”双模式 segmented control
+- 去掉拔草的独立打开 / 收起按钮
+- 收口必要 / 重复 / 准备 / 分次的控件视觉
+- 精简拔草候选列表的展示
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `manual-test-checklist.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/styles/globals.css`
+- `src/components/ui/Icons.tsx`
+
+### 本轮关键判断
+- 本轮只改 Todo 输入区与拔草面板 UI，不改种草区 UI，不改业务规则，不改 schema/storage。
+- “拔草条目”更适合成为输入区的一种模式，而不是额外按钮打开的二级面板。
+- 普通条目模式应把添加动作收进输入框内部，减少外部按钮噪音。
+- 重复规则若继续使用原生 `select`，会持续和其他三个控件不协调，因此改为同系统的 pill options 更合适。
+
+### 本轮关键决策
+- 顶部第一行改为两组 segmented control：
+  - 左侧：`普通条目 / 拔草条目`
+  - 右侧：太阳 / 月亮
+- 普通条目模式第二行改为：
+  - 输入框
+  - 输入框内加号按钮
+  - `...` 更多按钮
+- 拔草条目模式不再显示：
+  - 打开 / 收起按钮
+  - 默认推荐文案
+  - 候选列表说明
+  - 兴趣等级文字说明
+- 候选列表右侧加号使用黄色系，并按兴趣等级控制透明度
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 新增 `composerMode`
+  - Todo 输入区改为双 segmented control
+  - 普通条目输入改为输入框内添加按钮
+  - 拔草模式切换后直接展示筛选与列表
+  - 重复规则改为 inline pill options
+  - 候选项改为标题 + 右侧加号
+  - 新增兴趣加号透明度 helper
+- 更新 `src/styles/globals.css`
+  - 为模式切换、输入框内按钮、轻量日夜分段补样式
+  - 为四项执行属性补统一 option grid 样式
+  - 去掉旧拔草按钮 / 虚线分隔的视觉依赖
+  - 精简候选列表样式
+- 更新 `handoff.md`
+  - 记录当前输入区与拔草面板 UI 口径
+- 更新 `dev-log.md`
+  - 记录本轮 UI 收口决策
+- 更新 `manual-test-checklist.md`
+  - 更新输入区与拔草面板的手测口径
+
+### 当前风险与待确认问题
+- 当前 `picked / archived` 的管理视图仍未补，这轮只处理输入区与拔草面板。
+- 拔草模式切换时会保留当前筛选条件，但未来是否要记忆更长期的用户选择仍待确认。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-28（V2.1-K：种草生命周期实现第一版）
 
 ### 本轮目标

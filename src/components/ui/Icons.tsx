@@ -1,11 +1,14 @@
 import {
   CircleAlert,
   Check,
+  ChevronDown,
+  ChevronUp,
   Ellipsis,
   Moon,
   PencilLine,
   Plus,
   Repeat2,
+  Rows3,
   Save,
   Settings2,
   SunMedium,
@@ -50,6 +53,18 @@ export function EditIcon(props: IconProps) {
 
 export function SaveIcon(props: IconProps) {
   return <Save {...defaultProps} {...props} />
+}
+
+export function CollapseIcon(props: IconProps) {
+  return <ChevronUp {...defaultProps} {...props} />
+}
+
+export function ExpandIcon(props: IconProps) {
+  return <ChevronDown {...defaultProps} {...props} />
+}
+
+export function ListIcon(props: IconProps) {
+  return <Rows3 {...defaultProps} {...props} />
 }
 
 export function MoreIcon(props: IconProps) {

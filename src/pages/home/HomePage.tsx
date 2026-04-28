@@ -1,5 +1,11 @@
 import { useMemo, useState } from 'react'
 
+import {
+  CollapseIcon,
+  ExpandIcon,
+  ListIcon,
+  SaveIcon,
+} from '@/components/ui/Icons'
 import { CreateTaskTemplateForm, TemplateManagerPanel } from '@/features/templates'
 import { TodoModePanel } from '@/features/todo'
 
@@ -21,6 +27,8 @@ export function HomePage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [showComposer, setShowComposer] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)
+  const [canSaveGrass, setCanSaveGrass] = useState(false)
+  const [isSavingGrass, setIsSavingGrass] = useState(false)
 
   const selectedHeaderLabel = useMemo(
     () => formatHeaderLabel(selectedDate),
@@ -79,7 +87,21 @@ export function HomePage() {
                   setShowComposer((current) => !current)
                 }}
               >
-                {showComposer ? '−' : '+'}
+                {showComposer ? (
+                  <CollapseIcon className="icon-button__icon" />
+                ) : (
+                  <ExpandIcon className="icon-button__icon" />
+                )}
+              </button>
+
+              <button
+                className="icon-button icon-button--toolbar"
+                type="submit"
+                form="grass-create-form"
+                aria-label={isSavingGrass ? '保存种草中' : '保存种草'}
+                disabled={!showComposer || !canSaveGrass || isSavingGrass}
+              >
+                <SaveIcon className="icon-button__icon" />
               </button>
 
               <button
@@ -90,14 +112,20 @@ export function HomePage() {
                   setShowTemplateManager((current) => !current)
                 }}
               >
-                ≡
+                <ListIcon className="icon-button__icon" />
               </button>
             </div>
           </div>
 
           {showComposer ? (
             <div className="composer-panel">
-              <CreateTaskTemplateForm />
+              <CreateTaskTemplateForm
+                formId="grass-create-form"
+                onSubmitStateChange={({ canSubmit, isSaving }) => {
+                  setCanSaveGrass(canSubmit)
+                  setIsSavingGrass(isSaving)
+                }}
+              />
             </div>
           ) : null}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { appDataRepository } from '@/db'
 import {
@@ -9,7 +9,13 @@ import {
   validateTaskTemplateForm,
 } from '@/features/templates/TemplateFormFields'
 
-export function CreateTaskTemplateForm() {
+export function CreateTaskTemplateForm({
+  formId = 'grass-create-form',
+  onSubmitStateChange,
+}: {
+  formId?: string
+  onSubmitStateChange?: (state: { canSubmit: boolean; isSaving: boolean }) => void
+}) {
   const [formState, setFormState] = useState<TaskTemplateFormState>(
     createInitialTaskTemplateFormState,
   )
@@ -65,6 +71,17 @@ export function CreateTaskTemplateForm() {
   }, [])
 
   const validationMessage = validateTaskTemplateForm(formState)
+  const canSubmit = useMemo(
+    () => !validationMessage && !isSaving && loadState.activityTypes.length > 0,
+    [validationMessage, isSaving, loadState.activityTypes.length],
+  )
+
+  useEffect(() => {
+    onSubmitStateChange?.({
+      canSubmit,
+      isSaving,
+    })
+  }, [canSubmit, isSaving, onSubmitStateChange])
 
   const handleCreateSceneTag = async (name: string) => {
     const created = await appDataRepository.sceneTags.create({
@@ -213,7 +230,7 @@ export function CreateTaskTemplateForm() {
   }
 
   return (
-    <form className="template-form" onSubmit={handleSubmit}>
+    <form className="template-form" id={formId} onSubmit={handleSubmit}>
       <TaskTemplateFormFields
         formState={formState}
         setFormState={setFormState}
@@ -231,16 +248,6 @@ export function CreateTaskTemplateForm() {
       {successMessage ? (
         <p className="form-message form-message--success">{successMessage}</p>
       ) : null}
-
-      <div className="setup-actions">
-        <button
-          className="primary-button"
-          type="submit"
-          disabled={isSaving || loadState.activityTypes.length === 0}
-        >
-          {isSaving ? '保存中...' : '保存种草'}
-        </button>
-      </div>
     </form>
   )
 }

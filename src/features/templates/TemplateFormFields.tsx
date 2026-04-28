@@ -279,11 +279,11 @@ export function TaskTemplateFormFields({
       </div>
 
       <div className="template-form__row template-form__row--content">
-        <textarea
+        <input
           className="template-form__content-input"
-          rows={2}
+          type="text"
           value={formState.title}
-            onChange={(event) => {
+          onChange={(event) => {
             setFormState((current) => ({
               ...current,
               title: event.target.value,
@@ -292,6 +292,33 @@ export function TaskTemplateFormFields({
           placeholder="输入种草内容"
           aria-label="种草内容"
         />
+      </div>
+
+      <div className="template-form__row">
+        <div className="template-form__inline-field template-form__inline-field--interest">
+          <span>兴趣程度</span>
+          <div className="segmented-control">
+            {interestOptions.map((option) => (
+              <button
+                key={option.value}
+                className={
+                  option.value === formState.interestLevel
+                    ? 'segmented-control__button segmented-control__button--active'
+                    : 'segmented-control__button'
+                }
+                type="button"
+                onClick={() => {
+                  setFormState((current) => ({
+                    ...current,
+                    interestLevel: option.value,
+                  }))
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="template-form__row">
@@ -382,33 +409,6 @@ export function TaskTemplateFormFields({
         {sceneTagError ? (
           <p className="form-message form-message--danger">{sceneTagError}</p>
         ) : null}
-      </div>
-
-      <div className="template-form__row">
-        <div className="template-form__inline-field template-form__inline-field--interest">
-          <span>兴趣程度</span>
-          <div className="segmented-control">
-            {interestOptions.map((option) => (
-              <button
-                key={option.value}
-                className={
-                  option.value === formState.interestLevel
-                    ? 'segmented-control__button segmented-control__button--active'
-                    : 'segmented-control__button'
-                }
-                type="button"
-                onClick={() => {
-                  setFormState((current) => ({
-                    ...current,
-                    interestLevel: option.value,
-                  }))
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )
