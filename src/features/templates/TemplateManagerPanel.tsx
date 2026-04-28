@@ -246,6 +246,7 @@ export function TemplateManagerPanel() {
                   <h5>{template.title}</h5>
 
                   <div className="template-list-item__controls">
+                    <span className="template-list-item__interest-label">兴趣程度</span>
                     <div className="template-stepper" aria-label={`调整 ${template.title} 的兴趣程度`}>
                       <button
                         className="template-stepper__button"

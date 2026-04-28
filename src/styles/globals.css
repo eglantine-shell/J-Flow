@@ -799,9 +799,14 @@ button:hover:not(:disabled) {
 
 .temporary-composer__top-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) 98px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+}
+
+.temporary-composer__top-row-side {
+  display: inline-flex;
+  justify-content: flex-end;
 }
 
 .temporary-composer__controls {
@@ -855,9 +860,14 @@ button:hover:not(:disabled) {
   font-weight: 600;
 }
 
+.temporary-composer__mode-segmented {
+  min-width: 0;
+}
+
 .temporary-composer__segmented--light {
   padding: 2px;
   min-height: 34px;
+  width: 98px;
   background: rgba(255, 255, 255, 0.56);
 }
 
@@ -899,7 +909,7 @@ button:hover:not(:disabled) {
 }
 
 .temporary-composer__section--form {
-  gap: 10px;
+  gap: 8px;
 }
 
 .temporary-composer__section .recommendation-card {
@@ -916,6 +926,15 @@ button:hover:not(:disabled) {
   gap: 6px;
 }
 
+.temporary-composer__settings-row {
+  display: grid;
+  gap: 8px;
+}
+
+.temporary-composer__settings-row--recurrence {
+  padding-top: 2px;
+}
+
 .temporary-composer__option-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -924,21 +943,21 @@ button:hover:not(:disabled) {
 
 .temporary-composer__option-chip,
 .temporary-composer__recurrence-option {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 14px;
-  padding: 0 12px;
+  padding: 0 11px;
   font-size: 0.8rem;
 }
 
 .temporary-composer__option-chip {
   justify-content: center;
+  gap: 6px;
 }
 
 .temporary-composer__recurrence-group {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
-  grid-column: 1 / -1;
 }
 
 .temporary-composer__recurrence-option {
@@ -958,7 +977,7 @@ button:hover:not(:disabled) {
 }
 
 .temporary-composer__more--grass {
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .temporary-composer__hint-row,
@@ -1641,6 +1660,12 @@ button:hover:not(:disabled) {
   margin-left: auto;
 }
 
+.template-list-item__interest-label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .template-stepper {
   display: inline-flex;
   align-items: center;
@@ -1824,10 +1849,6 @@ button:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .temporary-composer__top-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .todo-item-card__layout {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -1907,7 +1928,16 @@ button:hover:not(:disabled) {
   }
 
   .temporary-composer__recurrence-group {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .temporary-composer__top-row {
+    grid-template-columns: minmax(0, 1fr) 98px;
+  }
+
+  .template-list-item__controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .setup-footer {

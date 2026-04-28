@@ -1237,173 +1237,175 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
               </button>
             </div>
 
-            <div
-              className="segmented-control temporary-composer__segmented temporary-composer__segmented--light"
-              aria-label="Todo 时段"
-            >
-              <button
-                className={
-                  temporaryTimeBlock === 'day'
-                    ? 'segmented-control__button segmented-control__button--active'
-                    : 'segmented-control__button'
-                }
-                type="button"
-                onClick={() => {
-                  setTemporaryTimeBlock('day')
-                }}
-                aria-label="白天"
-                title="白天"
+            <div className="temporary-composer__top-row-side">
+              <div
+                className="segmented-control temporary-composer__segmented temporary-composer__segmented--light"
+                aria-label="Todo 时段"
               >
-                <SunIcon className="segmented-control__icon" />
-              </button>
-              <button
-                className={
-                  temporaryTimeBlock === 'night'
-                    ? 'segmented-control__button segmented-control__button--active'
-                    : 'segmented-control__button'
-                }
-                type="button"
-                onClick={() => {
-                  setTemporaryTimeBlock('night')
-                }}
-                aria-label="晚上"
-                title="晚上"
-              >
-                <MoonIcon className="segmented-control__icon" />
-              </button>
+                <button
+                  className={
+                    temporaryTimeBlock === 'day'
+                      ? 'segmented-control__button segmented-control__button--active'
+                      : 'segmented-control__button'
+                  }
+                  type="button"
+                  onClick={() => {
+                    setTemporaryTimeBlock('day')
+                  }}
+                  aria-label="白天"
+                  title="白天"
+                >
+                  <SunIcon className="segmented-control__icon" />
+                </button>
+                <button
+                  className={
+                    temporaryTimeBlock === 'night'
+                      ? 'segmented-control__button segmented-control__button--active'
+                      : 'segmented-control__button'
+                  }
+                  type="button"
+                  onClick={() => {
+                    setTemporaryTimeBlock('night')
+                  }}
+                  aria-label="晚上"
+                  title="晚上"
+                >
+                  <MoonIcon className="segmented-control__icon" />
+                </button>
+              </div>
             </div>
           </div>
 
-          {composerMode === 'manual' ? (
-            <>
-              <div className="temporary-composer__controls">
-                <div className="temporary-composer__input-shell">
-                  <input
-                    className="temporary-composer__input temporary-composer__input--with-action"
-                    type="text"
-                    value={temporaryTitle}
-                    onChange={(event) => {
-                      setTemporaryTitle(event.target.value)
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void createTemporaryItem()
-                      }
-                    }}
-                    placeholder="输入一条 Todo"
-                  />
-                  <button
-                    className="temporary-composer__input-action"
-                    type="button"
-                    disabled={temporaryTitle.trim().length === 0}
-                    onClick={() => {
-                      void createTemporaryItem()
-                    }}
-                    aria-label="新增 Todo"
-                    title="新增 Todo"
-                  >
-                    <PlusIcon className="temporary-composer__add-icon" />
-                  </button>
+          <div className="temporary-composer__controls">
+            <div className="temporary-composer__input-shell">
+              <input
+                className="temporary-composer__input temporary-composer__input--with-action"
+                type="text"
+                value={temporaryTitle}
+                onChange={(event) => {
+                  setTemporaryTitle(event.target.value)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void createTemporaryItem()
+                  }
+                }}
+                placeholder="输入一条 Todo"
+              />
+              <button
+                className="temporary-composer__input-action"
+                type="button"
+                disabled={temporaryTitle.trim().length === 0}
+                onClick={() => {
+                  void createTemporaryItem()
+                }}
+                aria-label="新增 Todo"
+                title="新增 Todo"
+              >
+                <PlusIcon className="temporary-composer__add-icon" />
+              </button>
+            </div>
+
+            <button
+              className="ghost-button ghost-button--compact temporary-composer__more-toggle"
+              type="button"
+              onClick={() => {
+                setComposerErrorMessage(null)
+
+                if (showMoreOptions) {
+                  resetExpandedComposerState()
+                } else {
+                  setShowMoreOptions(true)
+                }
+              }}
+              aria-label={showMoreOptions ? '收起更多选项' : '打开更多选项'}
+              title={showMoreOptions ? '收起更多选项' : '打开更多选项'}
+            >
+              <MoreIcon className="temporary-composer__more-icon" />
+            </button>
+          </div>
+
+          {showMoreOptions ? (
+            <div className="temporary-composer__more">
+              <div className="temporary-composer__section temporary-composer__section--form">
+                <div className="temporary-composer__settings-row">
+                  <label className="toggle-chip temporary-composer__option-chip">
+                    <input
+                      type="checkbox"
+                      checked={isNecessaryDraft}
+                      onChange={(event) => {
+                        setIsNecessaryDraft(event.target.checked)
+                      }}
+                    />
+                    <span>必要</span>
+                  </label>
+
+                  <label className="toggle-chip temporary-composer__option-chip">
+                    <input
+                      type="checkbox"
+                      checked={requiresPreparationDraft}
+                      onChange={(event) => {
+                        const nextChecked = event.target.checked
+                        setRequiresPreparationDraft(nextChecked)
+
+                        if (!nextChecked) {
+                          setPreparationNotesDraft('')
+                        }
+                      }}
+                    />
+                    <span>准备</span>
+                  </label>
+
+                  <label className="toggle-chip temporary-composer__option-chip">
+                    <input
+                      type="checkbox"
+                      checked={isSegmentedDraft}
+                      onChange={(event) => {
+                        setIsSegmentedDraft(event.target.checked)
+                      }}
+                    />
+                    <span>分次</span>
+                  </label>
                 </div>
 
-                <button
-                  className="ghost-button ghost-button--compact temporary-composer__more-toggle"
-                  type="button"
-                  onClick={() => {
-                    setComposerErrorMessage(null)
-
-                    if (showMoreOptions) {
-                      resetExpandedComposerState()
-                    } else {
-                      setShowMoreOptions(true)
-                    }
-                  }}
-                  aria-label={showMoreOptions ? '收起更多选项' : '打开更多选项'}
-                  title={showMoreOptions ? '收起更多选项' : '打开更多选项'}
-                >
-                  <MoreIcon className="temporary-composer__more-icon" />
-                </button>
-              </div>
-
-              {showMoreOptions ? (
-                <div className="temporary-composer__more">
-                  <div className="temporary-composer__section temporary-composer__section--form">
-                    <div className="temporary-composer__option-grid">
-                      <label className="toggle-chip temporary-composer__option-chip">
-                        <input
-                          type="checkbox"
-                          checked={isNecessaryDraft}
-                          onChange={(event) => {
-                            setIsNecessaryDraft(event.target.checked)
-                          }}
-                        />
-                        <span>必要</span>
-                      </label>
-
-                      <div className="temporary-composer__recurrence-group" aria-label="Todo 重复规则">
-                        {recurringOptions.map((option) => (
-                          <button
-                            key={option.value}
-                            className={
-                              recurrenceDraft === option.value
-                                ? 'temporary-composer__recurrence-option temporary-composer__recurrence-option--active'
-                                : 'temporary-composer__recurrence-option'
-                            }
-                            type="button"
-                            onClick={() => {
-                              setRecurrenceDraft(option.value)
-                            }}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <label className="toggle-chip temporary-composer__option-chip">
-                        <input
-                          type="checkbox"
-                          checked={requiresPreparationDraft}
-                          onChange={(event) => {
-                            const nextChecked = event.target.checked
-                            setRequiresPreparationDraft(nextChecked)
-
-                            if (!nextChecked) {
-                              setPreparationNotesDraft('')
-                            }
-                          }}
-                        />
-                        <span>准备</span>
-                      </label>
-
-                      <label className="toggle-chip temporary-composer__option-chip">
-                        <input
-                          type="checkbox"
-                          checked={isSegmentedDraft}
-                          onChange={(event) => {
-                            setIsSegmentedDraft(event.target.checked)
-                          }}
-                        />
-                        <span>分次</span>
-                      </label>
-                    </div>
-
-                    {requiresPreparationDraft ? (
-                      <textarea
-                        className="template-form__notes-input"
-                        rows={2}
-                        value={preparationNotesDraft}
-                        onChange={(event) => {
-                          setPreparationNotesDraft(event.target.value)
+                <div className="temporary-composer__settings-row temporary-composer__settings-row--recurrence">
+                  <div className="temporary-composer__recurrence-group" aria-label="Todo 重复规则">
+                    {recurringOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        className={
+                          recurrenceDraft === option.value
+                            ? 'temporary-composer__recurrence-option temporary-composer__recurrence-option--active'
+                            : 'temporary-composer__recurrence-option'
+                        }
+                        type="button"
+                        onClick={() => {
+                          setRecurrenceDraft(option.value)
                         }}
-                        placeholder="记录这次 Todo 的准备备注"
-                      />
-                    ) : null}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ) : null}
-            </>
-          ) : (
+
+                {requiresPreparationDraft ? (
+                  <textarea
+                    className="template-form__notes-input"
+                    rows={2}
+                    value={preparationNotesDraft}
+                    onChange={(event) => {
+                      setPreparationNotesDraft(event.target.value)
+                    }}
+                    placeholder="记录这次 Todo 的准备备注"
+                  />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {composerMode === 'grass' ? (
             <div className="temporary-composer__more temporary-composer__more--grass">
               <div className="temporary-composer__section">
                 {recommendationPanel ? (
@@ -1426,7 +1428,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 )}
               </div>
             </div>
-          )}
+          ) : null}
 
           {composerErrorMessage ? (
             <p className="form-message form-message--danger">{composerErrorMessage}</p>
@@ -1436,12 +1438,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
       <div className="todo-board">
         <section className="list-group" aria-label="白天事项">
-          <div className="list-group__divider" aria-hidden="true" />
           {renderItems(dayItems, 'day')}
         </section>
 
         <section className="list-group" aria-label="晚上事项">
-          <div className="list-group__divider" aria-hidden="true" />
           {renderItems(nightItems, 'night')}
         </section>
       </div>

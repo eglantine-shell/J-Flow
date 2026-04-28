@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
 
 import {
-  CollapseIcon,
-  ExpandIcon,
   ListIcon,
   SaveIcon,
 } from '@/components/ui/Icons'
@@ -77,7 +75,7 @@ export function HomePage() {
       <section className="home-layout__composer">
         <div className="surface-card surface-card--compact">
           <div className="composer-entry composer-entry--toolbar">
-            <span className="composer-entry__title">种草</span>
+            <span className="composer-entry__title">种草清单</span>
             <div className="composer-entry__actions">
               <button
                 className="icon-button icon-button--toolbar"
@@ -87,11 +85,7 @@ export function HomePage() {
                   setShowComposer((current) => !current)
                 }}
               >
-                {showComposer ? (
-                  <CollapseIcon className="icon-button__icon" />
-                ) : (
-                  <ExpandIcon className="icon-button__icon" />
-                )}
+                <ListIcon className="icon-button__icon" />
               </button>
 
               <button

@@ -1,5 +1,75 @@
 # Dev Log
 
+## 2026-04-28（V2.1-N：Todo / 种草 UI 误解修正）
+
+### 本轮目标
+- 修正 Todo 输入区顶部工具栏布局
+- 修正“拔草条目”错误替换普通输入区的行为
+- 收紧更多设置区的视觉体量
+- 恢复种草区被误删的标题与辅助文案
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/pages/home/HomePage.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- 本轮只做 UI 纠偏，不改业务逻辑，不改 schema/storage/recommendation/grassStatus/recurrence/rollover。
+- “拔草条目”不应替换普通输入区，而应作为普通输入区下方的追加筛选与候选区域。
+- “必要 / 重复 / 准备 / 分次”属于附加设置，不应长成第二套主界面。
+
+### 本轮关键决策
+- Todo 输入区顶部两组 segmented control 保持同一行：
+  - 左侧 `普通条目 / 拔草条目`
+  - 右侧 `白天 / 晚上`
+- 普通输入框、输入框内添加按钮、`...` 更多按钮始终显示。
+- 切到 `拔草条目` 时，只在输入区下方追加：
+  - 种草清单 tag
+  - 场景 tag
+  - 候选列表
+- 更多设置区改为两行紧凑附加设置：
+  - 第一行：`必要 / 准备 / 分次`
+  - 第二行：`不重复 / 每天 / 每周 / 每月 / 每年`
+- 删除 Todo 列表中白天 / 晚上之间的实线分隔，保留背景区分。
+- 恢复种草区标题 `种草清单`，并把展开/收起 icon 改回三横线语义。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 拔草条目改回“追加式”显示，不再替换普通输入区
+  - 更多设置区改成紧凑两行
+  - 删除白天 / 晚上列表间的分隔线节点
+- 更新 `src/pages/home/HomePage.tsx`
+  - 恢复种草区标题 `种草清单`
+  - 展开/收起输入区按钮改回三横线 icon
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 在兴趣 stepper 前补回 `兴趣程度` 文案
+- 更新 `src/styles/globals.css`
+  - 调整顶部双 segmented 同行布局
+  - 收紧更多设置区尺寸与节奏
+  - 种草 stepper 补齐标签文案的样式
+- 更新 `handoff.md`
+  - 记录这轮 UI 误解修正后的当前口径
+- 更新 `manual-test-checklist.md`
+  - 更新 Todo 输入区与种草区的手测预期
+
+### 当前风险与待确认问题
+- 顶部两组 segmented control 现在在移动端仍保持同一行，空间更紧，后续如要继续压缩文字可再做微调。
+- 更多设置区虽然已明显收紧，但准备备注 textarea 仍会在勾选后单独展开，这是当前保留的必要例外。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-28（V2.1-M：种草区 UI 收口）
 
 ### 本轮目标
