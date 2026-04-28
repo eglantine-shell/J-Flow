@@ -1,5 +1,42 @@
 # Dev Log
 
+## 2026-04-28（V2.1-E：UI 微调）
+
+### 本轮目标
+- 缩小初始化页主句字号
+- 调整初始化页两个配置块之间的垂直节奏
+- 让 Todo 条目去边框、改成更轻的色块列表
+- 将设置页三段结构合并为一个大卡片内的两个小模块
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `src/pages/setup/SetupPage.tsx`
+- `src/features/settings/SettingsPanel.tsx`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- 本轮只做视觉层微调，不改初始化逻辑、不改 Todo 行为、不改设置功能。
+- 初始化页主句更适合降到“次级标题”层级，而不是继续占用 hero 级视觉权重。
+- Todo 区当前问题主要来自描边感，不需要靠阴影补偿，直接改成无边框色块更贴近轻量列表。
+- 设置页可以继续保留 `设置` 主标题，但把排序设置和测试工具降级为同卡片内的子模块。
+
+### 本轮修改
+- 更新 `src/pages/setup/SetupPage.tsx`
+  - 为初始化页增加局部样式作用域
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 将排序设置与测试工具合并到同一个 `SurfaceCard`
+- 更新 `src/styles/globals.css`
+  - 缩小初始化页主句字号
+  - 调整“种草清单”与“有空就做”两个配置块之间的垂直间距
+  - 去掉 Todo 条目明显边框，改为无边框背景色块
+  - 收口设置页为一个主卡片下的两个子模块，并补充分隔线与层级样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
 ## 2026-04-27（V2.1-E：修复设置页重置后 404）
 
 ### 本轮目标

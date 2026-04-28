@@ -232,7 +232,7 @@ export function SetupPage() {
   }
 
   return (
-    <section className="page-grid page-grid--single">
+    <section className="page-grid page-grid--single setup-page">
       <SurfaceCard title="哪怕你是一个100%的J人，想必也会有……">
         <div className="setup-tag-section">
           <div className="setup-tag-section__header">

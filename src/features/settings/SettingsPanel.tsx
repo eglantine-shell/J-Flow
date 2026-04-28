@@ -124,64 +124,70 @@ export function SettingsPanel() {
         {successMessage ? (
           <p className="form-message form-message--success">{successMessage}</p>
         ) : null}
-      </SurfaceCard>
 
-      <SurfaceCard
-        title="排序设置"
-        description="当推荐结果兴趣程度相同时，按加入时间的正序或倒序打破并列。"
-      >
-        <div className="settings-choice-row">
-          <button
-            className={
-              viewState.tieBreakerOrder === 'asc'
-                ? 'check-tile check-tile--selected'
-                : 'check-tile'
-            }
-            type="button"
-            disabled={isSaving}
-            onClick={() => {
-              void updateTieBreakerOrder('asc')
-            }}
-          >
-            正序
-          </button>
-          <button
-            className={
-              viewState.tieBreakerOrder === 'desc'
-                ? 'check-tile check-tile--selected'
-                : 'check-tile'
-            }
-            type="button"
-            disabled={isSaving}
-            onClick={() => {
-              void updateTieBreakerOrder('desc')
-            }}
-          >
-            倒序
-          </button>
-        </div>
-      </SurfaceCard>
+        <div className="settings-panel">
+          <section className="settings-panel__section">
+            <div className="settings-panel__section-header">
+              <h3>排序设置</h3>
+              <p>当推荐结果兴趣程度相同时，按加入时间的正序或倒序打破并列。</p>
+            </div>
 
-      <SurfaceCard
-        title="测试工具"
-        description="仅供当前开发 / 测试阶段使用。"
-      >
-        <div className="settings-danger-zone">
-          <p className="form-message">
-            重置后会清空当前本地应用数据，并回到第一次打开应用的初始化流程。
-          </p>
-          <div className="setup-actions">
-            <button
-              className="ghost-button ghost-button--danger"
-              type="button"
-              disabled={isSaving}
-              onClick={() => {
-                void resetForTesting()
-              }}
-            >
-              重置应用（测试用）
-            </button>
-          </div>
+            <div className="settings-choice-row">
+              <button
+                className={
+                  viewState.tieBreakerOrder === 'asc'
+                    ? 'check-tile check-tile--selected'
+                    : 'check-tile'
+                }
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  void updateTieBreakerOrder('asc')
+                }}
+              >
+                正序
+              </button>
+              <button
+                className={
+                  viewState.tieBreakerOrder === 'desc'
+                    ? 'check-tile check-tile--selected'
+                    : 'check-tile'
+                }
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  void updateTieBreakerOrder('desc')
+                }}
+              >
+                倒序
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-panel__section">
+            <div className="settings-panel__section-header">
+              <h3>测试工具</h3>
+              <p>仅供当前开发 / 测试阶段使用。</p>
+            </div>
+
+            <div className="settings-danger-zone">
+              <p className="form-message">
+                重置后会清空当前本地应用数据，并回到第一次打开应用的初始化流程。
+              </p>
+              <div className="setup-actions">
+                <button
+                  className="ghost-button ghost-button--danger"
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => {
+                    void resetForTesting()
+                  }}
+                >
+                  重置应用（测试用）
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       </SurfaceCard>
     </section>
