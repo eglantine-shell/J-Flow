@@ -1,5 +1,212 @@
 # Dev Log
 
+## 2026-04-28（V2.2：设置页数据导出 / 导入第一版）
+
+### 本轮目标
+- 实现网页端 V2.2：数据导出 / 导入
+- 入口放在设置页中：
+  - 排序设置之后
+  - 测试工具之前
+- 不改 schema，不改 storage 结构语义，只补本地快照导入 / 导出能力
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/settings/SettingsPanel.tsx`
+- `src/db/storage.ts`
+- `src/db/schema.ts`
+
+### 本轮关键判断
+- 当前最稳的导入方案是“备份文件整体覆盖当前本地数据”，不做合并导入。
+- 现有 `getAppData` / `replaceAppData` / schema parse 已经足够支撑快照式导入 / 导出，不需要额外改 schema。
+- 导出 / 导入入口应放在设置页而不是首页，符合当前网页端“工具型能力集中在设置页”的结构口径。
+
+### 本轮关键决策
+- 导出格式使用本地 JSON 快照。
+- 导入读取 JSON 文件，并整体覆盖当前本地数据。
+- 导入继续复用现有 schema 校验与 normalize 流程，保留：
+  - `grassStatus` 兼容
+  - `originDate` 兼容
+- 导入前保留明确确认。
+- 当前不实现：
+  - 合并导入
+  - 导入预览
+  - 差异比较
+
+### 本轮修改
+- 更新 `src/db/storage.ts`
+  - 新增 `exportAppDataSnapshot`
+  - 新增 `importAppDataSnapshot`
+  - 暴露到 `appDataStorage` 与 `appDataRepository`
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 在排序设置后、测试工具前新增“数据导入 / 导出”区块
+  - 新增“导出当前数据”按钮
+  - 新增“导入备份文件”按钮
+  - 增加本地文件读取、导入确认与成功提示
+- 更新 `src/styles/globals.css`
+  - 增加隐藏文件输入样式
+- 更新 `handoff.md`
+  - 记录 V2.2 已实现状态与新的后续路线
+- 更新 `task-list.md`
+  - 将数据导出 / 导入标记为已完成
+- 更新 `manual-test-checklist.md`
+  - 将导出 / 导入从待实现切到已实现手测项
+- 更新 `dev-log.md`
+  - 记录本轮实现与验证
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+  - 保留既有 Vite chunk size warning，不影响构建成功
+
+### 当前未解决问题
+- 当前导入为覆盖导入，不支持合并导入。
+- 当前没有导入预览，也不显示文件内摘要信息。
+- 搜索 / 筛选是否还要在网页端补，仍取决于是否继续长时间网页试用。
+
+## 2026-04-28（V2.1 收尾记录：阶段状态整理与 App 化前评估）
+
+### 本轮目标
+- 不改业务代码，只整理当前 V2.1 状态
+- 收尾记录已稳定规则、当前 UI 状态、已知暂缓事项
+- 从完整 Todo List 产品角度评估 App 化前还值得补哪些功能
+
+### 开始前已阅读
+- `handoff.md`
+- `dev-log.md`
+- `product-rules.md`
+- `data-model.md`
+- `app-structure.md`
+- `task-list.md`
+- `manual-test-checklist.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+- `src/features/templates/TemplateManagerPanel.tsx`
+- `src/features/decision/recommendation.ts`
+- `src/styles/globals.css`
+
+### 本轮关键判断
+- V2.1 的主规则已经基本稳定，当前更像“网页试用版收尾”而不是继续扩张功能面。
+- 真正影响 App 化前信心的，不是再加一批移动端交互，而是补齐：
+  - 数据安全闭环
+  - 生命周期自查闭环
+  - 更完整的手动验证闭环
+- 当前 `picked / archived` 缺管理视图，会直接削弱种草生命周期是否成立的可见性。
+- 当前无导出 / 导入，会直接影响网页试用阶段的数据信任感。
+- Todo 搜索 / 筛选从“完整 Todo List”视角是合理需求，但是否要在网页端补，取决于网页版是否还要继续真实试用一段时间。
+
+### 本轮结论
+
+#### A. App 化前强烈建议补的功能
+- 最小种草管理视图
+  - 至少可查看 `active / picked / archived`
+  - 至少支持 `archived -> active`
+- 数据导出 / 导入
+  - 至少提供本地导出
+  - 最好补受控导入
+- 删除 / 重置前的保护完善
+  - 当前主要还是 `window.confirm` 级别
+  - 应补更明确的文案与关键场景手测
+- 重复 Todo / 种草生命周期的手动验证补齐
+  - 尤其是 occurrence 删除、停止重复、来自种草的恢复与不恢复边界
+- Todo 搜索 / 筛选
+  - 若网页端还会继续试用，建议补最小版本
+  - 若准备近期冻结网页，则可放到 App 版
+
+#### B. 可以等 App 版再做
+- 左滑删除
+- 长按菜单
+- bottom sheet
+- 拖拽排序
+- 本地通知
+- iOS 日历 / reminder 集成
+- widget
+- haptic feedback
+
+#### C. 暂时不建议做
+- 多用户 / 协作
+- 云同步
+- 复杂统计
+- AI 推荐
+- 多层项目管理
+- 标签系统再扩展
+- 复杂 recurrence 自定义规则
+
+### 推荐路线
+- 如果只允许再做 2 个小版本：
+  - 先补最小种草管理视图 + 删除/重置保护 + 生命周期手测
+  - 再补数据导出 / 导入
+- 如果允许第 3 个小版本：
+  - 只有在网页端还要继续真实试用时，再补轻量 Todo 搜索 / 筛选
+- 当前已经接近进入“网页试用版冻结 + App 设计准备”
+  - 但更稳妥的门槛是先补：
+    - 数据导出 / 导入
+    - 最小生命周期管理视图
+
+### 本轮修改
+- 更新 `handoff.md`
+  - 收口 V2.1 当前状态、稳定规则、UI 状态与暂缓事项
+- 更新 `task-list.md`
+  - 按 App 化前价值重排后续任务
+- 更新 `manual-test-checklist.md`
+  - 补强生命周期、保护与数据安全相关手测口径
+- 更新 `dev-log.md`
+  - 记录本轮阶段评估结论
+
+### 验证结果
+- 本轮未改源码逻辑
+- 本轮未改 schema / storage
+- 本轮未执行 lint / build
+  - 原因：仅文档更新，无实现变更
+  - 仍建议下一轮进入实现时恢复执行
+
+### 当前未解决问题
+- Todo 搜索 / 筛选是否要在网页端补，取决于是否还要继续开放网页试用。
+- `picked` 是否需要独立分组展示，还是只作为管理状态可见，仍需在后续最小视图设计时定稿。
+- 导入是否支持“覆盖导入 / 合并导入 / 预览导入”，当前还未细化产品规则。
+
+## 2026-04-28（V2.1 收尾补记：后续路线收紧为导出 / 导入优先）
+
+### 本轮背景
+- 在上一轮阶段评估基础上，用户进一步确认了网页端后续取舍。
+
+### 用户确认的新判断
+- `picked` 不需要单独做管理视图。
+- 已拔出的内容应主要留在 Todo List 中体现，而不是回到种草管理页再单独查看。
+- `archived` 既然表示主动停用，也不值得为当前网页版单独补完整管理能力。
+- 删除 / 重置保护当前已足够，不再作为网页端优先补项。
+- 网页端下一步应优先补：数据导出 / 导入。
+
+### 对上一轮结论的修正
+- 取消“最小种草管理视图”作为 App 化前强制补项。
+- 取消“删除 / 重置保护补强”作为高优先级补项。
+- 将“数据导出 / 导入”提升为网页端下一步唯一明确高优先功能。
+- 将“生命周期与 recurrence 手测闭环”保留为配套验证项，而不是独立产品包。
+
+### 本轮修改
+- 更新 `handoff.md`
+  - 修正 App 化前建议与推荐路线
+- 更新 `task-list.md`
+  - 调整后续任务优先级
+- 更新 `manual-test-checklist.md`
+  - 移除不再作为近期目标的种草管理视图预期
+- 更新 `dev-log.md`
+  - 记录本次路线收紧
+
+### 当前阶段结论
+- 当前网页端后续路线已经明显收紧为：
+  - 先补数据导出 / 导入
+  - 再视是否继续网页试用，决定要不要补搜索 / 筛选
+- 这意味着当前更接近：
+  - 网页试用版冻结前最后一个实用功能包
+  - 然后进入 App 设计准备
+
 ## 2026-04-28（V2.1-N4：重复滚动修复、segmented 高度对齐、favicon）
 
 ### 本轮目标

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { SurfaceCard } from '@/components/ui/SurfaceCard'
@@ -15,12 +15,23 @@ const initialViewState: SettingsViewState = {
   tieBreakerOrder: 'desc',
 }
 
+const pad = (value: number) => String(value).padStart(2, '0')
+
+const buildBackupFilename = () => {
+  const now = new Date()
+  const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+
+  return `j-flow-backup-${datePart}-${timePart}.json`
+}
+
 export function SettingsPanel() {
   const navigate = useNavigate()
   const [viewState, setViewState] = useState<SettingsViewState>(initialViewState)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -106,6 +117,62 @@ export function SettingsPanel() {
     })
   }
 
+  const exportBackup = async () => {
+    await withSaving(async () => {
+      const appData = await appDataRepository.exportSnapshot()
+      const blob = new Blob([`${JSON.stringify(appData, null, 2)}\n`], {
+        type: 'application/json',
+      })
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = objectUrl
+      link.download = buildBackupFilename()
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(objectUrl)
+
+      setSuccessMessage('已导出当前本地数据。')
+    })
+  }
+
+  const importBackupFile = async (file: File) => {
+    const confirmed = window.confirm(
+      '确认导入这个备份文件吗？导入会覆盖当前本地数据。',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    await withSaving(async () => {
+      const fileContent = await file.text()
+      const parsed = JSON.parse(fileContent) as Parameters<
+        typeof appDataRepository.importSnapshot
+      >[0]
+
+      const imported = await appDataRepository.importSnapshot(parsed)
+
+      setViewState({
+        isLoading: false,
+        tieBreakerOrder: imported.settings.tieBreakerOrder,
+      })
+      setSuccessMessage('已导入备份并覆盖当前本地数据。')
+    })
+  }
+
+  const handleImportInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file) {
+      return
+    }
+
+    await importBackupFile(file)
+  }
+
   if (viewState.isLoading) {
     return (
       <section className="page-grid page-grid--single">
@@ -160,6 +227,46 @@ export function SettingsPanel() {
                 }}
               >
                 倒序
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-panel__section">
+            <div className="settings-panel__section-header">
+              <h3>数据导入 / 导出</h3>
+              <p>导出当前本地数据，或用备份文件整体覆盖当前本地数据。</p>
+            </div>
+
+            <input
+              ref={importInputRef}
+              className="settings-file-input"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                void handleImportInputChange(event)
+              }}
+            />
+
+            <div className="settings-choice-row">
+              <button
+                className="check-tile"
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  void exportBackup()
+                }}
+              >
+                导出当前数据
+              </button>
+              <button
+                className="check-tile"
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  importInputRef.current?.click()
+                }}
+              >
+                导入备份文件
               </button>
             </div>
           </section>

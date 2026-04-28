@@ -307,7 +307,15 @@ export async function getAppData() {
   return initializeAppData()
 }
 
+export async function exportAppDataSnapshot() {
+  return cloneAppData(await getAppData())
+}
+
 export async function replaceAppData(appData: AppData) {
+  return persistAppData(appData)
+}
+
+export async function importAppDataSnapshot(appData: AppData) {
   return persistAppData(appData)
 }
 
@@ -690,6 +698,8 @@ async function deleteDayPlanItem(id: string) {
 export const appDataStorage = {
   initialize: initializeAppData,
   get: getAppData,
+  exportSnapshot: exportAppDataSnapshot,
+  importSnapshot: importAppDataSnapshot,
   replace: replaceAppData,
   update: updateAppData,
   reset: resetAppData,
@@ -697,6 +707,8 @@ export const appDataStorage = {
 
 export const appDataRepository = {
   get: getAppData,
+  exportSnapshot: exportAppDataSnapshot,
+  importSnapshot: importAppDataSnapshot,
   replace: replaceAppData,
   update: updateAppData,
   reset: resetAppData,
