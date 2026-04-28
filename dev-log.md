@@ -13,8 +13,8 @@
 
 ### 本轮修改
 - 更新 `src/styles/globals.css`
-  - 在移动端明确清掉重复选项的 `grid-template-columns`
-  - 让重复选项真正按横向列流展开
+  - 在移动端将重复选项从隐式 grid 改为显式 flex 横向排布
+  - 让每个重复选项固定占据接近第一行单项的宽度
   - 对齐顶部两组 segmented control 的高度
 - 更新 `index.html`
   - 增加 favicon 链接
