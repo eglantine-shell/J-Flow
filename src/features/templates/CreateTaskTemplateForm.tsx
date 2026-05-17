@@ -3,11 +3,44 @@ import { useEffect, useMemo, useState } from 'react'
 import { appDataRepository } from '@/db'
 import {
   createInitialTaskTemplateFormState,
+  parseGrassBatchTitles,
   TaskTemplateFormFields,
   type TaskTemplateFormLoadState,
   type TaskTemplateFormState,
   validateTaskTemplateForm,
 } from '@/features/templates/TemplateFormFields'
+import type { TaskTemplate } from '@/types'
+
+const cloneTaskTemplate = (template: TaskTemplate): TaskTemplate => ({
+  ...template,
+  sceneTagIds: [...template.sceneTagIds],
+})
+
+const hasAllCreatedTemplates = (templates: TaskTemplate[], createdItems: TaskTemplate[]) =>
+  createdItems.every((createdItem) =>
+    templates.some((template) => template.id === createdItem.id),
+  )
+
+async function ensureCreatedTemplatesPersisted(createdItems: TaskTemplate[]) {
+  const currentTemplates = await appDataRepository.taskTemplates.list()
+
+  if (hasAllCreatedTemplates(currentTemplates, createdItems)) {
+    return
+  }
+
+  const existingIds = new Set(currentTemplates.map((template) => template.id))
+  const missingItems = createdItems.filter((createdItem) => !existingIds.has(createdItem.id))
+
+  for (const item of missingItems) {
+    await appDataRepository.taskTemplates.create(cloneTaskTemplate(item))
+  }
+
+  const verifiedTemplates = await appDataRepository.taskTemplates.list()
+
+  if (!hasAllCreatedTemplates(verifiedTemplates, createdItems)) {
+    throw new Error('批量种草保存后校验失败，请重试。')
+  }
+}
 
 export function CreateTaskTemplateForm({
   formId = 'grass-create-form',
@@ -190,27 +223,39 @@ export function CreateTaskTemplateForm({
     setSuccessMessage(null)
 
     try {
-      const created = await appDataRepository.taskTemplates.create({
-        templateKind: 'grass',
-        date: '',
-        activityTypeId: formState.activityTypeId,
-        title: formState.title.trim(),
-        sceneTagIds: formState.sceneTagIds,
-        interestLevel: formState.interestLevel,
-        isNecessary: false,
-        requiresPreparation: false,
-        preparationNotes: '',
-        recurrence: 'none',
-        isSegmented: false,
-        grassStatus: 'active',
-        isArchived: false,
-      })
+      const parsedTitles = parseGrassBatchTitles(formState.title)
+      const createdItems: TaskTemplate[] = []
+
+      for (const title of parsedTitles) {
+        const createdItem = await appDataRepository.taskTemplates.create({
+          templateKind: 'grass',
+          date: '',
+          activityTypeId: formState.activityTypeId,
+          title,
+          sceneTagIds: formState.sceneTagIds,
+          interestLevel: formState.interestLevel,
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          recurrence: 'none',
+          isSegmented: false,
+          grassStatus: 'active',
+          isArchived: false,
+        })
+
+        createdItems.push(createdItem)
+      }
+      await ensureCreatedTemplatesPersisted(createdItems)
 
       setFormState({
         ...createInitialTaskTemplateFormState(),
         activityTypeId: loadState.activityTypes[0]?.id || '',
       })
-      setSuccessMessage(`已加入种草：${created.title}`)
+      setSuccessMessage(
+        createdItems.length === 1
+          ? `已加入种草：${createdItems[0]?.title ?? ''}`
+          : `已加入 ${createdItems.length} 条种草`,
+      )
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error ? error.message : '种草保存失败，请稍后重试。',
@@ -230,7 +275,7 @@ export function CreateTaskTemplateForm({
   }
 
   return (
-    <form className="template-form" id={formId} onSubmit={handleSubmit}>
+    <form className="template-form template-form--capture" id={formId} onSubmit={handleSubmit}>
       <TaskTemplateFormFields
         formState={formState}
         setFormState={setFormState}
@@ -241,13 +286,15 @@ export function CreateTaskTemplateForm({
         onDeleteActivityType={handleDeleteActivityType}
       />
 
-      {errorMessage ? (
-        <p className="form-message form-message--danger">{errorMessage}</p>
-      ) : null}
+      <div className="template-form__footer">
+        {errorMessage ? (
+          <p className="form-message form-message--danger">{errorMessage}</p>
+        ) : null}
 
-      {successMessage ? (
-        <p className="form-message form-message--success">{successMessage}</p>
-      ) : null}
+        {successMessage ? (
+          <p className="form-message form-message--success">{successMessage}</p>
+        ) : null}
+      </div>
     </form>
   )
 }

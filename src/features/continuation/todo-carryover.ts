@@ -1,40 +1,11 @@
 import { appDataRepository } from '@/db'
-import type { AppData, DayPlanItem, RecurringTaskInstance, RecurrenceRule, TaskTemplate } from '@/types'
-
-const pad = (value: number) => String(value).padStart(2, '0')
-
-const toDateString = (date: Date) =>
-  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-
-const parseDate = (dateString: string) => {
-  const [year, month, day] = dateString.split('-').map(Number)
-
-  return new Date(year, month - 1, day)
-}
-
-const toWeekDateKey = (date: Date) => {
-  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayOfWeek = utcDate.getUTCDay() || 7
-  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayOfWeek)
-
-  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1))
-  const weekNumber = Math.ceil((((utcDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-
-  return `${utcDate.getUTCFullYear()}-W${pad(weekNumber)}`
-}
-
-const toDateKey = (date: Date, recurrence: Exclude<RecurrenceRule, 'none'>) => {
-  switch (recurrence) {
-    case 'daily':
-      return toDateString(date)
-    case 'weekly':
-      return toWeekDateKey(date)
-    case 'monthly':
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`
-    case 'yearly':
-      return String(date.getFullYear())
-  }
-}
+import {
+  buildRecurringInstanceSearchKeys,
+  parseDate,
+  resolveRepeatRule,
+  toDateString,
+} from '@/features/recurrence/repeat-rule'
+import type { AppData, DayPlanItem, RecurringTaskInstance, TaskTemplate } from '@/types'
 
 const getRootItemId = (item: DayPlanItem) => item.rootItemId ?? item.id
 
@@ -101,7 +72,15 @@ const isSameRecurringCycle = (
     return false
   }
 
-  return toDateKey(selectedDate, recurringInstance.recurrence) === recurringInstance.dateKey
+  const selectedDateKey = toDateString(selectedDate)
+
+  if (recurringInstance.targetDate) {
+    return recurringInstance.targetDate === selectedDateKey
+  }
+
+  return buildRecurringInstanceSearchKeys(selectedDate, resolveRepeatRule(recurringInstance)).includes(
+    recurringInstance.dateKey,
+  )
 }
 
 const hasRootItemOnDate = (
@@ -257,28 +236,29 @@ export async function syncTodoCarryoversForDate(selectedDateInput: Date | string
     return appData
   }
 
-  let nextAppData = appData
+  const updatedItems: typeof carryoverItems = []
 
-  carryoverItems.forEach((item) => {
+  for (const item of carryoverItems) {
     const sortOrder = nextSortOrder[item.timeBlock]
     nextSortOrder[item.timeBlock] += 1
 
-    nextAppData = {
-      ...nextAppData,
-      dayPlanItems: nextAppData.dayPlanItems.map((dayPlanItem) =>
-        dayPlanItem.id === item.id
-          ? {
-              ...dayPlanItem,
-              date: selectedDateKey,
-              originDate: resolveOriginDate(dayPlanItem),
-              sortOrder,
-            }
-          : dayPlanItem,
-      ),
-    }
-  })
+    const updated = await appDataRepository.dayPlanItems.update({
+      id: item.id,
+      date: selectedDateKey,
+      originDate: resolveOriginDate(item),
+      sortOrder,
+    })
 
-  await appDataRepository.replace(nextAppData)
+    updatedItems.push(updated)
+  }
+
+  const updatedItemsById = new Map(updatedItems.map((item) => [item.id, item]))
+  const nextAppData = {
+    ...appData,
+    dayPlanItems: appData.dayPlanItems.map((dayPlanItem) =>
+      updatedItemsById.get(dayPlanItem.id) ?? dayPlanItem,
+    ),
+  }
 
   return nextAppData
 }

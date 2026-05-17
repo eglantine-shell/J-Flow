@@ -1,411 +1,415 @@
 # 数据模型文档
 
-本文档定义当前版本的核心数据结构口径。
+本文档定义 `J-Flow V3 Desktop` 当前推荐的数据模型方向。
 
-V2.1 的重要调整是：
-- 产品主语切换为 Todo
-- 模板、实例、来源、continuation / carryover 等概念降级为内部实现说明
-- 种草从“可执行模板”降级为“轻量收藏记录”
-- `DayPlanItem.originDate` 已作为 Todo 创建来源字段落地
-
-字段名允许使用英文，说明文字使用中文。
+说明：
+- V2 现有实现仍可继续运行
+- 本文档优先描述 V3 的目标模型
+- 具体迁移可以分阶段完成，不要求一轮改完
 
 ---
 
-## 一、V2.1 建模原则
+## 一、建模原则
 
-### 1. 产品主语是 Todo，不是模板
+### 1. Todo 仍是产品主语
+- 用户看到的是 Todo。
+- 存储模型允许分层，但 UI 不应直接暴露底层历史兼容分支。
 
-产品层面对用户讲述的主语应是 Todo。
+### 2. 桌面端主库优先考虑 SQLite
+- V3 运行时主数据库推荐 `SQLite`。
+- JSON 只作为：
+  - 完整导出
+  - 完整导入
+  - 迁移格式
+  - 自动备份格式之一
 
-无论底层是否仍保留：
-- 模板层
-- 重复实例层
-- 当日实例层
-- continuation 链路
-
-这些都只能服务于 Todo 行为，不应反过来定义 Todo 是什么。
-
-### 2. UI 与底层模型分层
-
-V2.1 后续实现应明确分成两层：
-
-1. 底层存储模型
-- 用于持久化、同步、兼容历史数据
-
-2. UI 视图模型
-- 用于渲染 Todo 与决定按钮状态
-
-UI 不应直接把底层实例字段当作产品规则。
-
-### 3. 当前字段策略
-
-当前已新增：
-- `DayPlanItem.originDate`
-
-它用于稳定表达：
-- 这条 Todo 最初进入 Todo 列表的日期
-- 或某条 repeating occurrence 的原始命中日
-
-若后续实现发现底层结构不足，应先补规则，再决定是否调整模型。
+### 3. 网页端与桌面端模型尽量兼容
+- 字段命名尽量延续现有语义。
+- 桌面端允许在 migration 中补充新字段与新表。
 
 ---
 
-## 二、TodoViewModel 规划
+## 二、存储方案建议
 
-V2.1 建议继续使用一个面向 UI 的 `TodoViewModel`。
+### 1. Dexie / IndexedDB
+优点：
+- 可沿用当前网页实现
+- 初期迁移成本低
 
-### 最小字段集合
+缺点：
+- 不适合作为桌面端长期主库
+- 数据目录、用户迁移、备份、恢复体验较弱
 
-type TodoViewModel = {
+### 2. SQLite
+优点：
+- 更适合桌面端本地长期储存
+- 更适合 schema version 与 migration
+- 更适合导入 / 导出 / 备份恢复
+
+缺点：
+- 接入成本高于 IndexedDB
+
+### 3. 本地 JSON 文件
+优点：
+- 易读
+- 易迁移
+- 易备份
+
+缺点：
+- 不适合作为运行时主数据库
+- 单文件容易变大、写入脆弱、难做长期演进
+
+### 4. 推荐结论
+- `V3.0` 目标主库：`SQLite`
+- `JSON` 作为完整备份与迁移格式
+- 若短期必须过渡，可先保留 Web 侧 IndexedDB 与 Desktop 侧 JSON 导入桥接，但这只是过渡方案
+
+---
+
+## 三、推荐实体
+
+### 1. TodoItem
+
+```ts
+type TodoItem = {
   id: string
   title: string
   date: string
-  timeBlock: 'day' | 'night'
+  originDate?: string
 
-  isCompleted: boolean
-  isDeleted: boolean
+  timeBlock: 'day' | 'night'
+  order: number
+
+  status: 'pending' | 'completed' | 'deleted'
+  completedAt?: string
+
+  isNecessary: boolean
+  requiresPreparation: boolean
+  preparationNotes: string
 
   isSegmented: boolean
   progressPercent: number
 
-  isRepeating: boolean
-  isNecessary: boolean
-  preparationNotes: string
+  source: 'manual' | 'grass' | 'recurring'
+  sourceRefId?: string
 
-  createdAtHint?: string
-  originLabel?: string
-
-  canEdit: boolean
-  canDelete: boolean
-  canComplete: boolean
-  canUncomplete: boolean
-  canStopRepeating: boolean
-
-  internalRef: unknown
+  repeatRuleId?: string
+  createdAt: string
+  updatedAt: string
 }
+```
 
-### 规划说明
+说明：
+- `date` 表示当前有效计划日期。
+- `originDate` 用于追踪更早来源日期或首次生成日期，但不应直接决定当前显示归属。
+- `order` 用于当天未完成事项手动排序。
+- 当前实现优先复用现有 `sortOrder` 字段表达该语义，不额外新增独立 `order` 字段。
+- `completedAt` 用于已完成事项排序与完成时间修改。
+- 未完成事项按 `date` 归属显示。
+- 已完成事项按 `completedAt` 对应日期归属显示，而不是按 `date` 继续挂在原页面。
+- 已完成事项不参与未完成事项的 `order` 竞争。
+- 完成时写入 ISO string。
+- 恢复未完成时清空为 `undefined`。
+- 删除时写入 `deletedAt`，供日志归档“当日删除”使用。
+- 恢复未完成后，事项回到当前有效计划日期 `date` 的未完成区。
+- 若事项此前已被顺延到今天，则其当前 `date` 应视为今天：
+  - 完成后再取消完成，应回到今天，而不是回到更早历史日期。
+- 历史已完成事项若缺少 `completedAt`，本阶段先兼容排序到已完成组最后，不强制立刻 migration。
 
-- `TodoViewModel` 是 UI 层模型，不代表必须入库
-- 它可以由现有底层结构映射而来
-- `internalRef` 只用于映射层回写底层，不应直接暴露为产品心智
+### 2. RepeatRule
 
----
-
-## 三、当前底层数据层
-
-V2.1 当前仍允许保留以下底层模型。
-
-### 1. SceneTag
-
-用于表达用户主动维护的“有空就做”场景标签。
-
-V2.1 新口径下：
-- `SceneTag` 不再与白天 / 晚上自动绑定
-- 不再与周中 / 周末自动绑定
-- 不再依赖名称承担内部语义
-
-它只是用户自定义标签集合。
-
-### 2. ActivityType
-
-用于表达种草清单分类。
-
-它的职责是：
-- 给种草分组
-- 在拔草时缩小候选范围
-
-### 3. TaskTemplate
-
-仍可暂时保留，用于复用现有持久化结构，支撑：
-- 种草长期存在
-- 重复规则长期存在
-
-但在 V2.1 中，`TaskTemplate` 不再天然表示“可直接执行模板”。
-
-它在底层需要承担两种完全不同语义：
-1. `grass`
-- 轻量收藏记录
-2. `todo_recurring`
-- 重复 Todo 规则
-
-这意味着：
-- 底层类型可以暂时复用
-- 产品解释必须严格分开
-
-### 4. RecurringTaskInstance
-
-仍可保留，用于支撑：
-- 重复规则按周期追踪状态
-- 当前 occurrence 的完成与进度同步
-
-它属于内部实现层，不是用户主语。
-
-### 5. DayPlanItem
-
-仍可保留，用于支撑：
-- 某一天实际出现的 Todo 实例
-- 手动创建、从种草加入、重复生成、以及当前所在日期的 Todo 落地
-
-它仍是当前 Todo 的主要存储对象。
-
----
-
-## 四、TaskTemplate 的 V2.1 口径
-
-type TaskTemplate = {
+```ts
+type RepeatRule = {
   id: string
-  templateKind: 'grass' | 'todo_recurring'
-  title: string
-  date: string
-  activityTypeId?: string
-  sceneTagIds: string[]
+  repeatType: 'none' | 'calendar' | 'afterCompletion'
+  intervalUnit: 'day' | 'week' | 'month' | 'year'
+  intervalValue: number
 
-  interestLevel: 1 | 2 | 3
-  isNecessary: boolean
-
-  requiresPreparation: boolean
-  preparationNotes: string
-  recurrence: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
-
-  isSegmented: boolean
+  anchorDate: string
+  isActive: boolean
 
   createdAt: string
   updatedAt: string
-
-  grassStatus?: 'active' | 'picked' | 'archived'
-  isArchived: boolean
 }
-
-### 1. `grass` 的产品口径
-
-当 `templateKind = 'grass'` 时，用户可编辑规则只应理解为：
-- `activityTypeId`
-- `title`
-- `sceneTagIds`
-- `interestLevel`
-- `grassStatus`
-- `createdAt`
-- `updatedAt`
-
-其中推荐状态语义应为：
-- `active`
-  - 仍在种草库中
-  - 可被拔草
-- `picked`
-  - 已加入 Todo
-  - 暂时不在种草库中
-  - 不再参与拔草
-- `archived`
-  - 用户停用
-  - 不再参与拔草
-
-### 2. `grass` 上的历史兼容字段
-
-以下字段在 `grass` 上允许暂时继续存在于底层，但降级为历史兼容字段，不再属于用户可编辑规则：
-- `date`
-- `isNecessary`
-- `requiresPreparation`
-- `preparationNotes`
-- `recurrence`
-- `isSegmented`
-
-这些字段的处理原则：
-- 允许老数据继续被 schema 接受
-- 新实现不再把它们暴露为种草编辑能力
-- 新实现不再把它们作为拔草主规则
-
-另外，`isArchived` 在 `grass` 上也应逐步降级为兼容字段。
-
-推荐兼容策略：
-- 新规则优先读取 `grassStatus`
-- 若旧数据没有 `grassStatus`：
-  - `isArchived = true` 视为 `grassStatus = 'archived'`
-  - `isArchived = false` 视为 `grassStatus = 'active'`
-
-### 3. `grassStatus` 的字段定位
-
-推荐新增：
-
-```ts
-grassStatus?: 'active' | 'picked' | 'archived'
 ```
 
-命名建议继续使用 `grassStatus`，原因是：
-- 它只服务 `templateKind = 'grass'`
-- 不会误导到 `todo_recurring`
-- 比通用 `status` 更不容易和 Todo/instance 状态混淆
+规则：
+- `intervalValue` 必须限制在 `1-100`
+- `repeatType = none` 时，其余 interval 字段可为空或保留默认值
+- `repeatType = afterCompletion` 时，下一次以 `completedAt` 为基准
+- 当前代码阶段采用兼容层，而不是一次性删除旧 `recurrence`
+- 旧字段仍保留，用于兼容：
+  - `none`
+  - `daily`
+  - `weekly`
+  - `monthly`
+  - `yearly`
+- 读取时优先使用：
+  - `repeatType`
+  - `repeatIntervalUnit`
+  - `repeatIntervalValue`
+- 若新字段缺失，则回退到旧 `recurrence` 自动映射
 
-不建议继续只复用 `isArchived`，因为那会混淆：
-- 用户主动停用
-- 已被加入 Todo 暂时离库
+### 3. GrassItem
 
-### 4. `todo_recurring` 的产品口径
-
-当 `templateKind = 'todo_recurring'` 时，`TaskTemplate` 仍可继续承担重复规则对象。
-
-也就是说：
-- `recurrence`
-- `date`
-- `isNecessary`
-- `requiresPreparation`
-- `preparationNotes`
-- `isSegmented`
-
-这些字段对 `todo_recurring` 仍然有意义。
-
-### 5. `isArchived` 的未来定位
-
-推荐将 `isArchived` 逐步收口为：
-- `todo_recurring` 上的长期有效字段
-  - 表示这条重复规则是否已停止
-- `grass` 上的兼容字段
-  - 旧数据迁移 fallback
-  - 最终不再作为 `grass` 的产品状态主字段
-
-对于 `grass`：
-- `grassStatus = 'archived'` 时，可同步保留 `isArchived = true`
-- `grassStatus = 'active' | 'picked'` 时，可同步保留 `isArchived = false`
-
-但新业务判断不应继续依赖 `isArchived` 区分 `active` 与 `picked`
-
-### 6. 当前 schema 兼容策略
-
-当前阶段建议：
-- 不急着拆成两套底层表
-- 继续复用 `TaskTemplate`
-- 通过 `templateKind` 区分解释语义
-- 对 `grass` 上多余字段做“保留存储、停止暴露、逐步清理”
-- 对 `grass` 新增 `grassStatus` 承担生命周期状态
-
----
-
-## 五、RecurringTaskInstance 的 V2.1 口径
-
-type RecurringTaskInstance = {
+```ts
+type GrassItem = {
   id: string
-  templateId: string
-
-  dateKey: string
-  recurrence: 'daily' | 'weekly' | 'monthly' | 'yearly'
-
-  status: 'pending' | 'completed' | 'expired'
-
-  progressState: 'not_started' | 'in_progress' | 'completed'
-  progressPercent: number
-  progressNote: string
-
-  generatedAt: string
-  completedAt?: string
-}
-
-### V2.1 解释
-
-它继续可用于底层追踪某次重复周期的状态。
-
-但产品层不应把它直接解释为用户主语。
-
----
-
-## 六、DayPlanItem 的 V2.1 口径
-
-type DayPlanItem = {
-  id: string
-  date: string
-  originDate?: string
-  targetDate?: string
-  timeBlock: 'day' | 'night'
-  timeBlockSource: 'mapped_day' | 'default_day' | 'mapped_night' | 'manual_night'
-  sortOrder: number
-  source: 'auto_generated' | 'decision_selected' | 'manual_temporary'
-  templateId?: string
-  recurringInstanceId?: string
-  consumesDateTrigger?: boolean
-  rootItemId?: string
-  continuationOfItemId?: string
-  carriedFromDate?: string
-  title: string
   activityTypeId?: string
-  isNecessary: boolean
-  requiresPreparation: boolean
-  preparationNotes: string
-  isSegmented: boolean
-  progressState: 'not_started' | 'in_progress' | 'completed'
-  progressPercent: number
-  status: 'pending' | 'completed' | 'deleted'
+  title: string
+  sceneTagIds: string[]
+  interestLevel: 1 | 2 | 3
+  grassStatus: 'active' | 'picked' | 'archived'
   createdAt: string
-  completedAt?: string
+  updatedAt: string
 }
+```
 
-### V2.1 解释
+### 4. ActivityType
 
-`DayPlanItem` 才是执行属性真正落地的位置。
+```ts
+type ActivityType = {
+  id: string
+  name: string
+  order: number
+  createdAt: string
+  updatedAt: string
+}
+```
 
-对于“从种草加入 Todo”：
-- `templateId` 只保留来源追踪
-- `source = decision_selected`
-- `isNecessary`
-- `requiresPreparation`
-- `preparationNotes`
-- `isSegmented`
-- `date`
-- `timeBlock`
+### 5. SceneTag
 
-都应在“本次加入 Todo”时确定，而不是从 `grass` 模板直接继承为长期规则。
+```ts
+type SceneTag = {
+  id: string
+  name: string
+  order: number
+  createdAt: string
+  updatedAt: string
+}
+```
 
-另外，种草生命周期需要额外更新 `TaskTemplate.grassStatus`：
-- 从种草加入 Todo：
-  - `grassStatus = 'picked'`
-- 来自种草的一次性 Todo 被删除：
-  - `grassStatus = 'active'`
-- 来自种草的一次性 Todo 被完成：
-  - `grassStatus` 保持 `picked`
+### 6. LogbookEntry
 
-若来自种草的 Todo 被转成 repeating Todo：
-- 原种草仍保持 `picked`
-- 后续 recurring occurrence 与原种草不再自动联动
+```ts
+type LogbookEntry = {
+  date: string
+  completedItems: Array<{
+    id: string
+    titleSnapshot: string
+    time: string
+    kind: 'completed' | 'picked'
+    isNecessary: boolean
+  }>
+  unfinishedItems: Array<{
+    id: string
+    titleSnapshot: string
+    isNecessary: boolean
+    progressPercent?: number
+  }>
+  deletedItems: Array<{
+    id: string
+    titleSnapshot: string
+    isNecessary: boolean
+  }>
+  remark: string
+  generatedAt: string
+}
+```
 
-### `originDate` 的作用
+说明：
+- 每天一条日志容器。
+- `completedItems` 记录当日完成快照。
+- `kind = picked` 表示这条完成来自种草。
+- `unfinishedItems` 只记录当天页面上仍存在的 pending。
+- 手动改到未来日期的事项，不计入原日期未完成。
+- 分次事项可在 `titleSnapshot` 中体现：
+  - 无推进汇总时：
+    - `xxx 进度：40%`
+  - 若当天有推进且当天结束时仍未完成：
+    - `推进 xxx 20% -> 40%`
+- `deletedItems` 记录当日删除快照。
+- `remark` 是唯一允许后续编辑的区域，其余正文保持归档语义。
 
-`originDate` 用于表达：
-- 这条 Todo 进入 Todo 列表的起点日期
-- 或 repeating occurrence 的命中日期
+### 7. SegmentedProgressLog
 
-UI 展示“创建于 M/D”时应优先读取它。
+```ts
+type SegmentedProgressLog = {
+  date: string
+  itemId: string
+  titleSnapshot: string
+  isNecessary: boolean
+  fromProgress: number
+  toProgress: number
+}
+```
+
+说明：
+- 这是给日志生成用的辅助聚合记录，不单独作为页面区块展示。
+- 只用于支持分次事项在“当日未完成”里展示当天推进总量。
+- 当前口径采用：
+  - 当天第一次推进前的起点
+  - 当天最后一次推进后的进度
 
 ---
 
-## 七、当前明确降级的内部字段
+## 四、重复规则迁移
 
-以下字段继续允许存在，但在产品层降级为内部实现说明：
-- `source`
-- `templateKind`
-- `recurringInstanceId`
-- `consumesDateTrigger`
-- `continuationOfItemId`
-- `carriedFromDate`
-- `decision_selected`
-- `todo_recurring`
+### 1. 旧字段到新字段
+- `none`
+  - -> `repeatType = none`
+- `daily`
+  - -> `repeatType = calendar`
+  - -> `intervalUnit = day`
+  - -> `intervalValue = 1`
+- `weekly`
+  - -> `repeatType = calendar`
+  - -> `intervalUnit = week`
+  - -> `intervalValue = 1`
+- `monthly`
+  - -> `repeatType = calendar`
+  - -> `intervalUnit = month`
+  - -> `intervalValue = 1`
+- `yearly`
+  - -> `repeatType = calendar`
+  - -> `intervalUnit = year`
+  - -> `intervalValue = 1`
 
-另外，以下字段在 `grass` 上降级为历史兼容字段：
-- `date`
-- `isNecessary`
-- `requiresPreparation`
-- `preparationNotes`
-- `recurrence`
-- `isSegmented`
+### 2. 日历式与完成后重复的处理
+- `calendar`
+  - 固定按锚点命中日生成
+- `afterCompletion`
+  - 仅在当前实例完成后，基于 `completedAt` 生成下一次
+  - 若当前已存在下一次 pending occurrence，则不重复生成
+  - 若已生成下一次后再修改上一条的 `completedAt`，当前阶段不追溯重排已生成 occurrence
+- 停止重复时：
+  - 保留当前日期及以前的 occurrence
+  - 清理当前日期之后的 future occurrence
+- 恢复重复时：
+  - 不立即回填之前被清理的 future occurrence
+  - 继续采用“进入目标日期时再生成”的懒生成策略
+
+### 3. 不存在日期的处理
+- 月重复：落到目标月最后一天
+- 年重复：落到目标年对应月的最后一天
 
 ---
 
-## 八、后续实现拆分建议
+## 五、排序模型
 
-后续实现建议按以下顺序拆分：
-1. 收缩种草表单，只保留轻量收藏字段
-2. 给 `grass` 新增生命周期状态字段，并完成兼容迁移
-3. 收缩种草管理页，支持区分 active / picked / archived
-4. 改造拔草面板为“清单 + 场景多选”的显式筛选
-5. 改造从种草加入 Todo 的创建流程，在加入时填写执行属性并将 `grassStatus` 改为 `picked`
-6. 改造来自种草的一次性 Todo 删除逻辑，将 `grassStatus` 恢复为 `active`
-7. 兼容旧 `grass` 数据，逐步停止消费历史执行字段
-8. 最后再评估是否需要把 `grass` 与 `todo_recurring` 从同一底层模型中正式拆开
+### 1. `order` 字段
+- 当前代码层实际使用 `sortOrder` 表示某一天未完成 Todo 的手动顺序。
+- `sortOrder` 只作用于当天实例。
+- 手动排序时可按 `1, 2, 3...` 重写当前日期未完成事项的 `sortOrder`。
+
+### 2. 白天 / 晚上语境
+- `timeBlock` 继续使用：
+  - `day`
+  - `night`
+- 当事项越过排序页中的白天 / 晚上分隔线时：
+  - 同步修改 `timeBlock`
+  - 同步刷新颜色语境
+  - 当前只修改当天实例，不要求同步改模板全局语义
+
+### 3. 已完成事项排序
+- 已完成事项不参与未完成区的 `order`
+- 已完成事项按 `completedAt` 升序排序
+
+### 4. 恢复未完成
+- 若从 completed 恢复到 pending：
+  - 默认分配到未完成列表末尾
+  - 如后续保留 `lastPendingOrder`，可再升级为恢复原位置
+
+---
+
+## 六、批量种草建模
+
+批量种草不新增“批量 item”实体。
+
+规则：
+- 输入框多行提交后，每一行生成独立 `GrassItem`
+- 同次提交可共享元信息，但入库必须拆成多条独立记录
+
+---
+
+## 七、本地数据库与文件结构
+
+### 1. 默认数据目录
+- Windows 下建议使用用户本地应用数据目录，例如：
+  - `%APPDATA%/J-Flow`
+  - 或 `%LOCALAPPDATA%/J-Flow`
+
+### 2. 建议文件
+- `j-flow.sqlite3`
+- `backups/`
+- `logs/` 或迁移日志文件
+
+当前已落地口径：
+- 桌面端运行时主库文件：
+  - `j-flow.sqlite3`
+- 自动备份目录：
+  - `backups/`
+- 手动导入 / 导出：
+  - 继续使用完整 JSON 快照
+  - 文件保存位置由系统文件对话框决定，不强制固定在数据目录中
+
+### 3. 自定义数据目录
+- 建议支持，但可放到 `V3.3`
+
+### 4. 打开数据文件夹
+- 建议支持，至少在 `V3.3` 提供稳定入口
+
+---
+
+## 八、导入 / 导出 / 备份
+
+### 1. JSON 导入 / 导出
+- 必须支持完整 JSON 导入 / 导出。
+- 用于：
+  - 备份
+  - 换电脑迁移
+  - 网页端到桌面端迁移
+
+### 2. 自动备份
+- 建议支持周期性自动备份。
+- 可以导出为：
+  - JSON 快照
+  - 或 SQLite 文件副本
+
+### 3. 避免数据损坏
+- 数据写入使用事务
+- 导入前先做 schema 校验
+- 导入时先写临时文件 / 临时库，再原子替换
+- 保留最近 N 份备份
+
+---
+
+## 九、Schema Version 与 Migration
+
+### 1. Schema Version
+- 数据库中维护 `schema_version`
+- 每次结构变更必须附带 migration
+
+### 2. Migration 原则
+- 只做前进迁移
+- 迁移前自动备份
+- 迁移失败可回滚到迁移前备份
+
+### 3. 旧数据补齐
+- 旧 `completed = true` 但没有 `completedAt` 的事项：
+  - migration 时补一个可追溯默认值
+  - 推荐优先使用历史 `updatedAt`
+  - 若无可用时间，再退回导入或迁移执行时间
+
+---
+
+## 十、网页端到桌面端的数据迁移
+
+推荐迁移路径：
+1. 网页端导出完整 JSON
+2. 桌面端首次启动提供导入入口
+3. 桌面端读取 JSON
+4. 经 normalize 与 schema migration 后写入 SQLite
+
+不建议：
+- 直接尝试读取浏览器 IndexedDB 文件作为桌面端长期数据源

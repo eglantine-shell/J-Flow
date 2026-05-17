@@ -1,5 +1,3020 @@
 # Dev Log
 
+## 2026-05-17（仓库整理：GitHub 发布前可读性收口）
+
+### 本轮目标
+- 将仓库整理成更适合 push 到 GitHub 的“对外可读”状态
+- 不改业务逻辑、不改 UI、不改存储层、不做新功能
+- 收口 README、开发文档入口、`.gitignore` 与打包产物说明
+
+### 本轮关键判断
+- 本轮不改业务实现，只做仓库层整理。
+- `README.md` 不再承担开发交接与阶段日志职责，而是改为 GitHub 首页介绍文档。
+- 当前不直接把根目录规则文档整体迁入 `docs/`：
+  - 原因是 `AGENTS.md` 明确要求新任务开始前优先读取根目录下这些文档
+  - 若本轮直接迁移，会先破坏现有协作约定
+- 因此本轮采用低风险方案：
+  - 保留根目录规则文档
+  - 新增 `docs/README.md` 作为内部开发资料索引
+  - 在 README 中明确区分“对外介绍”和“内部文档入口”
+
+### 本轮修改
+- 更新 `README.md`
+  - 重写为面向 GitHub 读者的项目介绍
+  - 补充：
+    - 项目简介
+    - 当前状态
+    - 功能亮点
+    - 平台支持
+    - 技术栈
+    - 本地开发命令
+    - 打包产物位置
+    - 数据与隐私
+    - 当前限制 / Roadmap
+    - 开发文档入口
+    - License 状态
+- 新增 `docs/README.md`
+  - 作为内部开发文档索引页
+  - 说明本轮为何暂不整体迁移根目录规则文档
+- 更新 `.gitignore`
+  - 补充忽略：
+    - `.pnpm-store/`
+    - `build/`
+    - `release/`
+    - `*.tsbuildinfo`
+    - 本地数据库文件
+    - 编辑器与系统临时文件
+    - `backups/`
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前未完成 / 风险
+- 本轮没有直接删除 `release/` 中已有历史产物，只通过 `.gitignore` 防止后续误提交。
+- 当前根目录仍保留：
+  - `handoff.md`
+  - `dev-log.md`
+  - `product-rules.md`
+  - `data-model.md`
+  - `app-structure.md`
+  - `constraints.md`
+  - `task-list.md`
+  - `design-guidelines.md`
+  - `manual-test-checklist.md`
+  这是为兼容当前协作规则的刻意保留，不是遗漏。
+- 若后续希望把核心文档正式迁移到 `docs/`，建议先同步调整：
+  - `AGENTS.md`
+  - 文档引用路径
+  - 新任务启动时的阅读约定
+
+### 后续补充（同日）
+- 用户随后确认：
+  - 根目录图片资源继续保留
+  - 接受当前兼容方案
+  - 不再做文档迁移
+  - `release/` 目录只保留：
+    - `J-Flow-V1.4.dmg`
+- 已按确认执行清理：
+  - 删除旧 `.dmg`
+  - 删除 `.blockmap`
+  - 删除 Windows `portable` 包
+  - 删除 `unpacked` / `mac-arm64` 与 builder 中间文件
+- 清理后核对结果：
+  - `release/` 当前仅剩：
+    - `J-Flow-V1.4.dmg`
+
+## 2026-05-17（V3 Desktop：Mac 打包版本名切到 V1.4）
+
+### 本轮目标
+- 将当前 macOS 打包产物名从 `V1.3` 更新为 `V1.4`
+- 在当前代码状态下实际产出新 `.dmg`
+
+### 本轮关键判断
+- 这轮不改业务逻辑，只收口打包版本名与产物输出。
+- 继续沿用现有图标同步链路：
+  - 打包前自动将根目录 `J-Flow.PNG` 同步到 `build/icon.png`
+
+### 本轮修改
+- 更新 `package.json`
+  - `build.dmg.artifactName` 改为：
+    - `J-Flow-V1.4.dmg`
+- 更新 `handoff.md`
+  - 记录本轮已切到 `V1.4` 命名并执行实际打包
+
+### 验证结果
+- `corepack pnpm run package:mac`：通过
+- 成功产出：
+  - `release/J-Flow-V1.4.dmg`
+  - `release/J-Flow-V1.4.dmg.blockmap`
+
+### 当前未完成 / 风险
+- 若 `electron-builder` 受本机环境或缓存影响失败，需要根据打包日志继续补修。
+
+## 2026-05-15（V3 Desktop：分次事项按日汇总推进量到“当日未完成”）
+
+### 本轮目标
+- 不新增“当日推进”分区
+- 让分次事项在日志的“当日未完成”里显示当天推进总量
+
+### 本轮关键判断
+- 用户不要独立的推进分区，因此本轮不新增 `当日推进`。
+- 现有日志只会在次日生成“昨天快照”，单靠 `dayPlanItem.progressPercent` 只能看到最终值，看不到当天推进区间。
+- 为了在不增加新分区的前提下保留推进信息，本轮新增按天聚合的分次推进记录：
+  - 只记录当天第一次推进前的起点
+  - 以及当天最后一次推进后的进度
+- 生成“当日未完成”时：
+  - 若当天存在推进聚合记录，则优先显示：
+    - `推进 xxx 20% -> 40%`
+  - 否则继续显示：
+    - `xxx 进度：40%`
+
+### 本轮修改
+- 更新 `src/types/models.ts`、`electron/types.ts`、`src/db/schema.ts`
+  - `AppData` 新增：
+    - `segmentedProgressLogs`
+  - 新增：
+    - `SegmentedProgressLog`
+  - `APP_DATA_SCHEMA_VERSION` 升级到 `9`
+- 更新 `src/db/storage.ts`
+  - 旧快照缺少 `segmentedProgressLogs` 时自动补空数组
+- 更新 `electron/sqlite.ts`
+  - 新增表：
+    - `segmented_progress_logs`
+  - SQLite 快照读写接入该集合
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 分次进度变更时，按“当天起点 -> 当天最后一次推进后的进度”聚合写入日志辅助记录
+- 更新 `src/features/logbook/logbook-service.ts`
+  - 生成“当日未完成”时优先读取推进聚合记录并输出：
+    - `推进 xxx 20% -> 40%`
+- 新增 `src/features/logbook/logbook-service.test.ts`
+  - 覆盖未完成区的推进汇总文案
+- 更新 `src/db/storage.test.ts`、`electron/sqlite.test.ts`
+  - 覆盖旧快照默认空推进记录
+  - 覆盖 SQLite 的推进记录 round-trip
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts src/db/storage.test.ts electron/sqlite.test.ts`：通过
+- `corepack pnpm run build`：通过
+
+### 当前未完成 / 风险
+- 当前“推进总量”按“当天起点 -> 当天最后一次推进后的进度”计算，而不是记录每一次来回调整。
+- 若分次事项当天推进后又完成，它不会出现在“当日未完成”中，这是符合当前区块语义的刻意边界。
+
+## 2026-05-15（V3 Desktop：日志页支持删除当日快照）
+
+### 本轮目标
+- 让日志页中的每一条“当日快照”支持手动删除
+- 删除前明确提示这是永久删除
+
+### 本轮关键判断
+- 本轮只删单条 `logbook entry`，不回溯删除原始 Todo 或别的日期日志。
+- 删除入口保持轻量，不做成重操作区：
+  - 与“复制 Markdown”并排放在卡片头部
+- 删除确认文案明确为永久删除，避免误会是仅隐藏。
+
+### 本轮修改
+- 更新 `src/pages/logbook/LogbookPage.tsx`
+  - 每条日志卡片头部新增轻量 `删除` 按钮
+  - 删除前弹出确认：
+    - `确认永久删除 xxxx.xx.xx 的当日快照吗？`
+  - 删除后即时刷新当前日志列表
+  - 同步清理该条日志对应的本地备注 / 复制 / 保存状态
+- 更新 `src/styles/globals.css`
+  - 为日志卡片头部操作组补充紧凑样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+### 当前未完成 / 风险
+- 本轮未新增日志页交互测试，当前主要依赖构建校验与手测。
+- 日志删除是永久删除；当前没有“恢复日志”能力，这是符合本轮目标的刻意边界。
+
+## 2026-05-05（V3 Desktop：Logbook 时间格式兼容修复 + V1.3 重打包）
+
+### 本轮目标
+- 修复已打包版本打开后日志页因 `completedItems.time` 校验失败导致的初始化报错
+- 重新产出修复后的 `V1.3` macOS `.dmg`
+
+### 本轮关键判断
+- 问题不在日志生成本身，而在 schema 校验口径不一致：
+  - 生成逻辑写入的是全角时间 `HH：mm`
+  - schema 只接受半角时间 `HH:mm`
+- 为了兼容已经生成过的日志快照，本轮不改历史数据，也不强制把全角时间迁成半角。
+- 最稳的修法是放宽 schema，允许：
+  - `HH:mm`
+  - `HH：mm`
+
+### 本轮修改
+- 更新 `src/db/schema.ts`
+  - `logbookCompletedItemSchema.time` 的正则改为同时接受半角 / 全角冒号
+- 更新 `src/db/storage.test.ts`
+  - 补充旧日志使用全角时间时仍可成功导入的兼容测试
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm exec vitest run src/db/storage.test.ts`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run package:mac`：通过
+- 成功重新产出：
+  - `release/J-Flow-V1.3.dmg`
+  - `release/J-Flow-V1.3.dmg.blockmap`
+
+### 当前未完成 / 风险
+- 当前日志内部 `time` 仍保留全角格式，这是有意和页面文案保持一致；后续若想统一内部存储格式，可再单独做一次轻量归一化。
+
+## 2026-05-05（V3 Desktop：Mac 打包版本名切到 V1.3）
+
+### 本轮目标
+- 将当前 macOS 打包产物名从 `V1.2` 更新为 `V1.3`
+- 在当前代码状态下实际产出新 `.dmg`
+
+### 本轮关键判断
+- 这轮不单独改业务逻辑，只收口打包版本名与产物输出。
+- 继续沿用现有图标同步链路：
+  - 打包前自动将根目录 `J-Flow.PNG` 同步到 `build/icon.png`
+
+### 本轮修改
+- 更新 `package.json`
+  - `build.dmg.artifactName` 改为：
+    - `J-Flow-V1.3.dmg`
+- 更新 `handoff.md`
+  - 记录本轮已切到 `V1.3` 命名并执行实际打包
+
+### 验证结果
+- `corepack pnpm run package:mac`：通过
+- 成功产出：
+  - `release/J-Flow-V1.3.dmg`
+  - `release/J-Flow-V1.3.dmg.blockmap`
+
+### 当前未完成 / 风险
+- 若 `electron-builder` 受本机环境或缓存影响失败，需要根据打包日志继续补修。
+
+## 2026-05-05（V3 Desktop：Logbook 首版替代 Todo 垃圾桶）
+
+### 本轮目标
+- 放弃 Todo 垃圾桶页方向，改做按天归档的日志页
+- 将种草删除文案明确为永久删除
+- 为完成 / 未完成 / 删除行为补稳定的每日快照出口
+
+### 本轮关键判断
+- Todo 的真实价值不在“回收站”，而在“这一天到底发生了什么”，因此入口直接从 `垃圾桶` 改成 `日志`。
+- 日志不依赖应用必须在零点开着，而是采用“补生成昨天”的稳妥方案：
+  - 进入 Todo 同步链路前先检查昨天是否已有日志
+  - 没有则立刻补生成
+- `未完成` 只记录“当天页面上仍存在的 pending”。
+- 手动改到未来日期的事项，不算当天未完成。
+- 分次未完成事项只在日志文本里追加：
+  - `进度：x%`
+- 首版正文保持只读，避免日志变成第二套 Todo 系统；只开放 `备注` 编辑。
+
+### 本轮修改
+- 更新 `src/types/models.ts`、`electron/types.ts`、`src/db/schema.ts`
+  - `DayPlanItem` 新增：
+    - `deletedAt`
+  - `AppData` 新增：
+    - `logbookEntries`
+  - 新增：
+    - `LogbookEntry`
+    - `LogbookCompletedItem`
+    - `LogbookUnfinishedItem`
+    - `LogbookDeletedItem`
+  - `APP_DATA_SCHEMA_VERSION` 升级到 `8`
+- 更新 `src/db/storage.ts`
+  - 旧 Web 快照缺少 `logbookEntries` 时自动补空数组
+  - `normalizeDayPlanItem(...)` 收口 `deletedAt`
+- 更新 `electron/sqlite.ts`
+  - `day_plan_items` 新增：
+    - `deleted_at`
+  - 新增表：
+    - `logbook_entries`
+  - SQLite 读写、整包 replace、旧库补列全部接入
+- 新增 `src/features/logbook/logbook-service.ts`
+  - 负责生成昨日日志
+  - 负责输出 Markdown 文本
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 每次同步选中日期前，先补生成昨天日志
+  - 删除 Todo 时写入 `deletedAt`
+- 新增 `src/pages/logbook/LogbookPage.tsx`
+  - 展示每日日志容器
+  - 支持备注编辑
+  - 支持一键复制 Markdown
+- 更新 `src/app/router.tsx`、`src/app/shell/AppShell.tsx`
+  - `/trash` 替换为 `/logbook`
+  - Sidebar 文案从 `垃圾桶` 改为 `日志`
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 种草删除确认文案改为永久删除
+- 更新 `src/styles/globals.css`
+  - 补日志页样式
+- 更新 `src/mocks/app-data.ts`、`electron/test-fixtures.ts`
+  - 补 `logbookEntries`
+- 更新 `src/db/storage.test.ts`、`electron/sqlite.test.ts`
+  - 覆盖旧快照默认空日志数组
+  - 覆盖 SQLite 的 `deletedAt / logbookEntries` round-trip
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts`：通过
+
+### 当前未完成 / 风险
+- 当前首版只稳定补生成“昨天”的日志；如果应用连续多天完全未打开，期间更早日期的未完成快照不会自动回补。
+- 日志复制当前依赖 `navigator.clipboard`，正常 Electron 开发窗口可用，但仍建议在打包产物里顺手验一次。
+
+## 2026-05-04（V3 Desktop 小修：Todo 编辑/新增支持改计划日期）
+
+### 本轮目标
+- 在 quick add / 编辑共用面板中增加日期入口
+- 允许未完成 Todo 直接改当前计划日期
+- 保持重复事项“只改当前 occurrence，不改规则”
+
+### 本轮关键判断
+- 日期入口直接放进现有编辑面板第一行，不新增独立“延期”系统。
+- quick add 和编辑共用一个日期草稿：
+  - 新增时可直接创建到未来日期
+  - 编辑时可直接把未完成 Todo 改到未来日期
+- 普通 Todo 改期时，直接改 `dayPlanItem.date`。
+- 重复事项改期时，继续保留当前 occurrence 的 `targetDate` 语义，只改实际显示用的 `date`，避免误改整条重复规则。
+- 已完成事项继续只开放 `completedAt` 编辑，不在这里开放改计划日期。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - quick add / 编辑面板新增日期草稿状态
+  - 第一行新增日历入口
+  - 新增与编辑都支持直接选择目标日期
+  - 普通 Todo：
+    - 创建时可直接落到目标日期
+    - 编辑时直接更新当前 `dayPlanItem.date`
+  - repeating Todo：
+    - 编辑时只改当前 occurrence 的显示日期
+    - 不改模板重复规则
+- 更新 `src/styles/globals.css`
+  - 为日历入口补充紧凑样式
+  - 收口三组控件到同一行
+  - 将模式切换字号轻压，避免拉长编辑卡片
+- 更新 `manual-test-checklist.md`
+  - 补充 quick add 改期、普通 Todo 改期、重复 Todo 改期口径
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+### 当前未完成 / 风险
+- 本轮尚未为“改计划日期”新增单元测试，当前主要依赖 Electron 手测。
+- 当前仍不支持已完成事项改计划日期，这是刻意保留的规则边界。
+
+## 2026-05-03（V3 Desktop 小修：种草条目编辑 + Mac 打包配置更新）
+
+### 本轮目标
+- 让种草清单支持直接编辑条目内容
+- 不开放 tag 编辑
+- 为下次 macOS 打包准备新图标与新 `.dmg` 名称
+
+### 本轮关键判断
+- 本轮只补“条目内容编辑”，不把种草清单重新扩成完整编辑表单，避免破坏当前列表密度。
+- 现有规则里种草是 backlog，不是 Todo 模板，因此列表内编辑优先只允许改标题，不顺手开放场景或清单归属调整。
+- 图标更新不在打包时临时手工处理，而是收进脚本，避免下次忘记同步 `J-Flow.PNG`。
+
+### 本轮修改
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 种草列表新增单条编辑入口
+  - 支持：
+    - 进入编辑
+    - 保存标题
+    - 取消编辑
+  - 仅更新 `title`
+  - 不修改：
+    - `activityTypeId`
+    - `sceneTagIds`
+- 更新 `src/styles/globals.css`
+  - 为种草标题内联输入框与编辑按钮补充样式
+- 更新 `package.json`
+  - 新增：
+    - `sync:icon`
+  - `package:mac`
+    - 打包前自动把根目录 `J-Flow.PNG` 同步到 `build/icon.png`
+  - `package:win`
+    - 同步沿用这套图标刷新逻辑
+  - `build.dmg.artifactName` 改为：
+    - `J-Flow-V1.2.dmg`
+- 更新 `manual-test-checklist.md`
+  - 补充种草列表标题编辑手测口径
+
+### 验证结果
+- 待本轮修改后统一执行：
+  - `corepack pnpm run lint`
+  - `corepack pnpm run build`
+
+### 当前未完成 / 风险
+- 本轮没有新增种草标题编辑的单测，当前主要依赖构建校验与 Electron 实机手测。
+- 这次已把打包脚本切到自动同步根目录图标，但尚未实际执行 `.dmg` 打包验证。
+
+## 2026-05-03（V3 Desktop 小修：完成时间取整设置）
+
+### 本轮目标
+- 在设置页追加“完成时间是否取整”选项
+- 让 Todo 勾选完成时按设置写入 `completedAt`
+- 保持旧备份、旧本地数据、SQLite 旧库自动兼容
+
+### 本轮关键判断
+- “完成时间取整”优先只作用于“勾选完成时的自动记录时间”。
+- 已完成事项的手动时间编辑仍按用户输入值保存，不再额外二次取整，避免用户精确修正时被系统再改写。
+- 新设置应默认落在 `5 分钟取整`，旧数据缺字段时也自动回落到这个默认值。
+
+### 本轮修改
+- 更新 `src/types/models.ts`、`electron/types.ts`
+  - `AppSettings` 新增：
+    - `completedAtRoundingMinutes`
+  - 允许值：
+    - `0`
+    - `5`
+    - `10`
+    - `30`
+- 更新 `src/features/todo/completed-at-rounding.ts`
+  - 新增完成时间取整工具：
+    - 默认值
+    - 选项文案
+    - 旧值归一化
+    - 自动记录时间取整
+- 更新 `src/db/schema.ts`
+  - `appSettingsSchema` 新增完成时间取整字段
+  - `APP_DATA_SCHEMA_VERSION` 升级到 `7`
+- 更新 `src/db/storage.ts`
+  - 旧 Web 本地数据 / 导入快照缺少该字段时，自动补成 `5`
+- 更新 `electron/sqlite.ts`
+  - `settings` 表新增：
+    - `completed_time_rounding_minutes`
+  - 已存在旧库时自动执行补列兼容
+  - SQLite 读写设置时同步收口该字段
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 设置页新增“完成时间取整”配置项
+  - 提供：
+    - 不取整
+    - 5 分钟取整
+    - 10 分钟取整
+    - 30 分钟取整
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 普通 Todo 完成
+  - 分次 Todo 进度到 100%
+  - 两条完成链路都改为按设置写入取整后的 `completedAt`
+- 更新 `src/features/todo/completed-at-rounding.test.ts`
+  - 覆盖取整算法
+- 更新 `src/db/storage.test.ts`
+  - 覆盖旧数据缺字段时默认回落 `5`
+- 更新 `manual-test-checklist.md`
+  - 新增“完成时间取整”手测口径
+- 记录图标提醒：
+  - 当前应用程序图标已更新为根目录 `J-Flow.PNG`
+  - 下次打包时需要同步切到这份图标资源
+
+### 验证结果
+- 待本轮修改后统一执行：
+  - `corepack pnpm run lint`
+  - `corepack pnpm run build`
+  - `corepack pnpm run test -- --runInBand`
+
+### 当前未完成 / 风险
+- 本轮未把“手动修改完成时间”也接入自动取整，这是刻意保留的精确编辑语义。
+- 下次进行 macOS / Windows 打包前，需要检查 `electron-builder` 图标来源是否已切到根目录 `J-Flow.PNG` 对应产物。
+
+## 2026-05-02（V3.4 Windows Compatibility）
+
+### 本轮目标
+- 保留现有 macOS Desktop 能力
+- 保留现有 Web 构建能力
+- 在现有 Electron Desktop 基础上新增 Windows target
+- 检查数据目录、SQLite、备份、导入导出、图标与打包配置是否写死 macOS
+
+### 本轮关键判断
+- 本轮不是重写 Windows 版，而是扩展现有 Electron Desktop 的跨平台打包能力。
+- Windows 第一轮更适合优先选 `portable`：
+  - 自用测试路径最短
+  - 安装器变量最少
+  - 能先验证图标、路径、SQLite 与导入导出兼容性
+- 当前数据路径主链路已经基本符合跨平台要求，核心都走了 Electron / Node API，而不是手写 macOS 目录。
+
+### 本轮检查结果
+- `electron/main.ts`
+  - 数据目录统一通过 `app.getPath('userData')`
+  - 打开数据目录统一通过 `shell.openPath(...)`
+  - JSON 导入 / 导出统一通过 `dialog.showOpenDialog(...)` / `dialog.showSaveDialog(...)`
+- `electron/sqlite.ts`
+  - SQLite 主库路径统一通过：
+    - `path.join(dataPath, 'j-flow.sqlite3')`
+- `electron/backup.ts`
+  - 自动备份目录统一通过：
+    - `path.join(dataPath, 'backups')`
+- 唯一保留的显式平台判断是：
+  - `process.platform !== 'darwin'` 时关闭所有窗口后退出应用
+  - 这是 Electron 常规生命周期差异处理，不属于路径写死问题
+
+### 本轮修改
+- 更新 `package.json`
+  - 新增：
+    - `package:win`
+  - `electron-builder` 新增 Windows 配置：
+    - `win.target = portable`
+    - `win.artifactName = J-Flow-V1-win-portable.${ext}`
+    - `win.icon = build/icon.png`
+  - 将 `electronDist=node_modules/electron/dist` 从全局 build 配置移除
+  - 改为仅在 `package:mac` 中通过命令行参数传入，避免 Windows 打包误复用 macOS Electron runtime
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 修正 `useRef` DOM 类型，消除 `build` 暴露的 TS 报错
+- 更新 `src/features/todo/todo-view-model.ts`
+  - 明确 `buildTodoTags` 返回 `string[]`，消除 `build` 暴露的 TS 报错
+
+### Windows 数据安全结论
+- Windows 用户数据目录：
+  - 继续通过 Electron `app.getPath('userData')` 获取
+  - 预计位于 `%APPDATA%/J-Flow`
+- SQLite 主库：
+  - `<userData>/j-flow.sqlite3`
+- JSON 自动备份目录：
+  - `<userData>/backups`
+- 卸载 / 删除应用：
+  - 当前第一轮是 `portable`
+  - 删除可执行文件不会自动删除 `%APPDATA%/J-Flow` 数据
+- macOS -> Windows 迁移建议：
+  - 推荐走 JSON 导出 / 导入
+  - 不建议直接复制 SQLite 主库文件
+- 安装 / 更新要求：
+  - 不应覆盖 `userData` 目录中的用户数据
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm run package:win`：
+  - 初次尝试失败，原因是需要下载 Windows Electron runtime，但本机网络无法解析 `github.com`
+  - 2026-05-02 用户已使用镜像环境变量再次执行并成功产出：
+    - `release/J-Flow-V1-win-portable.exe`
+  - 实际使用命令包含：
+    - `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`
+    - `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
+
+### 当前未完成 / 风险
+- 尚未在 Windows 真机验证：
+  - `%APPDATA%/J-Flow` 实际路径
+  - portable 可执行文件图标
+  - JSON 导入 / 导出对话框
+  - 数据目录打开行为
+- 当前还没有 Windows `nsis` 安装器
+- 当前已知问题：
+  - Windows 首包打开后“没有反应”
+  - 需在 Windows 真机环境继续排查：
+    - 是否为 ARM64 / x64 架构问题
+    - 是否被 SmartScreen 或系统策略拦截
+    - 是否存在启动即崩溃但未显示日志的情况
+- 当前阶段状态总结：
+  - Web 端继续可用
+  - macOS `V1` 版本进入实用测试
+  - Windows 端进入待办排查阶段
+
+## 2026-05-01（V3 Desktop UI Pass 01：独立页标题与页面壳统一修复）
+
+### 本轮目标
+- 修复种草清单独立页、垃圾桶独立页、设置独立页三者标题视觉不一致的问题
+- 只处理真实存在的结构问题，不继续扩展到主观观感争论
+
+### 本轮关键判断
+- 垃圾桶页之所以接近理想状态，不是偶然，而是它当前使用的是最干净的独立页结构：
+  - 统一外层 page stack
+  - 统一 surface card
+  - 统一 page header
+- 设置页标题间距偏大，真实原因是它没有使用与垃圾桶相同的页面壳：
+  - 外层使用了单独的 `settings-page` / `settings-surface-card`
+  - 顶部页头与正文之间不在同一套页级 gap 基线内
+- 种草清单页布局分散，真实原因不是标题文案，而是标题下第一屏内容被拆成彼此游离的计数区、筛选区和列表区：
+  - 页面壳看似接近
+  - 但首屏内容没有形成连续的单一工作区块
+
+### 本轮修改
+- 更新 `src/pages/grass-list/GrassListPage.tsx`
+  - 移除独立页外层的 `page-stack--manager`
+  - 改为与垃圾桶页一致的标准 `page-stack`
+  - 给正文补统一的 `page-panel__body`
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 设置页加载态与正常态都改回统一独立页壳：
+    - `page-stack`
+    - `surface-card surface-card--compact`
+    - `page-panel`
+    - `page-panel--settings`
+  - 将页头以下内容纳入统一 `page-panel__body`
+  - 去掉设置页依赖单独页面壳才能成立的结构
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 将计数区与筛选区合并为同一个 `template-manager__controls`
+  - 收口种草页标题下第一屏结构，让正文起点更集中
+- 更新 `src/styles/globals.css`
+  - 新增统一的 `page-panel__body`
+  - 为 manager / settings 正文补充页级 body 间距
+  - 删除设置页原有独立外层壳样式依赖
+  - 新增 `template-manager__controls` 样式，收口种草页首屏控件区
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+
+### 当前结论
+- 三个独立页现在回到了同一套页级骨架：
+  - 同类外层容器
+  - 同类页头位置
+  - 同类正文起点
+- 设置页标题与正文的结构间距已按统一页面壳收口
+- 种草清单页首屏已从“分散模块堆叠”收回为连续的管理区块
+
+### 当前未完成 / 风险
+- 本轮没有改垃圾桶真实功能，垃圾桶仍是占位页
+- 本轮没有调整三页更深层的内容密度差异：
+  - 设置页内部仍是多段 preferences/data/backup/testing
+  - 种草页内部仍是筛选 + 列表
+  这些属于业务内容差异，不再纳入本轮“统一标题与页面壳”修复范围
+
+### 追加修正（按实际页面对比）
+- 仅统一页面壳后，种草清单页仍未达到目标。
+- 通过实际页面对比确认，真实问题是：
+  - 种草页的 `page-panel__body--manager`
+  - `template-manager`
+  - `template-manager__controls`
+  - `template-manager__filters`
+  - `template-manager__list`
+  这些 grid 容器在整页高度下发生了内容拉伸，导致：
+  - 标题区与正文区像被分段撑开
+  - 筛选卡内部控件下沉
+  - 空状态卡被异常拉高
+- 本轮已补充将这些容器统一收回到 `align-content: start / align-items: start`
+- 这次修正仍然只处理真实存在的布局拉伸问题，不改业务结构
+
+### 追加修正（设置页与种草页计数文案）
+- 继续按实际页面对比确认：
+  - 设置页也存在与种草页同类的 grid 拉伸问题
+  - 设置页页头下方内容需要同样固定到顶部，而不是参与剩余高度分配
+- 本轮已为：
+  - `page-panel--settings`
+  - `page-panel__body--settings`
+  - `settings-panel`
+  补充 `align-content: start / align-items: start`
+- 同时补回种草页计数说明文案：
+  - 当前这个数字统计的是当前筛选结果中的未完成种草数
+  - 因此恢复为：
+    - `未完成 X 条`
+
+## 2026-05-02（V3 Desktop UI Pass 01：第三轮手动细修）
+
+### 本轮目标
+- 继续做桌面端第三轮人工细修
+- 只处理：
+  - Sidebar 品牌区与 TODAY 间距
+  - quick add 悬浮卡片内部控件比例与密度
+  - 拔草候选区滚动方式
+  - 主页种草区说明文案合并
+
+### 本轮关键判断
+- Sidebar 当前不是结构错误，而是品牌栏和 TODAY 卡片之间的留白略松，只需轻压，不应重做侧栏比例。
+- quick add 的主要问题不再是卡片壳尺寸，而是：
+  - 内部 grid 默认拉伸
+  - 普通条目模式的输入区过矮
+  - 拔草模式候选列表没有局部滚动边界
+- 拔草模式里真正需要滚动的是候选清单列表，不是整个浮层卡片。
+- 主页种草区的两条说明文案表达的是同一件事，合并进 placeholder 更干净。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 为 quick add 浮层新增 manual / grass 模式类
+  - 为普通条目模式输入壳新增独立类
+  - 为普通条目控件行新增独立类
+  - 为拔草候选列表新增可滚动类
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 合并种草输入说明文案到 placeholder
+  - 删除输入框下方重复说明
+- 更新 `src/styles/globals.css`
+  - 轻压 Sidebar 品牌区与 TODAY 卡片间距
+  - 收口 quick add 浮层为贴顶排布，避免内部控件继续被卡片高度拉伸
+  - 调整普通条目模式输入框高度为原先约 2 倍
+  - 收紧普通条目模式控件区间距
+  - 将拔草候选列表限制为 3 条高度并独立纵向滚动
+  - 保持 checkbox / recurrence 控件高度一致
+
+### 验证结果
+- 待本轮修改后统一执行
+
+### 当前未完成 / 风险
+- 本轮不改 quick add 的业务流程与提交流程
+- 若后续还要继续细调，将主要集中在：
+  - 浮层不同模式的横向宽度
+  - 候选条目单行密度
+  - 普通条目模式的更细输入节奏
+
+### 追加修正（quick add 小补丁）
+- 拔草条目模式下不再显示顶部 Todo 输入框，避免与“从候选里直接加入”这一路径冲突。
+- `必要 / 准备 / 分次` 与重复规则按钮高度统一回同一套 `--template-control-height` 基线，不再出现拔草模式控件略矮的问题。
+
+### 追加修正（quick add 控件高度纠偏）
+- 已撤回上一轮“高度翻倍”的误改。
+- 当前保留的结果是：
+  - 拔草条目模式下不显示顶部 Todo 输入框
+  - `必要 / 准备 / 分次` 与“不重复”按钮保持同一高度基线
+
+## 2026-05-02（V3 Desktop UI Pass 01：第四轮手动细修）
+
+### 本轮目标
+- 继续减少页面中不必要的框线
+- 收口已完成区域的信息层级
+- 调整种草清单页操作按钮文案与顺序
+
+### 本轮关键判断
+- 当前最影响页面清爽度的不是单个配色，而是“容器套容器”的层级过多。
+- Todo 区在“无事项”时继续显示白天/晚上空框，会把本来应该干净的留白变成多余装饰。
+- 设置页和种草清单页的问题都属于“内容已经足够分组，却还叠了一层容器框”。
+- 已完成区域里“完成于 xx”比“创建于 xx”更大，会让次级信息抢主信息，需要缩回同一层级。
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 白天/晚上/已完成分组在无事项时不再渲染空状态卡
+  - 仅保留有事项时的列表内容
+  - tag 行改为仅在存在 tag 时才渲染
+- 更新 `src/features/todo/todo-view-model.ts`
+  - 取消已完成事项的 `已完成` tag 生成
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - `TODO` 按钮改为 `TODO！`
+  - 位置调整到兴趣程度 stepper 之后
+- 更新 `src/styles/globals.css`
+  - 缩小已完成时间按钮字号，使其与“创建于 xx”一致
+  - 调整完成时间编辑图标尺寸
+  - 去掉设置页各二级分组的边框、圆角和渐变底色
+  - 去掉种草清单页顶部统计/筛选容器的边框、圆角和底色
+
+### 验证结果
+- 待本轮修改后统一执行
+
+### 当前未完成 / 风险
+- 本轮没有改设置页内部只读数据卡片，它们仍保留轻量信息面板样式
+- 本轮没有调整种草清单单条 item 卡片本身的边框层级
+
+## 2026-05-02（V3 Desktop UI Pass 01：第五轮手动细修）
+
+### 本轮目标
+- 继续精简已完成事项信息
+- 调整种草清单计数对齐
+- 修正主页 Todo 标题文案
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 已完成事项不再显示：
+    - `创建于某日`
+    - 准备备注
+    - 分次进度条
+  - 主页 `TODO` 区标题从：
+    - `未完成`
+    改为：
+    - `待办`
+- 更新 `src/styles/globals.css`
+  - 种草清单顶部 `未完成 X 条` 计数改为左对齐
+
+### 验证结果
+- 待本轮修改后统一执行
+
+### 当前未完成 / 风险
+- 本轮没有继续调整种草清单单条卡片本身的边框层级
+
+## 2026-05-01（V3 Desktop UI Pass 01：桌面应用化 UI 初调）
+
+### 本轮目标
+- 不改业务规则、不改数据模型、不改存储实现
+- 先做一轮桌面应用化 UI 收口
+- 优先去掉当前 macOS / Electron 端明显的“网页感”
+
+### 当前 UI 为什么像网页
+- `AppShell` 当前更像网页 header：
+  - 顶部条过窄，且品牌、主导航、设置入口的关系更接近网页站点头部，而不是稳定的应用 toolbar
+  - 主内容宽度仍锁在窄列，窗口像“网页容器”而不是“应用工作区”
+- `HomePage` 当前更像单页网页：
+  - 日期区、Todo 主区、底部种草输入区按网页段落自上而下堆叠
+  - “今日”主工作区缺少稳定的 workspace 层级，像把多个模块放进同一页
+- `TodoModePanel` 当前更像功能块集合：
+  - 新增区、排序工具、白天 / 晚上 / 已完成分组都能用，但视觉关系不够清楚
+  - 排序入口、快速新增、分组标题还不够“工具化”
+- `GrassListPage` / `TemplateManagerPanel` 当前更像网页列表页：
+  - 页面壳偏轻，条目偏卡片堆叠
+  - 筛选、状态标签、`TODO` 按钮、兴趣调整器还不够像桌面管理列表
+- `SettingsPanel` 当前更像网页表单页：
+  - 各区块都是“说明 + 一排按钮”，更像 Web 设置页而不是 app preferences
+  - 数据目录 / 主库 / 自动备份虽然信息完整，但信息面板层级还不够系统化
+- 全局控件密度偏网页 / 移动端：
+  - 间距略松、主内容列偏窄、按钮权重过于接近
+  - 暖色与轻量气质本身没有问题，网页感主要来自布局、信息层级和面板组织方式
+
+### 本轮策略
+- 不重构路由，继续沿用现有页面结构
+- 通过：
+  - 更稳定的 app shell
+  - 更像桌面工具栏的导航
+  - 更宽、更稳定的 workspace
+  - 更克制的面板层级
+  - 更清楚的 preferences / manager list 视觉
+  来完成第一轮应用化收口
+
+### 本轮修改
+- 更新 `src/app/shell/AppShell.tsx`
+  - 顶部导航改成更像桌面 app toolbar 的结构：
+    - 左侧品牌
+    - 中部主导航
+    - 右侧设置工具入口
+  - 主内容外包一层更稳定的 `workspace`
+- 更新 `src/pages/home/HomePage.tsx`
+  - 今日页顶部改成工作区工具栏样式
+  - 底部种草区改成更像 docked quick capture 的结构
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 快速新增区增加清晰的 workspace header
+  - 白天 / 晚上 / 已完成分组统一为稳定的列表面板
+  - 排序工具条更工具化
+- 更新 `src/pages/grass-list/GrassListPage.tsx`
+  - 增加页面壳与说明层级
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 种草管理区改成更像桌面 manager list
+  - 增加列表计数、筛选标签标题、条目 meta 信息
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 补快速录入 footer 结构，便于收口消息和表单层级
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 按 preferences / data / backup / testing 分组
+  - 让数据目录与主库文件信息更像系统信息面板
+- 更新 `src/styles/globals.css`
+  - 扩大 Desktop workspace 宽度
+  - 收口 toolbar / workspace / panel / list / preferences 的统一视觉
+  - 调整桌面端密度、控件权重、状态面板与 dock 质感
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+### 当前结论
+- Desktop 端第一轮“应用程序化 UI 收口”已完成初调。
+- 当前视觉重心已从“窄网页列 + 模块堆叠”调整为“稳定应用壳 + workspace 面板 + 轻量工具栏”。
+- 本轮没有改业务规则、存储逻辑、数据结构或导入导出行为。
+
+### 当前未完成 / 风险
+- 这轮仍是第一轮 UI 初调，不是最终定稿：
+  - 细节间距
+  - 控件重量
+  - 某些列表项文字层级
+  仍可以继续人工细修
+- 目前主要验证的是 `lint/build` 与接下来 Electron dev 观感，不包含 UI 自动化截图测试。
+
+## 2026-05-01（V3 Desktop UI Pass 01：左右布局人工修改第一轮）
+
+### 本轮目标
+- 把当前顶部导航式布局改为更像本地桌面应用的左右结构
+- 左侧固定 Sidebar，右侧为可拉伸 workspace
+- 不改业务规则，只改 UI 结构与交互壳
+
+### 本轮关键判断
+- 仅靠顶部 toolbar 已经不足以承接你要求的“长期打开的小工具”气质，日期切换和导航需要稳定落到左侧。
+- 左侧月历如果继续沿用 `input[type=date]` 弹出式体验，会明显拉回网页感，因此这轮直接接入常驻月历面板更合适。
+- 主页右侧的 Quick add 若继续占据正常文档流，会与 Todo 主区抢层级；改成黄色 `+` + 浮层卡片，更符合你要的桌面工具感。
+
+### 本轮修改
+- 更新 `src/app/router.tsx`
+  - 新增 `/trash` 占位路由
+- 更新 `src/app/shell/AppShell.tsx`
+  - 改为左右布局：
+    - 左侧固定 Sidebar
+    - 右侧 workspace
+  - 把 `selectedDate` 提升到 Shell 层
+  - 通过 `Outlet context` 传给主页
+  - Sidebar 新增：
+    - `J-Flow`
+    - 左右切日 + Today 日期
+    - 常驻月历
+    - `TODO`
+    - `种草清单`
+    - `垃圾桶`
+    - `设置`
+- 更新 `src/components/ui/Icons.tsx`
+  - 新增 `TrashIcon`
+- 更新 `src/pages/home/HomePage.tsx`
+  - 去掉右侧顶部日期工具栏
+  - 主页日期改由 Shell 提供
+  - 保留底部种草区，并收成 bottom sheet 风格
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - Quick add 改为黄色 `+`
+  - 点击后展开漂浮卡片
+  - 打开后输入框自动聚焦
+  - Todo 改为单一大卡片内部承载：
+    - 白天事项
+    - 晚上事项
+    - 已完成事项
+- 新增 `src/pages/trash/TrashPage.tsx`
+  - 垃圾桶占位页
+- 更新 `src/styles/globals.css`
+  - 补 Sidebar、月历、右侧 workspace、浮层 Quick add、Bottom Sheet 样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+### 当前结论
+- 当前桌面版已从“顶部导航 + 单列内容”进入“Sidebar + Workspace”的结构阶段。
+- 常驻月历、浮层 Quick add 和垃圾桶占位都已接上。
+
+### 当前未完成 / 风险
+- 垃圾桶目前仅是占位页，尚未接真实删除恢复逻辑。
+- Quick add 浮层当前仍是第一版，后续还可以继续细调：
+  - 尺寸
+  - 遮罩感
+  - 关闭时状态是否保留
+- Sidebar 月历目前是轻量实现，后续若要支持更复杂的月份跳转和键盘导航，还可继续增强。
+
+## 2026-05-01（V3 Desktop UI Pass 01：左右布局人工修改第二轮）
+
+### 本轮目标
+- 对第一轮 Sidebar + Workspace 版本做第二轮人工细修
+- 重点修正：
+  - Sidebar 宽度与品牌排版
+  - Quick add 入口与浮层手感
+  - Todo 区文案精简
+  - 种草 / 种草清单 / 垃圾桶 / 设置页头统一
+
+### 本轮修改
+- 更新 `src/app/shell/AppShell.tsx`
+  - 左侧副标题改为：
+    - `J人用的拔草todo`
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - Quick add 入口从独立黄色按钮改为白色条目
+  - 白色条目左侧保留黄色 `+`
+  - Quick add 浮层放大
+  - 删除浮层顶部说明与右上角关闭按钮
+  - 删除输入框右侧 `+`
+  - 保留回车保存
+  - 新增点击卡片外部时：
+    - 有输入则保存并关闭
+    - 无输入则直接关闭
+  - 拔草候选区新增：
+    - `按清单筛选`
+    - `按场景筛选`
+  - 删除 Todo 主卡片中的：
+    - `DAY 白天事项`
+    - `NIGHT 晚上事项`
+    说明文字
+- 更新 `src/pages/home/HomePage.tsx`
+  - 快速种草标题改为：
+    - `GRASS 种草`
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 调整兴趣程度行，让 `1 / 2 / 3` 紧跟在“兴趣程度”后
+- 更新 `src/pages/grass-list/GrassListPage.tsx`
+  - 删除页面说明文案
+- 更新 `src/pages/trash/TrashPage.tsx`
+  - 删除页面说明文案
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 页面头改为：
+    - `SETTINGS 设置`
+  - 删除顶部说明文案
+- 更新 `src/styles/globals.css`
+  - 放宽 Sidebar 宽度
+  - 品牌区右对齐
+  - 调整种草清单列表间距
+  - 收口 Quick add 白条入口和放大后的浮层样式
+  - 补充推荐筛选小字样式
+  - 收口设置页头样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+### 当前结论
+- 第二轮人工细修已经把右侧 Quick add、Sidebar 宽度、页面头文案和种草区细节进一步收齐。
+- 当前桌面端整体已经更接近“本地长期打开的小工具”而不是网页页面。
+
+### 当前未完成 / 风险
+- 垃圾桶仍是占位页，没有接恢复逻辑。
+- Quick add 浮层关闭即保存目前采用最小实现，后续如果你想区分：
+  - 关闭但不保存
+  - 点击空白保存
+  还可以进一步精细化。
+
+## 2026-05-01（V3 Desktop UI Pass 01：返工补丁）
+
+### 本轮修改
+- 收窄并抬高 Quick add 浮层
+- 删除 Todo 顶部残留的独立 `+` 入口
+- 保持 Sidebar 品牌区右对齐
+- 设置页页面头改成与其他页面一致的：
+  - 小字英文 eyebrow
+  - 中文主标题
+- 继续压缩种草清单单行密度
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+
+## 2026-05-01（V3.4 前置：macOS 打包前收口 + `package:mac` 第一版）
+
+### 本轮目标
+- 先做 macOS 打包前收口
+- 接入 `package:mac` 第一版最小打包配置
+- 目标是产出本机自用、未签名的 `.dmg`
+
+### 本轮关键判断
+- 当前桌面运行链路、SQLite 主库、导入 / 导出、自动备份都已具备，因此已经到了可以尝试 macOS 第一版打包的阶段。
+- 第一版不追求签名、公证或发布级配置，先以：
+  - 本机可打包
+  - `.dmg` 可挂载
+  - `J-Flow.app` 可拖入 `Applications`
+  - 应用可正常启动
+  为目标更稳。
+- 打包前必须先把 README 与手测清单更新到当前真实状态，避免继续沿用“尚未进入 SQLite / 打包前阶段”的旧口径。
+
+### 本轮修改
+- 更新 `README.md`
+  - 收口当前 Desktop 状态
+  - 补充 `package:mac` 命令说明
+- 更新 `manual-test-checklist.md`
+  - 新增 macOS 打包前验收项
+  - 新增 `.dmg` 第一版验收项
+- 更新 `package.json`
+  - 新增 `package:mac`
+  - 新增最小 `electron-builder` 配置：
+    - `appId`
+    - `productName`
+    - `directories.output`
+    - `files`
+    - `mac.target = dmg`
+    - `dmg.artifactName`
+  - 排除 `dist-electron` 下的测试产物与测试夹具
+
+### 验证结果
+- `corepack pnpm install`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm run package:mac`：
+  - 通过最小配置完成 `.app` 产出
+  - 后续通过 `electron-builder --mac dmg --prepackaged release/mac-arm64/J-Flow.app` 完成 `.dmg` 封装
+- `hdiutil verify release/J-Flow-0.1.0.dmg`：通过
+
+### 当前结论
+- 当前已具备接入 `package:mac` 第一版的条件。
+- 当前第一版 macOS 打包已落地：
+  - `release/J-Flow-0.1.0.dmg`
+  - `release/mac-arm64/J-Flow.app`
+- 本轮产物是本机自用安装包，不是发布级安装包。
+
+### 当前未完成 / 风险
+- 仍未接入：
+  - 代码签名
+  - 公证
+  - App Store 分发
+- 首次打开 unsigned 应用时，macOS 仍可能给出安全提示。
+- 当前使用的是默认 Electron 图标，尚未补 `.icns` 应用图标资源。
+- `package.json` 仍缺少 `description` 与 `author`，`electron-builder` 会给出提示但不阻塞打包。
+
+## 2026-05-01（V3.3 Local Backup 第四轮补充：数据目录与主库文件说明收口）
+
+### 本轮目标
+- 收口“数据目录 / SQLite 主库 / 自动备份目录 / 手动导入导出”的说明口径
+- 不改存储行为
+- 不改备份规则
+- 只补清晰的只读展示与文档说明
+
+### 本轮关键判断
+- 当前设置页虽然已经展示数据目录，但没有把“SQLite 主库文件就在这个目录里”明确说清。
+- 当前文档里仍残留一段“桌面主数据仍是 IndexedDB 过渡方案”的旧状态描述，容易和现状冲突。
+- 最稳的做法是新增一个只读 `storage info` bridge，把：
+  - 数据目录
+  - SQLite 主库文件路径
+  - 自动备份目录
+  一次性明确暴露给设置页。
+
+### 本轮修改
+- 更新 `electron/sqlite.ts`
+  - 新增 `getSqliteDatabasePath(dataPath)`
+- 更新 `electron/main.ts`
+  - 新增 `app:get-storage-info`
+  - 返回：
+    - `dataPath`
+    - `databasePath`
+    - `autoBackupDirectory`
+- 更新 `electron/preload.ts`
+  - 暴露 `getStorageInfo()`
+- 更新 `src/vite-env.d.ts`
+  - 补齐 `DesktopStorageInfo` 类型
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 设置页新增“当前 SQLite 主库文件”只读展示
+  - 说明文案改为明确区分：
+    - 数据目录
+    - 运行时主库
+    - `backups/` 自动备份目录
+    - 手动导出 JSON 的实际保存位置由系统文件对话框决定
+- 更新文档：
+  - `app-structure.md`
+  - `data-model.md`
+  - `task-list.md`
+  - `handoff.md`
+
+### 验证结果
+- 待本轮代码修改后统一执行
+
+### 当前结论
+- 当前桌面口径应明确为：
+  - 运行时主库：SQLite
+  - 主库文件：`j-flow.sqlite3`
+  - 数据目录：Electron `userData`
+  - 自动备份目录：数据目录下 `backups/`
+  - 手动导出 JSON：不强制保存在数据目录
+
+### 当前未完成 / 风险
+- 本轮只做说明收口，没有新增“自定义数据目录”或“主库文件打开”能力。
+
+## 2026-05-01（V3.3 Local Backup 第四轮补充：自动备份测试时钟注入）
+
+### 本轮目标
+- 只做测试收口
+- 把自动备份轮换测试从真实时间等待改成可注入时钟
+- 不改业务行为
+- 不改备份规则
+- 不做打包相关工作
+
+### 本轮关键判断
+- 自动备份测试当前最慢的点不是逻辑复杂，而是为生成不同文件名而真实等待秒级时间推进。
+- 最小且安全的收口方式是：
+  - 在 `electron/backup.ts` 内部给“当前时间”来源增加可注入时钟
+  - 默认仍走真实 `Date`
+  - 业务调用方完全不需要改
+- 这样可以保留现有备份规则，同时让测试直接构造时间序列。
+
+### 本轮修改
+- 更新 `electron/backup.ts`
+  - 为 `createAutoBackup(...)` 增加可选 `clock.now()` 注入
+  - 默认仍使用真实 `new Date()`
+- 更新 `electron/backup.test.ts`
+  - 删除轮换测试中的 `setTimeout(1000)` 真实等待
+  - 改为传入可控时间序列
+  - 补充断言：
+    - 轮换后保留首个文件应为 `08:00:02`
+    - 最后一个文件应为 `08:00:21`
+
+### 验证结果
+- `corepack pnpm exec vitest run electron/backup.test.ts`：通过
+- `corepack pnpm run lint`：通过
+
+### 当前结论
+- 自动备份测试已从真实时间等待切到可注入时钟。
+- 本轮未改变任何业务语义、备份规则或运行时触发逻辑。
+
+### 当前未完成 / 风险
+- 目前时钟注入仅用于 `createAutoBackup(...)`，这是有意保持最小改动范围。
+- 尚未进一步把时间相关 helper 全面抽象为独立测试工具；当前没有必要。
+
+## 2026-05-01（V3.3 Local Backup 第四轮补充：SQLite / AppData Service 最小自动化测试）
+
+### 本轮目标
+- 为 Desktop 主库存储相关能力补最小自动化测试
+- 优先覆盖：
+  - SQLite repository 核心读写
+  - 自动备份核心路径
+  - `storage.ts` Desktop `appData service` 接线
+
+### 本轮关键判断
+- 这轮最值得先补的不是 UI 测试，而是数据安全链路上的“最小可回归护栏”：
+  - `electron/sqlite.ts`
+  - `electron/backup.ts`
+  - `src/db/storage.ts` 的 Desktop 分支
+- `build:desktop` 不应因为 Electron 测试文件而失败，因此桌面构建需要显式排除 `*.test.ts`。
+- Electron 测试不应依赖 renderer 侧别名和 mocks，使用本地测试夹具更稳。
+
+### 本轮修改
+- 新增 `electron/test-fixtures.ts`
+  - 提供 Electron 侧测试专用最小种子数据
+- 新增 `electron/sqlite.test.ts`
+  - 覆盖：
+    - `replaceSqliteSnapshot` 后整包读回
+    - `taskTemplates` / `dayPlanItems` 代表性 CRUD
+    - `deleteSqliteSceneTagAndDetachTemplates`
+    - `deleteSqliteActivityTypeIfUnused`
+- 新增 `electron/backup.test.ts`
+  - 覆盖：
+    - 无数据时跳过备份
+    - 正常生成 JSON 自动备份
+    - 启动时同日备份跳过
+    - 自动备份轮换最多保留 20 份
+- 新增 `src/db/storage.desktop.test.ts`
+  - 验证 Desktop 下：
+    - `get`
+    - `replace`
+    - `reset`
+    - `import`
+    - `export`
+    都走 `repository.appData`
+  - 验证不再依赖旧 snapshot bridge 作为主路径
+- 更新 `electron/tsconfig.json`
+  - 排除 `./**/*.test.ts`
+  - 避免 `build:desktop` 将测试文件纳入 Electron 产物编译
+
+### 验证结果
+- `corepack pnpm exec vitest run electron/sqlite.test.ts electron/backup.test.ts src/db/storage.desktop.test.ts`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- SQLite / `app-data service` 已具备最小自动化回归护栏。
+- 当前桌面构建与测试职责已分离：
+  - 测试可独立运行
+  - `build:desktop` 不再被测试文件拖垮
+
+### 当前未完成 / 风险
+- 目前仍未覆盖 Electron IPC 端到端测试。
+- 自动备份轮换测试依赖真实时间等待，运行耗时较长。
+- 仍未补更细粒度的 SQLite batch / transaction service 专项测试。
+
+## 2026-05-01（V3.3 Local Backup 第四轮：自动备份第一版）
+
+### 本轮目标
+- 落地桌面版自动备份第一版
+- 复用现有完整 JSON 快照格式
+- 不做复杂定时器和多项配置，先把“默认开启、可见、可手动触发、可轮换”跑通
+
+### 本轮关键判断
+- 第一版自动备份最稳的策略不是先上“每 N 小时定时”，而是：
+  - 启动后做一次当日备份检查
+  - 在 `appData.replace / reset / import` 成功后自动补备份
+- 这样能覆盖当前最关键的数据变更点，同时验证成本明显低于引入调度器。
+- 备份应继续使用 JSON 快照，而不是直接复制 SQLite 运行时数据库文件。
+
+### 本轮修改
+- 新增 `electron/backup.ts`
+  - 新增自动备份目录管理：
+    - 数据目录下 `backups/`
+  - 新增自动备份文件命名：
+    - `j-flow-auto-backup-YYYYMMDD-HHmmss.json`
+  - 新增轮换策略：
+    - 最多保留最近 `20` 份
+  - 新增启动备份检查：
+    - 当日已有自动备份则跳过
+- 更新 `electron/main.ts`
+  - 新增 IPC：
+    - `app:get-auto-backup-info`
+    - `app:create-auto-backup`
+    - `app:open-backup-directory`
+  - `appData.replace / reset / import` 成功后自动创建备份
+  - 启动时增加自动备份检查
+- 更新 `electron/preload.ts`
+  - 暴露：
+    - `getAutoBackupInfo()`
+    - `createAutoBackup()`
+    - `openBackupDirectory()`
+- 更新 `src/vite-env.d.ts`
+  - 补齐自动备份相关 bridge 类型
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 新增“自动备份”区块
+  - 显示：
+    - 自动备份目录
+    - 最近一次自动备份时间
+    - 当前自动备份数量
+  - 新增：
+    - “立即创建备份”
+    - “打开备份目录”
+  - 同步修正数据目录说明文案为当前 SQLite 口径
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 桌面版自动备份第一版已落地。
+- 当前自动备份默认开启，采用 JSON 快照格式，保留最近 20 份。
+
+### 当前未完成 / 风险
+- 暂未提供：
+  - 开关配置
+  - 自定义保留数量
+  - 定时计划
+  - 备份列表浏览
+  - 一键恢复指定自动备份
+- 自动备份目前以事件触发为主，不是独立调度系统。
+
+## 2026-05-01（V3.3 Local Backup 第三轮最终收口：Desktop AppData Service）
+
+### 本轮目标
+- 把 `storage.ts` 里 Desktop 下仍保留的：
+  - `get / replace / reset / import / export / update`
+  从“快照细节接口”收束到更明确的 main 侧 `app-data service`
+
+### 本轮关键判断
+- 当前外部日常业务代码已经基本退出快照桥，最后需要收口的是 `storage.ts` 自己内部的 Desktop 分支。
+- 比起继续保留 renderer 侧的 `snapshot + revision` 心智，更清晰的做法是：
+  - 由 Electron main 暴露明确的 `appData` service
+  - `storage.ts` 仅消费：
+    - `appData.get`
+    - `appData.replace`
+    - `appData.reset`
+    - `appData.exportSnapshot`
+    - `appData.importSnapshot`
+- `updateAppData` 在 Desktop 下保留为过渡层，但内部也只复用 `appData.get + appData.replace`，不再自己做 revision 重试。
+
+### 本轮修改
+- 更新 `electron/main.ts`
+  - 新增 IPC：
+    - `db:app-data:replace`
+    - `db:app-data:reset`
+    - `db:app-data:export`
+    - `db:app-data:import`
+- 更新 `electron/preload.ts`
+  - `repository.appData` 新增：
+    - `replace`
+    - `reset`
+    - `exportSnapshot`
+    - `importSnapshot`
+- 更新 `src/vite-env.d.ts`
+  - 补齐新增 `appData service` 类型定义
+- 更新 `src/db/storage.ts`
+  - Desktop 下：
+    - `initializeAppData` 改走 `appData.get + appData.replace`
+    - `exportAppDataSnapshot` 改走 `appData.exportSnapshot`
+    - `replaceAppData` 改走 `appData.replace`
+    - `importAppDataSnapshot` 改走 `appData.importSnapshot`
+    - `resetAppData` 改走 `appData.reset`
+    - `updateAppData` 改为基于 `appData.get + appData.replace` 的过渡实现
+  - 删除 Desktop 主路径对 `snapshot revision retry` 的依赖
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- Desktop 下 `storage.ts` 的整包能力已经从“快照桥细节”收口为更明确的 `app-data service`。
+- 当前快照语义仍存在，但已经退居到 main 侧受控实现，而不是 renderer 自己处理。
+
+### 当前未完成 / 风险
+- `updateAppData` 在 Desktop 下仍作为过渡层存在，虽然外部业务已几乎不用它。
+- Electron main 的 `app-data service` 目前内部仍复用了整包替换语义，不是最终形态的细粒度 batch service。
+- 仍未补 SQLite service / app-data service 专项自动化测试。
+
+## 2026-05-01（V3.3 Local Backup 第三轮再收口：日常业务退出快照桥）
+
+### 本轮目标
+- 继续压缩 Desktop 下 `updateAppData / replaceAppData` 的日常使用面
+- 让快照桥更明确地退回：
+  - setup 初始化
+  - reset
+  - import / export
+  - 旧 Dexie 迁移
+
+### 本轮关键判断
+- 外部业务代码里真正还在依赖 `appDataRepository.update / replace` 的路径已经不多：
+  - 批量种草兜底校验
+  - 停止重复
+  - Todo 手动排序
+  - 自动生成 recurrence 同步
+  - Todo 顺延 carryover
+- 这些逻辑虽然之前借用了全局 mutator / replace，但本质上都能改成：
+  - 实体级 CRUD
+  - 或基于现有 repository 的批量更新
+
+### 本轮修改
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 批量种草落库校验补写不再走 `appDataRepository.update`
+  - 改为对缺失条目逐条 `taskTemplates.create`
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 停止重复不再走全局 `update`
+  - 改为：
+    - `taskTemplates.update`
+    - `recurringTaskInstances.delete`
+    - `dayPlanItems.delete`
+  - 手动排序不再走全局 `update`
+  - 改为逐条 `dayPlanItems.update`
+- 更新 `src/features/continuation/todo-carryover.ts`
+  - 顺延写回不再走 `appDataRepository.replace`
+  - 改为逐条 `dayPlanItems.update`
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - 自动生成同步不再走 `appDataRepository.replace`
+  - 改为对变化过的：
+    - `recurringTaskInstances.create / update`
+    - `dayPlanItems.create / update`
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 外部日常业务代码已不再直接使用 `appDataRepository.update / replace`。
+- 当前仅剩 `SetupPage` 保留 `replaceAppData`，这是符合语义的整包初始化场景。
+
+### 当前未完成 / 风险
+- `src/db/storage.ts` 中快照桥本身仍保留：
+  - `replace / update / import / export / reset`
+- 这轮的“批量实体更新”仍主要由 renderer 顺序编排，尚未全部进一步下沉为 main 侧 batch service。
+- 仍未补 SQLite repository / batch update 专项自动化测试。
+
+## 2026-05-01（V3.3 Local Backup 第三轮补收口：组合事务下沉 + 聚合读取收口）
+
+### 本轮目标
+- 继续收口 Desktop SQLite repository 第一版
+- 把仍停留在 renderer 编排的高频组合动作下沉到 main 侧事务
+- 把 Desktop 下的整包读取尽量收回到 main 侧聚合
+
+### 本轮关键判断
+- 当前最值得优先收口的不是继续加更多单表 CRUD，而是：
+  - `sceneTags.deleteAndDetachTemplates`
+  - `activityTypes.deleteIfUnused`
+  - `getAppData()` 的 Desktop 聚合读取
+- 这三项正好覆盖：
+  - 跨实体联动事务
+  - 初始化 / setup / guard 使用的整包读取入口
+  - “快照桥仍被日常主路径借用”的关键残留点
+
+### 本轮修改
+- 更新 `electron/sqlite.ts`
+  - 新增 `getSqliteAppData`
+  - 新增 `deleteSqliteSceneTagAndDetachTemplates`
+  - 新增 `deleteSqliteActivityTypeIfUnused`
+- 更新 `electron/main.ts`
+  - 新增 IPC：
+    - `db:app-data:get`
+    - `db:scene-tags:delete-and-detach-templates`
+    - `db:activity-types:delete-if-unused`
+- 更新 `electron/preload.ts`
+  - `repository.appData.get()`
+  - `repository.sceneTags.deleteAndDetachTemplates()`
+  - `repository.activityTypes.deleteIfUnused()`
+- 更新 `src/vite-env.d.ts`
+  - 补齐新增 bridge 类型
+- 更新 `src/db/storage.ts`
+  - Desktop 下 `getAppData()` 改走 `repository.appData.get()`
+  - `sceneTags.deleteAndDetachTemplates` 改走 main 侧事务 IPC
+  - `activityTypes.deleteIfUnused` 改走 main 侧事务 IPC
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- Desktop 下的高频组合动作已不再依赖 renderer 侧“先查再改”的分散写法。
+- 初始化链路中的整包读取也已优先收回到 main 侧聚合。
+
+### 当前未完成 / 风险
+- 快照桥仍保留给：
+  - `replace / update / import / export / reset`
+  - 首次旧 Dexie -> SQLite 迁移
+- 这轮仍未把所有全局 mutator 彻底替换成实体级或 service 级事务。
+- SQLite repository 仍缺少专项自动化测试。
+
+## 2026-05-01（V3.3 Local Backup 第三轮：Desktop SQLite 实体级 Repository 第一版）
+
+### 本轮目标
+- 开始把 Desktop 主库存储从“快照级替换”推进到“实体级 repository 操作”
+- 保持现有页面调用口径不变
+- 优先切基础 CRUD，不一轮重写全部组合业务
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮关键判断
+- 当前页面层大多已经通过 `appDataRepository.<entity>.*` 调用存储，而不是直接依赖整包 `AppData`，这非常适合渐进式下沉到 main。
+- 这轮最稳的做法不是删除快照桥，而是：
+  - 保留快照用于初始化、导入 / 导出、reset、旧 Dexie 迁移
+  - 把日常实体 CRUD 优先切到 Electron main + SQLite
+- 像 `deleteAndDetachTemplates`、`deleteIfUnused` 这类跨实体组合动作，先保留在 renderer 侧编排，避免一轮塞进过大的 SQL 事务重构。
+
+### 本轮修改
+- 更新 `electron/types.ts`
+  - 新增 Electron 侧实体 update input 类型
+- 更新 `electron/sqlite.ts`
+  - 新增 SQLite 实体级读写方法：
+    - `settings`
+    - `scene_tags`
+    - `activity_types`
+    - `task_templates`
+    - `recurring_task_instances`
+    - `day_plan_items`
+  - 新增单次实体变更的 revision bump 封装
+- 更新 `electron/main.ts`
+  - 新增实体级 IPC：
+    - `db:settings:*`
+    - `db:scene-tags:*`
+    - `db:activity-types:*`
+    - `db:task-templates:*`
+    - `db:recurring-task-instances:*`
+    - `db:day-plan-items:*`
+- 更新 `electron/preload.ts`
+  - 暴露 `window.jflowDesktop.repository`
+- 更新 `src/vite-env.d.ts`
+  - 补齐实体级 bridge 类型定义
+- 更新 `src/db/storage.ts`
+  - Desktop 分支的 `settings / sceneTags / activityTypes / taskTemplates / recurringTaskInstances / dayPlanItems`
+    优先改走实体级 IPC
+  - 快照桥仍保留给：
+    - `get / replace / update / reset / import / export`
+    - 首次旧 Dexie -> SQLite 迁移
+  - 组合动作继续由 renderer 编排：
+    - `sceneTags.deleteAndDetachTemplates`
+    - `activityTypes.deleteIfUnused`
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- Desktop 日常实体写入已开始脱离“整包快照读改写”模式。
+- 当前页面层调用口径保持不变，但 Desktop 下大部分 repository CRUD 已经直接落到 Electron main + SQLite。
+
+### 当前未完成 / 风险
+- `getAppData / replace / update / import / export / reset` 仍保留快照桥，尚未完全实体化。
+- 组合动作仍主要在 renderer 编排，暂未下沉为 main 侧事务级 service。
+- 这轮还没有补 SQLite repository 专项自动化测试，当前主要依赖构建与桌面运行验证。
+
+## 2026-05-01（V3.3 Local Backup 第二轮补修：Desktop 启动误触 IndexedDB）
+
+### 本轮目标
+- 修复 Desktop 新窗口启动时报：
+  - `初始化状态读取失败`
+  - `UnknownError Internal error opening backing store for indexedDB.open`
+
+### 本轮关键判断
+- Desktop 主库虽然已经切到 SQLite，但 `src/db/index.ts` 仍在 re-export `client`。
+- 业务代码大量通过 `@/db` 引用仓库；这会让 Electron 渲染进程在普通 import 时就把 Dexie 客户端一并带入。
+- 对 Desktop 而言，这种“无意带入 IndexedDB 入口”的风险高于单个 `db.open()` 调用本身，因此需要先把导出层收紧。
+
+### 本轮修改
+- 更新 `src/db/index.ts`
+  - 移除对 `@/db/client` 的默认 re-export
+  - 保留 `schema` 与 `storage` 导出
+- 延续 `src/db/storage.ts` 的 Desktop / Web 分流口径：
+  - Web 侧 Dexie 改为按需 lazy import
+  - Desktop 启动路径默认不再通过 `@/db` 入口碰到 Dexie
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- Desktop 初始化链路已进一步收紧，默认应只走 SQLite bridge。
+- 本轮修复的是“Electron 启动时误触 IndexedDB 入口”的高概率根因。
+
+## 2026-05-01（V3.3 Local Backup 第二轮：Desktop SQLite 主库存储第一版）
+
+### 本轮目标
+- 开始落地 Desktop 运行时主库存储迁移
+- 不改现有页面调用口径
+- 先完成：
+  - Electron main 持有 SQLite
+  - renderer 通过受控 bridge 读写桌面主库
+  - Web 继续保留 Dexie
+
+### 本轮关键判断
+- 当前业务代码已经基本收敛在 `src/db/storage.ts`，最稳的切入点不是重写页面层，而是把最底层快照持久化后端改成双实现。
+- 第一版不直接把所有业务改成 SQL 级 CRUD，而是：
+  - Electron main 里用实体表存 SQLite
+  - renderer 继续复用现有 `AppData` 快照式仓库逻辑
+  - Desktop 通过 IPC 做快照读写与 revision 冲突控制
+- 这样可以先把“主库从 IndexedDB 切到 SQLite”落地，再逐步细化实体级操作。
+
+### 本轮修改
+- 新增 `electron/sqlite.ts`
+  - 使用 Node 内建 `node:sqlite`
+  - 新增 SQLite schema：
+    - `meta`
+    - `settings`
+    - `scene_tags`
+    - `activity_types`
+    - `task_templates`
+    - `recurring_task_instances`
+    - `day_plan_items`
+  - 新增 revision 机制
+  - 新增整库快照读取 / 替换
+- 新增 `electron/types.ts`
+  - 为 Electron 侧本地定义 `AppData` 相关类型
+  - 避免把 `src/` 类型直接纳入 Electron `rootDir`
+- 更新 `electron/main.ts`
+  - 新增 IPC：
+    - `db:get-app-data-snapshot`
+    - `db:replace-app-data-snapshot`
+  - Desktop 主库读写改由 main 进程持有 SQLite
+- 更新 `electron/preload.ts`
+  - 暴露桌面主库快照桥接方法
+- 更新 `src/vite-env.d.ts`
+  - 补齐新的 SQLite bridge 类型定义
+- 更新 `src/db/storage.ts`
+  - 新增 Desktop / Web 双后端分流
+  - Desktop 下：
+    - `get/replace/update/reset/import/export` 走 SQLite bridge
+    - `update` 通过 revision 重试降低并发覆盖风险
+  - Web 下继续保留现有 Dexie 行为
+  - 首次 Desktop SQLite 为空时：
+    - 优先尝试从当前可读的旧 Dexie 快照迁移
+    - 若读不到旧快照，再回退到 seed
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- Desktop 运行时主库存储现已具备 SQLite 第一版落地。
+- 当前 renderer 层 API 基本不变，但 Desktop 实际持久化已经改由 Electron main + SQLite 承接。
+
+### 当前未完成 / 风险
+- 当前仍是“快照级仓库逻辑 + SQLite 实体表存储”的第一版，不是最终形态的细粒度 repository。
+- 旧桌面数据向 SQLite 的迁移目前只覆盖：
+  - 当前 renderer 还能直接读取到的 Dexie 快照
+- 若旧数据已不在当前 renderer 可读域内，仍需通过现有 JSON 导入导出手动迁移。
+- 自动备份、数据目录内主库可视化说明、SQLite 专项测试仍未补齐。
+
+## 2026-05-01（V3.3 Local Backup 第一轮：桌面化导入导出 + 数据目录入口）
+
+### 本轮目标
+- 不接 SQLite
+- 不重做现有 JSON 备份规则
+- 只把当前设置页里的导入 / 导出升级为桌面化体验，并补上数据目录入口
+
+### 本轮关键判断
+- 当前设置页虽然已经有“数据导入 / 导出”，但本质仍是 Web 方案：
+  - 导出依赖浏览器下载
+  - 导入依赖文件 input 上传
+- 当前运行时主数据仍是 IndexedDB 过渡方案，因此这轮不能假装“桌面数据目录已经承载全部运行时数据”。
+- 更稳的 V3.3 第一段是：
+  - 保留 JSON 备份语义
+  - 在桌面环境下改用系统文件对话框
+  - 显示并打开桌面数据目录
+  - Web 环境继续保留现有回退实现
+
+### 本轮修改
+- 更新 `electron/main.ts`
+  - 新增桌面 IPC：
+    - `app:save-json-backup`
+    - `app:read-json-backup`
+    - `app:open-data-directory`
+  - `app:get-data-path` 改为确保 `userData` 目录存在后再返回
+- 更新 `electron/preload.ts`
+  - 暴露：
+    - `saveJsonBackup(...)`
+    - `readJsonBackup()`
+    - `openDataDirectory()`
+- 更新 `src/vite-env.d.ts`
+  - 补齐新的桌面 bridge 类型定义
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 桌面环境优先使用系统文件对话框导出 / 导入 JSON
+  - 新增“打开数据目录”按钮
+  - 新增当前桌面数据目录展示
+  - 保留 Web 环境下原有浏览器下载 / 上传回退
+  - 明确提示当前仍处于桌面过渡阶段
+- 更新 `src/styles/globals.css`
+  - 新增数据目录信息卡样式
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 设置页现已支持桌面化导入导出。
+- 桌面环境下可直接：
+  - 选择导出位置
+  - 选择备份文件导入
+  - 打开桌面数据目录
+- 当前运行时主数据仍未迁移到 SQLite；数据目录目前主要承接桌面备份文件与后续迁移基础。
+
+## 2026-04-30（V3.2 Grass List Page 第三轮：种草清单直接加入今日 Todo）
+
+### 本轮目标
+- 为种草清单页中的每条未完成种草增加轻量化 `TODO` 按钮
+- 默认加入真实今日白天
+- 已排入未完成 Todo 的条目保留在种草清单中，并显示排期标签
+
+### 本轮规则确认
+- 种草清单展示所有未完成种草，而不是仅 `active`
+- 已加入 Todo 但尚未完成的种草继续显示
+- 条目显示小标签：
+  - `已排在 M/D`
+- `TODO` 按钮行为：
+  - 已在今日白天或晚上：不可点击
+  - 已在其他日期未完成 Todo 中：点击后将原 Todo 移至真实今日白天
+  - 尚未加入 Todo：点击后按普通事项加入真实今日白天
+    - 非必要
+    - 非重复
+    - 无准备
+    - 不分次
+
+### 本轮修改
+- 新增 `src/features/templates/template-manager-state.ts`
+  - 抽出种草条目与未完成 Todo 的关联判断
+  - 统一计算：
+    - 是否应在种草清单中显示
+    - 是否已在今日
+    - 是否已排在其他日期
+    - `已排在 M/D` 标签文案
+- 新增 `src/features/templates/template-manager-state.test.ts`
+  - 覆盖今日排期、未来排期、已 picked 但仍应显示等状态判断
+- 更新 `src/features/templates/TemplateManagerPanel.tsx`
+  - 种草清单不再只筛 `active`
+  - 改为显示所有未完成种草
+  - 每条条目新增轻量 `TODO` 按钮
+  - 已排期条目显示 `已排在 M/D`
+  - 已在今日的条目按钮禁用
+  - 已排在其他日期的条目点击后移动原 Todo 到真实今日白天
+  - 未排入 Todo 的条目点击后直接加入真实今日白天
+- 更新 `src/styles/globals.css`
+  - 补充排期标签与轻量 `TODO` 按钮样式
+- 更新 `product-rules.md`
+  - 记录本轮确认后的种草清单展示范围与 `TODO` 按钮规则
+
+### 验证结果
+- `corepack pnpm exec vitest run src/features/templates/template-manager-state.test.ts src/features/templates/TemplateFormFields.test.ts src/db/storage.test.ts`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 种草清单页现在可以直接把条目拉入真实今日白天。
+- 已在未来排期中的种草可以原位“移至今日”，不再需要先切到那一天处理。
+- 已在今日的条目不会重复加入。
+
+## 2026-04-30（V3.2 收口：批量种草回归测试 + 构建脚本修复）
+
+### 本轮目标
+- 不扩新功能
+- 只做批量种草收口：
+  - 增加最小自动化回归测试
+  - 修复构建脚本链路
+  - 补齐一处存储层共享引用细节
+
+### 本轮关键判断
+- 当前仓库几乎没有现成业务测试基座，不适合这一轮顺手引入更重的浏览器测试环境。
+- 对这次 bug 最有价值的自动化护栏是：
+  - 直接测批量种草输入解析与上限校验
+  - 直接测存储层连续创建是否会丢掉前面已写入的模板
+- 此外，`build` 脚本之前依赖脚本内再次调用 `pnpm`，在当前终端环境会失败，应该改成直接命令链。
+
+### 本轮修改
+- 新增 `src/db/storage.test.ts`
+  - 为 `appDataRepository.taskTemplates.create(...)` 增加存储层回归测试
+  - 覆盖“连续创建两条种草后，两条都仍然存在”
+  - 覆盖“调用方后续修改原始 `sceneTagIds` 数组时，已创建模板不应被污染”
+- 新增 `src/features/templates/TemplateFormFields.test.ts`
+  - 覆盖批量种草多行解析
+  - 覆盖超过 20 条时的校验文案
+- 更新 `src/db/storage.ts`
+  - `normalizeTaskTemplate(...)` 中复制 `sceneTagIds`
+  - 避免创建后仍与调用方共享同一个数组引用
+- 更新 `package.json`
+  - `build` 改为直接执行 `tsc -b && vite build`
+  - `build:desktop` 改为直接执行 renderer build + electron build
+  - `dev:desktop` 改为直接执行 electron build + 并行启动 web/electron
+  - 避免脚本内部再次依赖全局 `pnpm`
+
+### 验证结果
+- `corepack pnpm exec vitest run`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 批量种草现在至少有了最小自动化护栏，后续再出现“提示成功但只保留最后一条”时，能更早暴露。
+- 构建脚本链路已恢复，不再依赖当前环境是否安装全局 `pnpm`。
+
+## 2026-04-30（V3.2 紧急修复：批量种草遗留冲突导致白屏）
+
+### 问题现象
+- 页面出现白屏，应用无法正常打开。
+- 批量种草相关问题尚未继续定位到最终根因前，前端已先被编译错误阻断。
+
+### 根因判断
+- `src/features/templates/CreateTaskTemplateForm.tsx` 残留了未清理的 merge 冲突标记：
+  - `<<<<<<< ours`
+  - `=======`
+  - `>>>>>>> theirs`
+- 该文件属于首页底部种草区提交流程，冲突标记进入源码后会直接导致前端构建失败，从而表现为白屏。
+
+### 本轮修复
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 清理批量种草提交逻辑中的冲突标记
+  - 保留“顺序创建 + 创建后校验补写”的当前实现分支
+  - 明确 `createdItems` 为 `TaskTemplate[]`
+- 更新 `dev-log.md`
+  - 清理上一轮遗留的文档冲突标记
+- 更新 `handoff.md`
+  - 清理上一轮遗留的文档冲突标记
+  - 记录当前白屏已恢复为可编译状态
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm exec vite build`：通过
+- `corepack pnpm run build`：未通过
+  - 原因不是本轮白屏修复回归，而是 `package.json` 中 `build` 脚本再次调用 `pnpm run build:web`
+  - 当前终端环境没有全局 `pnpm`，因此脚本链路失败
+
+### 当前结论
+- 白屏的直接原因已修复，源码已恢复到可编译状态。
+- 批量种草“提示多条但库里只剩最后一条”的业务问题仍需继续排查，尚未在这一轮宣告解决。
+
+## 2026-04-30（V3.2 Grass List Page 第二轮补修：批量种草并发写覆盖）
+
+### 问题现象
+- 多行输入时，界面提示“已加入多条种草”
+- 但实际存储结果只保留最后一条
+
+### 根因判断
+- 批量种草初版虽然已经取消 `Promise.all(...)`，但仍是“每一行都单独写一次整份 `AppData`”。
+- 当前存储层采用的是整份 `AppData` 快照读改写持久化。
+- 在同一次批量提交里连续多次写回整份快照，仍存在前几次结果被后一次写回覆盖的风险。
+- 结果表现为：
+  - 提示已保存多条
+  - 最终持久化可能只保留最后一条
+- 继续排查后确认，问题不只在批量种草提交层：
+  - `mutateAppData(...)` 原本也是“事务外读当前快照，再事务内整包写回”
+  - 这会让其他并发写入路径也存在旧快照覆盖新结果的可能
+
+### 本轮修复
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 将批量创建从并发 `Promise.all(...)` 改为顺序 `for...of await`
+  - 保持每一行生成独立种草项
+  - 避免整份 `AppData` 并发写覆盖
+- 更新 `src/db/storage.ts`
+  - `mutateAppData(...)` 改为在同一个 Dexie 事务内读取当前 `AppData` 再写回
+  - 避免事务外旧快照覆盖最新写入
+
+### 当前结论
+- 这轮修复后，批量种草仍然是：
+  - 多行输入
+  - 每行一条独立 item
+  - 空行忽略
+  - 最多 20 条
+- 但创建过程当前仍是顺序写入，不是单次批量写入
+- 同时，`AppData` 的通用写入路径比之前更稳，后续并发写互相覆盖的风险更低
+
+## 2026-04-30（V3.2 Grass List Page 第二轮：批量种草）
+
+### 本轮目标
+- 只做主页底部种草区的批量种草
+- 不改独立种草清单页面结构
+- 不改 SQLite、导入导出、打包、Windows
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/templates/CreateTaskTemplateForm.tsx`
+- `src/features/templates/TemplateFormFields.tsx`
+
+### 本轮关键判断
+- 当前主页种草输入已复用统一表单，不需要另起一套状态流。
+- 第一版优先稳定实现：
+  - 多行 `textarea`
+  - 按换行切分
+  - 每行生成独立 item
+- 暂不实现复杂的“灰色 ... 占位行”交互，先保证数据正确和可用。
+
+### 本轮修改
+- 更新 `src/features/templates/TemplateFormFields.tsx`
+  - 将种草内容输入从单行 `input` 改为多行 `textarea`
+  - 新增 `GRASS_BATCH_MAX_LINES = 20`
+  - 新增 `parseGrassBatchTitles(...)`
+  - 校验规则改为：
+    - 至少有 1 行有效内容
+    - 空行自动忽略
+    - 最多 20 条
+- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
+  - 提交时按换行切分标题
+  - 继续复用同一组共享元信息：
+    - `activityTypeId`
+    - `sceneTagIds`
+    - `interestLevel`
+  - 一次提交生成 `1-20` 条独立种草项
+  - 成功提示支持单条 / 多条文案
+- 更新 `src/styles/globals.css`
+  - 调整多行输入框最小高度与可调整行为
+
+### 当前行为结论
+- 主页底部种草区现已支持批量种草。
+- 用户可在同一输入框内按换行输入多条内容。
+- 每一行会生成一条独立种草项，而不是合并成一个 item。
+- 空行会被忽略。
+- 最多支持 20 条。
+- 若只有 1 行，行为与之前单条保存一致。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+
+### 本轮没有做
+- 没有做复杂动态占位行交互
+- 没有改独立种草清单筛选 / 编辑结构
+- 没有做“添加到今日 Todo”入口优化
+- 没有改 SQLite、导入导出、打包、Windows
+
+### 仍需本机真人点击确认
+- 单行输入时，行为与原先单条保存一致
+- 多行输入时，会生成多条独立种草项
+- 空行会被忽略
+- 超过 20 行时会被阻止保存
+- 保存后的新条目能在独立种草清单页中看到
+
+## 2026-04-30（V3.2 Grass List Page 补充收口：主页种草区按钮精简）
+
+### 本轮目标
+- 删除主页种草区原有的种草清单按钮
+- 只保留：
+  - `+/-`
+  - `保存`
+
+### 本轮修改
+- 更新 `src/pages/home/HomePage.tsx`
+  - 移除主页种草区内跳转“种草清单”的按钮
+  - 主页种草区工具按钮现仅保留展开/收起与保存
+
+### 本轮没有做
+- 没有改独立种草清单页面
+- 没有改路由
+- 没有改种草数据流
+
+## 2026-04-30（V3.2 Grass List Page 第一轮：导航骨架 + 独立页面壳）
+
+### 本轮目标
+- 只做：
+  - 顶部导航骨架
+  - 独立种草清单页面壳
+  - 主页入口迁移
+- 不改种草数据模型、不做批量种草、不做 SQLite、导入导出、打包、Windows
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `task-list.md`
+- `dev-log.md`
+- `src/app/router.tsx`
+- `src/app/shell/AppShell.tsx`
+- `src/pages/home/HomePage.tsx`
+- `src/features/templates/TemplateManagerPanel.tsx`
+
+### 本轮关键判断
+- 当前已经有可复用的完整种草管理组件：
+  - `TemplateManagerPanel`
+- 当前最稳的第一步不是重写种草清单，而是：
+  - 先把它迁到独立页面
+  - 主页只保留轻量输入区
+- 当前顶部壳只有设置按钮，因此需要先补轻量导航承接新页面
+
+### 本轮修改
+- 新增 `src/pages/grass-list/GrassListPage.tsx`
+  - 独立种草清单页面先直接承接 `TemplateManagerPanel`
+- 更新 `src/app/router.tsx`
+  - 新增 `/grass-list`
+- 更新 `src/app/shell/AppShell.tsx`
+  - 顶部导航改为：
+    - 今日
+    - 种草清单
+    - 设置
+- 更新 `src/pages/home/HomePage.tsx`
+  - 保留新增种草输入区与保存能力
+  - 移除主页内 `TemplateManagerPanel` 展开
+  - 原列表按钮改为跳转到独立种草清单页
+- 更新 `src/styles/globals.css`
+  - 补充顶部导航与独立页面壳的最小样式
+
+### 当前行为结论
+- 主页底部继续保留轻量种草输入区。
+- 完整种草清单浏览已迁到独立页面。
+- 顶部已可在：
+  - 今日
+  - 种草清单
+  - 设置
+ 之间切换。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+
+### 本轮没有做
+- 没有做批量种草
+- 没有重写种草清单筛选/编辑逻辑
+- 没有新增“添加到今日 Todo”快捷入口
+- 没有改 SQLite、导入导出、打包、Windows
+
+### 仍需本机真人点击确认
+- 顶部能切换：
+  - 今日
+  - 种草清单
+  - 设置
+- 主页底部仍能新增种草
+- 主页不再展开完整种草清单
+- 独立种草清单页能正常看到现有种草项
+
+## 2026-04-30（V3.1 Core Fixes：Todo 手动排序边界按钮禁用修复）
+
+### 本轮目标
+- 只修复排序模式下的一个边界 bug：
+  - 白天无事项时，晚上第一条无法上移
+  - 晚上无事项时，白天最后一条无法下移
+
+### bug 原因
+- 移动逻辑本身已经支持跨组插入。
+- 但按钮禁用逻辑仍按“全局第一条 / 全局最后一条”在判断。
+- 这会导致：
+  - 夜间首条在没有白天项时，被误判为“不能上移”
+  - 白天末条在没有晚上项时，被误判为“不能下移”
+
+### 本轮修复
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 调整 `isMoveDisabled(...)`
+  - 白天项：
+    - 只有“白天第一条上移”会禁用
+  - 晚上项：
+    - 只有“晚上最后一条下移”会禁用
+  - 允许：
+    - 白天末条下移跨到晚上（即使当前晚上为空）
+    - 晚上首条上移跨到白天（即使当前白天为空）
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+
+## 2026-04-30（V3.1 Core Fixes：Todo 手动排序跨日夜分界线 bug 修复）
+
+### 本轮目标
+- 只修复 Todo 手动排序跨白天 / 晚上分界线的错误归属问题
+- 不改重复规则、种草清单、SQLite、导入导出、打包、Windows
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+
+### bug 原因
+- 上一版排序实现把全部未完成事项合并成一个数组重排。
+- 跨线移动后，再按“白天条数边界”整体重算所有 item 的 `timeBlock`。
+- 这会导致：
+  - 移动中的 item 跨线时
+  - 另一条相邻 item 也被动换组
+- 本质问题是：
+  - 跨组移动被错误实现成“全列表 swap + 边界重算归属”
+  - 而不是“移出原组，插入目标组”
+
+### 本轮修复
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 排序逻辑改为先拆成：
+    - `dayItems`
+    - `nightItems`
+  - 同组内移动：
+    - 继续组内交换
+  - 跨组移动：
+    - `night` 第一条上移时，移出 `nightItems`，插入 `dayItems` 末尾
+    - `day` 最后一条下移时，移出 `dayItems`，插入 `nightItems` 开头
+  - 最后分别重写 `sortOrder`
+  - 只改变移动中的 item 的 `timeBlock / timeBlockSource`
+  - 其他 item 保持原 day/night 归属
+
+### 当前行为结论
+- 同组内移动仍是相邻交换。
+- 跨组移动现在采用：
+  - 移出原组
+  - 插入目标组
+- 只改变移动中的 item 的 day/night 归属。
+- 不再把另一条相邻 item 一起挤到对侧。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+
+### 本轮没有做
+- 没有改重复规则
+- 没有改种草清单独立页面
+- 没有改 SQLite、导入导出、数据目录迁移
+- 没有改打包、Windows 适配
+
+### 仍需本机真人点击确认
+- 用例 A：晚上第一条上移跨到白天，只改变移动中的 item 归属
+- 用例 B：白天最后一条下移跨到晚上，只改变移动中的 item 归属
+- 用例 C：白天组内移动仍然都是白天
+- 用例 D：晚上组内移动仍然都是晚上
+- 用例 E：边界无效移动保持不变
+
+## 2026-04-30（V3.1 Core Fixes：Todo 手动排序）
+
+### 本轮目标
+- 只做 Todo 手动排序
+- 不做重复规则、种草清单独立页面、SQLite、导入导出、打包、Windows
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/styles/globals.css`
+- `src/types/models.ts`
+
+### 本轮关键判断
+- 当前已有 `DayPlanItem.sortOrder`，不需要新增独立 `order` 字段。
+- 已完成事项已有独立的显示与排序逻辑：
+  - 继续按 `completedAt` 显示
+  - 不应参与手动排序
+- 第一版优先稳定实现：
+  - 排序模式
+  - 上移 / 下移按钮
+  - 每次移动即时保存
+- 跨白天 / 晚上边界时：
+  - 只更新当前日期实例的 `timeBlock`
+  - 不去改模板全局语义
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 新增排序模式状态
+  - 新增“调整顺序 / 完成排序”入口
+  - 排序模式下为未完成事项显示上移 / 下移按钮
+  - 复用 `sortOrder`
+  - 每次移动后按 `1, 2, 3...` 重写当前日期未完成事项顺序
+  - 跨过白天 / 晚上分隔线时，同步更新当前日期实例 `timeBlock`
+  - 已完成事项继续沉底显示，不参与手动排序
+- 更新 `src/styles/globals.css`
+  - 新增排序模式按钮激活态
+  - 新增排序模式分隔线样式
+  - 新增排序模式标题细节样式
+
+### 当前行为结论
+- 排序只作用于当前 `selectedDate` 的未完成事项。
+- 已完成事项不参与手动排序，继续在底部按 `completedAt` 排序。
+- 普通查看模式不显示白天 / 晚上的实线分隔线。
+- 排序模式中显示白天 / 晚上分隔线。
+- 白天事项下移跨线后会变成晚上事项并变色。
+- 晚上事项上移跨线后会变成白天事项并变色。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+- `pnpm run dev`：
+  - 成功启动
+  - `http://localhost:5173/J-Flow/` 返回 `200`
+- `pnpm run dev:desktop`
+  - 本轮未完成一次新的干净启动
+  - 原因仍是本机 `4173` 已被现有 `node` 进程占用
+  - `curl -I http://localhost:4173/J-Flow/` 返回 `200`
+  - `lsof -nP -iTCP:4173 -sTCP:LISTEN` 显示端口已有监听
+
+### 本轮没有做
+- 没有接入拖拽库
+- 没有改重复规则
+- 没有改种草清单独立页面
+- 没有改 SQLite、导入导出、数据目录迁移
+- 没有改打包、Windows 适配
+
+### 仍需本机真人点击确认
+- 当前日期有多个未完成 Todo 时，确认可进入排序模式
+- 确认未完成事项可上移 / 下移
+- 确认刷新页面后顺序仍保留
+- 确认已完成事项仍在底部且不参与排序
+- 确认排序模式中有白天 / 晚上分隔线，普通模式没有
+- 确认白天项下移越界后变成晚上项并变色
+- 确认晚上项上移越界后变成白天项并变色
+- 确认取消完成后回未完成区，不破坏排序
+
+### 下一轮建议
+- 若排序交互确认通过，可切到：
+  - V3.2 Grass List Page
+  - 或先做种草清单独立页面前的导航整理
+
+## 2026-04-30（V3.1 Core Fixes：完成日期归属 + 停止重复清理未来）
+
+### 本轮目标
+- 只做以下 4 条实现：
+  - 已完成事项按完成日期归属显示
+  - 修改完成时间后的跨日期迁移
+  - 停止重复清理 future occurrence
+  - 恢复重复继续懒生成
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+- `src/features/recurrence/auto-generated.ts`
+- `src/types/models.ts`
+
+### 本轮关键判断
+- 这轮优先改“列表显示归属”，不重写原计划字段语义：
+  - `date / originDate / targetDate` 继续承担计划归属
+  - `completedAt` 负责已完成事项的显示归属
+- 取消完成后，事项应回到当前有效计划日期：
+  - 如果事项此前已经顺延到今天，则回到今天
+  - 不误回更早的 `originDate`
+- 修改 `completedAt` 当前只影响已完成事项显示归属：
+  - 本轮不让它顺手影响“完成后重复”的下一次生成
+- 停止重复清理 future occurrence 时：
+  - 边界使用用户当前操作日期 `selectedDate`
+  - 不使用系统今天日期
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 新增已完成事项显示日期 helper
+  - Todo 列表改为：
+    - 未完成按 `date` 过滤显示
+    - 已完成按 `completedAt` 对应日期过滤显示
+  - 修改完成时间后，列表会按新的完成日期重新归属
+  - 停止重复时不再只切 `isArchived`
+    - 同时清理当前操作日期之后的 future occurrence
+    - 保留当前和既往 occurrence
+  - 恢复重复时仅解除停止状态，继续懒生成
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - `afterCompletion` 的下一次生成基准改为只读 `recurringTaskInstances.completedAt`
+  - 避免用户手动编辑已完成事项显示时间后，顺手影响下一次重复生成
+
+### 当前行为结论
+- 已完成事项现在按 `completedAt` 对应日期显示。
+- 修改 `completedAt` 会改变已完成事项显示归属，但不改原计划日期字段。
+- 取消完成后，事项回到当前有效计划日期的未完成区。
+- 停止重复时，future occurrence 的判断以用户当前查看/操作日期为边界。
+- 恢复重复时不立即回填 future occurrence，后续切到目标日期再生成。
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+
+### 本轮没有做
+- 没有改 Todo 手动排序
+- 没有改种草清单独立页面
+- 没有改 SQLite、导入导出、数据目录迁移
+- 没有改打包、Windows 适配
+
+### 仍需本机真人点击确认
+- 将今天已完成事项的 `completedAt` 改成昨天，确认它从今天页移到昨天页
+- 将昨天顺延到今天的事项在今天完成后再取消完成，确认它回到今天未完成区
+- 以某个重复 Todo 在历史日期执行“停止重复”，确认只清理该操作日期之后的 future occurrence
+
+### 下一轮建议
+- 若这轮交互确认通过，可继续：
+  - Todo 手动排序
+  - 或补一轮已完成事项跨日期显示的边角交互收口
+
+## 2026-04-30（V3.1 Core Fixes 规则收口：完成日期归属 + 停止重复）
+
+### 本轮目标
+- 只更新文档，不改代码
+- 收口两组关键规则：
+  - 已完成事项按完成日期归属
+  - 停止重复时清理 future occurrence
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+
+### 本轮新增规则结论
+- 已完成事项不再默认挂在原计划日期下。
+- 未完成事项按“当前有效计划日期”显示。
+- 已完成事项按 `completedAt` 对应日期显示。
+- 修改 `completedAt` 后，事项应迁移到新的完成日期页面。
+- 取消完成后，事项应回到当前有效计划日期的未完成区。
+- 若事项此前已经被顺延到今天，则取消完成后应回到今天，而不是误回更早历史日期。
+- 停止重复时：
+  - 保留当前日期及以前的 occurrence
+  - 清理当前日期之后的 future occurrence
+- 恢复重复时：
+  - 不立即回填 future occurrence
+  - 继续沿用“进入某天时同步生成”的懒生成策略
+
+### 本轮判断依据
+- 之前“未来已完成条目是否要保留”的顾虑，本质上来自“已完成事项仍挂在原计划日期”这一旧口径。
+- 一旦改为“已完成事项按完成日期归属显示”：
+  - 未来日期页面不应再保留这类已完成条目
+  - 停止重复时清理 future occurrence 的规则会更干净、更一致
+- 对于取消完成：
+  - 若事项已经顺延到今天，用户心智中的当前计划归属就是今天
+  - 因此取消完成后应回到今天，而不是回到更早的 originDate
+
+### 本轮更新文档
+- `product-rules.md`
+  - 明确完成日期归属规则
+  - 明确修改 `completedAt` 后的跨日期迁移
+  - 明确取消完成回当前有效计划日期
+  - 明确停止重复 / 恢复重复规则
+- `data-model.md`
+  - 明确 `date` 与 `originDate` 的职责边界
+  - 明确未完成按 `date`，已完成按 `completedAt` 归属显示
+  - 明确停止 / 恢复重复的模型语义
+- `handoff.md`
+  - 记录本轮规则收口结论
+  - 调整下一位开发者的第一优先实现项
+- `task-list.md`
+  - 将上述规则落地列为 V3.1 下一轮优先任务
+
+### 本轮没有做
+- 没有改任何业务代码
+- 没有改重复生成实现
+- 没有改已完成事项跨日期迁移实现
+- 没有改 SQLite、导入导出、打包、Windows
+
+### 下一轮建议
+- 先做一轮规则落地实现，范围只包含：
+  - 已完成事项按完成日期归属显示
+  - 修改完成时间后的跨日期迁移
+  - 停止重复清理 future occurrence
+  - 恢复重复继续懒生成
+- 等这一轮收口后，再继续：
+  - Todo 手动排序
+  - 或 V3.2 相关页面重构
+
+## 2026-04-29（V3.1 Core Fixes 第三轮：重复规则扩充）
+
+### 本轮目标
+- 只做重复规则扩充
+- 不做 Todo 手动排序、种草清单独立页面、SQLite、导入导出、打包
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/types/models.ts`
+- `src/db/schema.ts`
+- `src/db/storage.ts`
+- `src/features/recurrence/auto-generated.ts`
+- `src/features/continuation/todo-carryover.ts`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/templates/CreateTaskTemplateForm.tsx`
+
+### 本轮关键判断
+- 当前重复系统的核心不是独立 repeat-rule 实体，而是：
+  - `TaskTemplate.recurrence`
+  - `RecurringTaskInstance.recurrence`
+  - `syncAutoGeneratedDayPlanForDate(...)`
+- 现有实例生成机制已经是“进入某天时同步生成”，这很适合继续沿用。
+- 本轮最稳妥方案不是推倒旧 `recurrence`，而是：
+  - 新增新模型字段
+  - 保留旧字段作为兼容层
+  - 读取时优先新字段，缺失时映射旧字段
+
+### 本轮修改
+- 更新 `src/types/models.ts`
+  - 新增：
+    - `RepeatType`
+    - `RepeatIntervalUnit`
+    - `RepeatRule`
+  - 为 `TaskTemplate` 新增：
+    - `repeatType`
+    - `repeatIntervalUnit`
+    - `repeatIntervalValue`
+  - 为 `RecurringTaskInstance` 新增：
+    - `targetDate`
+    - `repeatType`
+    - `repeatIntervalUnit`
+    - `repeatIntervalValue`
+- 新增 `src/features/recurrence/repeat-rule.ts`
+  - 统一处理：
+    - 旧五类规则映射到新模型
+    - 新模型序列化回兼容字段
+    - interval 取值 clamp
+    - 日/月/年日期计算
+    - 月 / 年不存在日期时落到最后一天
+- 更新 `src/db/schema.ts`
+  - schema 加入新重复字段
+  - `APP_DATA_SCHEMA_VERSION` 升到 `6`
+- 更新 `src/db/storage.ts`
+  - 在 `normalizeLegacyAppData` 中补兼容层
+  - 旧 `daily / weekly / monthly / yearly` 自动映射为：
+    - `calendar + intervalValue=1 + intervalUnit`
+- 更新 `src/features/recurrence/auto-generated.ts`
+  - `calendar`
+    - 改为支持 `每 x 天 / 周 / 月 / 年`
+  - `afterCompletion`
+    - 只有完成后才计算下一次
+    - 下一次日期基于 `completedAt + interval`
+    - 若当前已经存在下一次 pending occurrence，则不重复生成
+  - 继续沿用“进入某天时同步生成”机制
+- 更新 `src/features/continuation/todo-carryover.ts`
+  - repeating item 判断同一 cycle 时，兼容：
+    - 新 `targetDate`
+    - 旧 `dateKey`
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 替换旧五个 recurrence 小标签
+  - 新增：
+    - 不重复
+    - 按日历重复
+    - 完成后重复
+    - interval 数字输入
+    - 单位选择
+  - interval 输入范围限制为 `1-100`
+- 更新 `src/styles/globals.css`
+  - 为新重复规则 UI 补最小样式
+
+### 新重复模型
+- 逻辑模型：
+  - `none`
+  - `calendar`
+  - `afterCompletion`
+- interval：
+  - `day`
+  - `week`
+  - `month`
+  - `year`
+- 当前落地策略：
+  - 新字段承载新语义
+  - 旧 `recurrence` 继续保留用于兼容
+
+### 旧数据兼容策略
+- 旧 `none`
+  - -> `repeatType = none`
+- 旧 `daily`
+  - -> `calendar + 1 + day`
+- 旧 `weekly`
+  - -> `calendar + 1 + week`
+- 旧 `monthly`
+  - -> `calendar + 1 + month`
+- 旧 `yearly`
+  - -> `calendar + 1 + year`
+- 当前阶段主要靠读取兼容层，不要求用户手动迁移旧数据
+
+### 日历式重复规则
+- 不管当前 occurrence 是否完成，未来命中日仍会继续出现
+- 计算基准是模板锚点 `date`
+- 支持：
+  - 每 `x` 天
+  - 每 `x` 周
+  - 每 `x` 月
+  - 每 `x` 年
+
+### 完成后重复规则
+- 只有当前 occurrence 完成后才会安排下一次
+- 下一次基于 `completedAt`
+- 若没有 `completedAt`，不生成下一次
+- 当前若已经存在下一次 pending occurrence，不重复生成
+- 本阶段采用稳定优先策略：
+  - 若下一次已经生成
+  - 后续再修改上一条 `completedAt`
+  - 不自动追溯改已生成的下一次日期
+
+### 日期计算规则
+- `day`
+  - 加 `x` 天
+- `week`
+  - 加 `7 * x` 天
+- `month`
+  - 按日历月加 `x` 月
+  - 若目标月不存在对应日期，落到目标月最后一天
+- `year`
+  - 按日历年加 `x` 年
+  - 若目标年对应月份不存在对应日期，落到该月最后一天
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+- `pnpm run dev`
+  - 正常启动
+  - `http://localhost:5173/J-Flow/` 返回 `200`
+- `pnpm run dev:desktop`
+  - 本轮未能完成一次新的干净启动验证
+  - 失败原因是本机已有旧进程占用 `4173`
+  - `lsof -nP -iTCP:4173 -sTCP:LISTEN` 显示：
+    - `node` 进程仍在监听 `4173`
+  - 这是端口占用冲突，不是本轮代码编译错误
+
+### 本轮明确没有做
+- 没有做 Todo 手动排序
+- 没有改种草清单独立页面
+- 没有接 SQLite
+- 没有做导入导出
+- 没有做数据目录迁移
+- 没有做打包
+- 没有做 Windows 适配
+
+### 下一轮建议
+- 继续 `V3.1 Core Fixes`
+- 下一项建议优先做：
+  - Todo 手动排序
+  - 或在进入 V3.2 前先整理桌面端导航与种草清单入口
+
+## 2026-04-29（V3.1 Core Fixes 第二轮：完成事项自动下沉 + completedAt）
+
+### 本轮目标
+- 只做一个核心修复：
+  - 完成事项自动下沉
+  - 明确并使用 `completedAt`
+  - 支持修改完成时间
+- 不改重复规则、手动排序、种草清单、SQLite、导入导出、打包
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/features/todo/TodoModePanel.tsx`
+- `src/features/todo/todo-view-model.ts`
+- `src/styles/globals.css`
+- `src/types/models.ts`
+- `src/db/schema.ts`
+- `src/db/storage.ts`
+
+### 本轮关键判断
+- `completedAt` 字段实际上已存在于当前类型、schema 与 storage 中，本轮不需要新增字段或重构存储层。
+- 当前主要缺口不是“没有字段”，而是：
+  - 列表仍按 `day/night` 分组显示已完成事项
+  - 已完成事项没有统一沉底排序
+  - 缺少完成时间修改入口
+- 旧历史数据里若存在 `status = completed` 但没有 `completedAt`，本轮先做兼容排序，不做正式 migration：
+  - 这类事项仍留在已完成组
+  - 排序时放到带有效 `completedAt` 的事项之后
+  - 用户可手动补录完成时间
+
+### 本轮修改
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 调整 `sortTodoItems`
+    - 未完成事项保持在上方
+    - 已完成事项统一沉到底部
+    - 已完成事项按 `completedAt` 从早到晚排序
+  - 将展示分组调整为：
+    - 白天未完成
+    - 晚上未完成
+    - 已完成
+  - 完成 / 恢复未完成继续复用现有逻辑：
+    - 完成时写入 `completedAt = new Date().toISOString()`
+    - 恢复未完成时清空 `completedAt = undefined`
+  - 新增已完成事项的原生 `datetime-local` 编辑入口
+    - 仅已完成事项可编辑
+    - 保存后同步更新 `dayPlanItem.completedAt`
+    - 若存在 `recurringInstanceId`，同步更新对应 `recurringTaskInstance.completedAt`
+- 更新 `src/features/todo/todo-view-model.ts`
+  - 已完成 tag 简化为固定“已完成”
+  - 具体完成时间改为单独可编辑的一行显示
+- 更新 `src/styles/globals.css`
+  - 已完成卡片改为中性无色样式
+  - 已完成 tag 改为中性样式
+  - 白天事项底色加深为更明显的浅黄色
+  - 新增完成时间按钮与 `datetime-local` 输入样式
+
+### completedAt 语义
+- `completedAt` 存储为 ISO string
+- 当用户把 Todo 标记为完成时：
+  - `status = completed`
+  - `completedAt = 当前时间 ISO string`
+- 当用户把 Todo 恢复为未完成时：
+  - `status = pending`
+  - `completedAt = undefined`
+- 本轮延续当前项目风格，统一使用 `undefined`，不引入 `null`
+
+### 排序与兼容策略
+- 未完成事项：
+  - 继续沿用当前顺序
+  - 本轮不改手动排序
+- 已完成事项：
+  - 按 `completedAt` 升序
+  - `completedAt` 越早越靠上
+  - `completedAt` 越晚越靠下
+- 历史完成事项若缺少 `completedAt`：
+  - 保留在已完成组
+  - 排到已完成组最后
+  - 不会导致崩溃
+
+### 完成时间修改规则
+- 仅已完成事项显示完成时间入口
+- 点击后切换为原生 `datetime-local` 输入
+- 输入非法时不写入
+- 取消修改时不改数据
+- 修改完成时间不会改变事项 `date`
+- 修改完成时间不会触发重复规则变化
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+- `pnpm run dev`
+  - 受当前环境端口占用影响，本轮实际启动在 `5174`
+  - `http://localhost:5174/J-Flow/` 返回 `200`
+- `pnpm run dev:desktop`
+  - Desktop renderer 正常启动在 `4173`
+  - `http://localhost:4173/J-Flow/` 返回 `200`
+
+### 本轮明确没有做
+- 没有改重复规则
+- 没有改手动排序
+- 没有改种草清单页面
+- 没有接 SQLite
+- 没有做导入导出
+- 没有做数据目录迁移
+- 没有做打包
+- 没有做 Windows 适配
+
+### 下一轮建议
+- 继续留在 `V3.1 Core Fixes`
+- 下一项更适合做：
+  - 重复规则扩充
+  - 或 Todo 手动排序
+- 如果希望先做边界更可控的一项，建议优先进入重复规则重构的文档到代码落地
+
+## 2026-04-29（V3.1 Core Fixes 第一轮：天气占位改日历跳转）
+
+### 本轮目标
+- 正式进入 `V3.1 Core Fixes`
+- 只做一个功能：
+  - 取消天气占位
+  - 改为日历图标与任意日期跳转
+- 不改重复规则、排序、完成事项、种草清单、SQLite、导入导出、打包
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `src/pages/home/HomePage.tsx`
+- `src/components/ui/Icons.tsx`
+- `src/styles/globals.css`
+- `src/features/todo/TodoModePanel.tsx`
+
+### 本轮关键判断
+- 当前“天气占位”位于主页日期切换区，本质是一个纯 UI 占位，不涉及业务逻辑。
+- 主页已经有前一天 / 后一天切换逻辑，因此日历跳转应直接复用同一套 `selectedDate` 更新入口。
+- 当前最稳妥方案是原生 `input[type='date']`：
+  - 不新增大型日期组件库
+  - Web / Desktop 都可复用
+  - 实现成本小、稳定性高
+
+### 本轮修改
+- 更新 `src/components/ui/Icons.tsx`
+  - 新增 `CalendarIcon`
+- 更新 `src/pages/home/HomePage.tsx`
+  - 删除天气占位 UI
+  - 新增日历图标入口
+  - 新增原生日期选择器
+  - 让前一天 / 后一天 / 日历选择共用同一套 `selectedDate` 更新逻辑
+- 更新 `src/styles/globals.css`
+  - 删除天气占位相关样式
+  - 新增日历跳转按钮与隐藏 date input 样式
+
+### 复用的现有逻辑
+- 继续复用主页现有的 `selectedDate` 状态
+- 继续复用 `TodoModePanel selectedDate={selectedDate}` 这条已有数据流
+- 继续复用现有日期切换语义：
+  - 前一天
+  - 后一天
+  - 现在新增“任意日期跳转”
+- 未新增新的业务日期状态，也没有改 Todo 数据读取 / 展示入口
+
+### 验证结果
+- `pnpm run lint`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+- `pnpm run dev`
+  - 正常启动
+  - 本轮验证时因 5173 被占用，Vite 自动切到 `5174`
+  - 页面可正常访问
+- `pnpm run dev:desktop`
+  - 正常启动
+  - Desktop renderer 正常跑在 `4173`
+  - Electron 开发窗口链路未报错
+- 代码检索确认：
+  - 当前 `src/pages` / `src/components` / `src/styles` 中已无天气占位相关 UI 残留
+
+### 本轮明确没有做
+- 没有改重复规则
+- 没有改 Todo 排序
+- 没有改完成事项逻辑
+- 没有改种草清单页面
+- 没有接 SQLite
+- 没有做导入导出
+- 没有做数据目录迁移
+- 没有做打包
+- 没有做 Windows 适配
+- 没有改数据模型
+
+### 下一轮建议
+- 可以继续 `V3.1 Core Fixes`
+- 下一项更合适的是：
+  - 重复规则扩充
+  - 或完成事项自动下沉与 `completedAt`
+- 不建议在 `V3.1` 中间插入 SQLite、导入导出或打包工作
+
+## 2026-04-29（V3.0 Desktop Foundation 第一轮：最小 Electron 骨架接入）
+
+### 本轮目标
+- 只做 `Desktop Foundation`
+- 不改业务规则
+- 让现有 React / Vite / TypeScript 应用在 macOS 上具备最小 Electron 桌面运行骨架
+- 保留原网页端 `dev/build` 能力
+
+### 开始前已阅读
+- `handoff.md`
+- `product-rules.md`
+- `app-structure.md`
+- `data-model.md`
+- `constraints.md`
+- `task-list.md`
+- `design-guidelines.md`
+- `dev-log.md`
+- `package.json`
+- `vite.config.ts`
+- `tsconfig.json`
+- `tsconfig.app.json`
+- `tsconfig.node.json`
+- `src/main.tsx`
+- `src/app/router.tsx`
+- `src/features/settings/SettingsPanel.tsx`
+
+### 本轮关键判断
+- 当前项目结构足够轻，适合用最小 Electron 主进程 + preload 方式接入，不需要引入更重的 Electron 工程化方案。
+- 网页端 `build` 当前依赖 GitHub Pages `base: '/J-Flow/'`，不能直接改坏。
+- 桌面端构建需要独立 renderer 输出目录与 `./` base，避免未来加载本地文件时路径出错。
+- 当前最小 IPC 适合只做开发验证，不应该污染正式业务 UI。
+
+### 本轮新增依赖
+- `electron`
+- `concurrently`
+- `wait-on`
+- `cross-env`
+- `@types/node`
+
+### 本轮新增文件
+- `electron/main.ts`
+- `electron/preload.ts`
+- `electron/tsconfig.json`
+
+### 本轮关键实现
+- 更新 `package.json`
+  - 保留原 `dev`
+  - 将原 `build` 继续作为网页端构建入口
+  - 新增：
+    - `build:web`
+    - `build:electron`
+    - `build:desktop:renderer`
+    - `build:desktop`
+    - `dev:desktop`
+    - `dev:desktop:electron`
+- 更新 `electron/main.ts`
+  - 创建最小桌面窗口
+  - 设置默认桌面尺寸
+  - 开启 `contextIsolation`
+  - 关闭 `nodeIntegration`
+  - 注册最小 IPC：
+    - `app:get-info`
+    - `app:get-data-path`
+- 更新 `electron/preload.ts`
+  - 通过 `contextBridge` 暴露：
+    - `getAppInfo()`
+    - `getDataPath()`
+- 更新 `src/vite-env.d.ts`
+  - 补充 `window.jflowDesktop` 类型
+- 更新 `src/main.tsx`
+  - 在检测到桌面 API 时输出 console 验证信息
+- 更新 `src/app/router.tsx`
+  - 增加 `BASE_URL` 正常化，兼容桌面端 `./` base
+- 更新 `.gitignore`
+  - 忽略 `dist-electron`
+  - 忽略 `dist-desktop`
+
+### 验证结果
+- `pnpm run build:electron`：通过
+- `pnpm run build`：通过
+- `pnpm run build:desktop`：通过
+- `pnpm run lint`：通过
+- `pnpm run dev:desktop`：
+  - 已可在 macOS 上真正打开桌面窗口
+  - 窗口中可正常显示现有 J-Flow 页面
+
+### 本轮问题与修复记录
+- Electron 初次安装时被 `pnpm` 的 ignored build scripts 阻止。
+- 依赖安装阶段出现：
+  - `Ignored build scripts: electron@41.3.0`
+- 后续通过以下方式修复：
+  - `pnpm approve-builds --all`
+  - 手动执行 `install.js` 下载 Electron 二进制
+- Electron dev URL 曾写为：
+  - `http://127.0.0.1:5173/J-Flow/`
+- 已修正为：
+  - `http://localhost:4173/J-Flow/`
+- `wait-on` 已改为等待真实页面：
+  - `http-get://localhost:4173/J-Flow/`
+- `electron/main.ts` 中的 `loadURL` 已增加错误处理：
+  - 加载失败时会 `console.error` 输出 URL 与错误原因
+
+### 当前阶段结论
+- 当前 macOS Electron dev 链路已跑通。
+- `V3.0 Desktop Foundation` 当前已达到：
+  - Electron dev 链路可用
+  - Web / Desktop 双开发链路可用
+- 当前仍未进入：
+  - SQLite
+  - 导入导出
+  - 数据目录迁移
+  - 打包
+
+### 本轮明确没有做
+- 没有改重复规则
+- 没有改 Todo 排序
+- 没有改完成事项逻辑
+- 没有改种草清单页面
+- 没有接 SQLite
+- 没有做导入导出
+- 没有做数据目录迁移
+- 没有做 Windows 打包
+- 没有做云同步
+- 没有做账号系统
+- 没有重构业务逻辑
+
+### 下一轮建议
+- `V3.0 Desktop Foundation` 的 dev 链路问题已收口。
+- 下一轮可以根据排期选择：
+  - 继续补 V3.0 的非业务基础项
+  - 或进入 `V3.1 Core Fixes`
+- 进入 `V3.1` 前，仍不建议提前做 SQLite、导入导出、打包和 Windows 适配。
+
+## 2026-04-29（阶段切换：从 V2 Web 转向 J-Flow V3 Desktop）
+
+### 本轮目标
+- 不改业务代码
+- 完成项目交接整理
+- 将项目主线从网页端 V2 收口状态，正式切换为 `J-Flow V3 Desktop`
+- 更新核心文档中的阶段判断、技术方案、任务拆分与数据方向
+
+### 开始前已阅读
+- `README.md`
+- `handoff.md`
+- `dev-log.md`
+- `task-list.md`
+- `product-rules.md`
+- `data-model.md`
+- `constraints.md`
+- `app-structure.md`
+- `manual-test-checklist.md`
+- `design-guidelines.md`
+
+### 本轮关键判断
+- 当前网页端已经基本可用，但仍有业务逻辑与 UI 缺陷。
+- 继续在网页端做大规模规则重构与 UI 调整，边际收益已经明显下降。
+- 网页端更适合冻结为已部署、可参考的 `V2` 版本，而不是继续作为主战场。
+- 下一阶段最重要的不是继续扩网页功能，而是建立：
+  - Electron 跨平台桌面壳
+  - 本地数据库
+  - 导入 / 导出
+  - 数据目录
+  - 备份恢复
+
+### 本轮关键决策
+- 正式将下一阶段命名为：`J-Flow V3 Desktop`
+- 技术方案优先采用 `Electron`
+- 当前不优先 `Tauri`
+- V3 第一阶段优先本地储存，不做账号系统、云数据库、iCloud、手机端同步
+- 运行时数据库优先推荐 `SQLite`
+- `JSON` 作为完整备份、导入、导出、迁移格式
+- 网页端继续保留，但暂不继续承接新功能
+
+### 本轮新增需求整理
+- 顶部天气占位改为日历跳转
+- 重复规则扩充为：
+  - `calendar`
+  - `afterCompletion`
+- Todo 手动排序
+- 完成事项自动下沉与 `completedAt`
+- 完成时间修改
+- 种草清单独立页面
+- 主页底部保留轻量种草区
+- 批量种草
+- V3 本地数据库、导入导出、备份与未来同步预留
+
+### 本轮修改
+- 更新 `handoff.md`
+  - 明确 V2 网页端状态
+  - 明确网页端暂不继续增改
+  - 明确 V3 Desktop 主线
+  - 明确下一位开发者优先事项
+- 更新 `README.md`
+  - 更新当前项目状态
+  - 保留 V2 网页端说明
+  - 加入 V3 Desktop 方向
+  - 写明线上地址
+- 更新 `constraints.md`
+  - 明确当前不做云同步、账号系统、iCloud、原生移动端
+  - 明确数据安全与导入导出是桌面版基础能力
+- 更新 `product-rules.md`
+  - 增加日历式重复与完成后重复规则
+  - 增加完成事项排序规则
+  - 增加手动排序与白天 / 晚上语境变更规则
+  - 增加种草清单独立页面与批量种草规则
+- 更新 `data-model.md`
+  - 规划 `repeatType / intervalUnit / intervalValue`
+  - 规划 `completedAt`
+  - 规划 `order`
+  - 规划 SQLite + JSON 方案
+  - 规划 schema version / migration
+- 更新 `app-structure.md`
+  - 规划 Electron 目录结构
+  - 说明 main / preload / renderer 分工
+  - 规划桌面端路由与页面结构
+- 更新 `task-list.md`
+  - 新增 `V3.0 ~ V3.4` 任务组
+  - 标注 Must-have 与 Later
+- 更新 `dev-log.md`
+  - 记录本轮阶段切换
+
+### 验证结果
+- 本轮未改业务源码
+- 本轮未改 schema 实现
+- 本轮未执行 `lint / build`
+  - 原因：本轮仅进行文档更新与技术方案整理
+
+### 当前未解决问题
+- Electron 具体脚手架选型与接入方式尚未实施
+- SQLite 具体库选型尚未最终定稿
+- 已完成事项恢复未完成后的“原排序位恢复”是否做首版支持，仍可在实现前再收口
+- 本地文件夹同步目前只完成方向预留，尚未进入实现设计细节
+
+## 2026-04-29（文档修正：V3 Desktop 改为跨平台，macOS 优先开发）
+
+### 本轮背景
+- 在上一轮阶段切换基础上，用户进一步明确了当前真实开发环境与优先级。
+
+### 用户确认的新判断
+- `V3 Desktop` 不应被写死为 Windows 桌面版。
+- 当前实际开发环境是 MacBook。
+- 第一阶段应先做 Electron 跨平台桌面版，并优先在 macOS 上开发、自测和试用。
+- Windows 版作为后续适配与打包目标，不作为当前每轮开发阻塞项。
+- 当前不要转向 Swift / SwiftUI，也不要进入 App Store、签名、公证等正式发布流程。
+
+### 本轮关键修正
+- 将文档中的“Windows 优先桌面版”统一调整为：
+  - Electron 跨平台桌面版
+  - macOS 优先开发
+  - Windows 后续适配
+- 将里程碑调整为：
+  - `V3.0 Desktop Foundation`
+  - `V3.1 Core Fixes`
+  - `V3.2 Grass List Page`
+  - `V3.3 Local Backup`
+  - `V3.4 Windows Compatibility`
+
+### 本轮修改
+- 更新 `handoff.md`
+  - 修正平台方向与里程碑
+- 更新 `dev-log.md`
+  - 记录本轮平台口径修正
+- 更新 `task-list.md`
+  - 里程碑重排为 `V3.0 ~ V3.4`
+- 更新 `README.md`
+  - 修正为跨平台 Desktop，macOS 优先
+- 更新 `app-structure.md`
+  - 修正 Electron 壳与打包命令描述
+- 更新 `constraints.md`
+  - 明确不转向 Apple 原生 App 与正式发布流程
+
+### 验证结果
+- 本轮未改业务代码
+- 本轮未执行 `lint / build`
+  - 原因：仅文档修正
+
 ## 2026-04-28（V2.2：设置页数据导出 / 导入第一版）
 
 ### 本轮目标
@@ -65,736 +3080,145 @@
 - `corepack pnpm run build`：通过
   - 保留既有 Vite chunk size warning，不影响构建成功
 
-### 当前未解决问题
-- 当前导入为覆盖导入，不支持合并导入。
-- 当前没有导入预览，也不显示文件内摘要信息。
-- 搜索 / 筛选是否还要在网页端补，仍取决于是否继续长时间网页试用。
-
-## 2026-04-28（V2.1 收尾记录：阶段状态整理与 App 化前评估）
+## 2026-05-02 编辑卡片首轮实现
 
 ### 本轮目标
-- 不改业务代码，只整理当前 V2.1 状态
-- 收尾记录已稳定规则、当前 UI 状态、已知暂缓事项
-- 从完整 Todo List 产品角度评估 App 化前还值得补哪些功能
-
-### 开始前已阅读
-- `handoff.md`
-- `dev-log.md`
-- `product-rules.md`
-- `data-model.md`
-- `app-structure.md`
-- `task-list.md`
-- `manual-test-checklist.md`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/features/todo/todo-view-model.ts`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/features/decision/recommendation.ts`
-- `src/styles/globals.css`
-
-### 本轮关键判断
-- V2.1 的主规则已经基本稳定，当前更像“网页试用版收尾”而不是继续扩张功能面。
-- 真正影响 App 化前信心的，不是再加一批移动端交互，而是补齐：
-  - 数据安全闭环
-  - 生命周期自查闭环
-  - 更完整的手动验证闭环
-- 当前 `picked / archived` 缺管理视图，会直接削弱种草生命周期是否成立的可见性。
-- 当前无导出 / 导入，会直接影响网页试用阶段的数据信任感。
-- Todo 搜索 / 筛选从“完整 Todo List”视角是合理需求，但是否要在网页端补，取决于网页版是否还要继续真实试用一段时间。
-
-### 本轮结论
-
-#### A. App 化前强烈建议补的功能
-- 最小种草管理视图
-  - 至少可查看 `active / picked / archived`
-  - 至少支持 `archived -> active`
-- 数据导出 / 导入
-  - 至少提供本地导出
-  - 最好补受控导入
-- 删除 / 重置前的保护完善
-  - 当前主要还是 `window.confirm` 级别
-  - 应补更明确的文案与关键场景手测
-- 重复 Todo / 种草生命周期的手动验证补齐
-  - 尤其是 occurrence 删除、停止重复、来自种草的恢复与不恢复边界
-- Todo 搜索 / 筛选
-  - 若网页端还会继续试用，建议补最小版本
-  - 若准备近期冻结网页，则可放到 App 版
-
-#### B. 可以等 App 版再做
-- 左滑删除
-- 长按菜单
-- bottom sheet
-- 拖拽排序
-- 本地通知
-- iOS 日历 / reminder 集成
-- widget
-- haptic feedback
-
-#### C. 暂时不建议做
-- 多用户 / 协作
-- 云同步
-- 复杂统计
-- AI 推荐
-- 多层项目管理
-- 标签系统再扩展
-- 复杂 recurrence 自定义规则
-
-### 推荐路线
-- 如果只允许再做 2 个小版本：
-  - 先补最小种草管理视图 + 删除/重置保护 + 生命周期手测
-  - 再补数据导出 / 导入
-- 如果允许第 3 个小版本：
-  - 只有在网页端还要继续真实试用时，再补轻量 Todo 搜索 / 筛选
-- 当前已经接近进入“网页试用版冻结 + App 设计准备”
-  - 但更稳妥的门槛是先补：
-    - 数据导出 / 导入
-    - 最小生命周期管理视图
-
-### 本轮修改
-- 更新 `handoff.md`
-  - 收口 V2.1 当前状态、稳定规则、UI 状态与暂缓事项
-- 更新 `task-list.md`
-  - 按 App 化前价值重排后续任务
-- 更新 `manual-test-checklist.md`
-  - 补强生命周期、保护与数据安全相关手测口径
-- 更新 `dev-log.md`
-  - 记录本轮阶段评估结论
-
-### 验证结果
-- 本轮未改源码逻辑
-- 本轮未改 schema / storage
-- 本轮未执行 lint / build
-  - 原因：仅文档更新，无实现变更
-  - 仍建议下一轮进入实现时恢复执行
-
-### 当前未解决问题
-- Todo 搜索 / 筛选是否要在网页端补，取决于是否还要继续开放网页试用。
-- `picked` 是否需要独立分组展示，还是只作为管理状态可见，仍需在后续最小视图设计时定稿。
-- 导入是否支持“覆盖导入 / 合并导入 / 预览导入”，当前还未细化产品规则。
-
-## 2026-04-28（V2.1 收尾补记：后续路线收紧为导出 / 导入优先）
-
-### 本轮背景
-- 在上一轮阶段评估基础上，用户进一步确认了网页端后续取舍。
-
-### 用户确认的新判断
-- `picked` 不需要单独做管理视图。
-- 已拔出的内容应主要留在 Todo List 中体现，而不是回到种草管理页再单独查看。
-- `archived` 既然表示主动停用，也不值得为当前网页版单独补完整管理能力。
-- 删除 / 重置保护当前已足够，不再作为网页端优先补项。
-- 网页端下一步应优先补：数据导出 / 导入。
-
-### 对上一轮结论的修正
-- 取消“最小种草管理视图”作为 App 化前强制补项。
-- 取消“删除 / 重置保护补强”作为高优先级补项。
-- 将“数据导出 / 导入”提升为网页端下一步唯一明确高优先功能。
-- 将“生命周期与 recurrence 手测闭环”保留为配套验证项，而不是独立产品包。
-
-### 本轮修改
-- 更新 `handoff.md`
-  - 修正 App 化前建议与推荐路线
-- 更新 `task-list.md`
-  - 调整后续任务优先级
-- 更新 `manual-test-checklist.md`
-  - 移除不再作为近期目标的种草管理视图预期
-- 更新 `dev-log.md`
-  - 记录本次路线收紧
-
-### 当前阶段结论
-- 当前网页端后续路线已经明显收紧为：
-  - 先补数据导出 / 导入
-  - 再视是否继续网页试用，决定要不要补搜索 / 筛选
-- 这意味着当前更接近：
-  - 网页试用版冻结前最后一个实用功能包
-  - 然后进入 App 设计准备
-
-## 2026-04-28（V2.1-N4：重复滚动修复、segmented 高度对齐、favicon）
-
-### 本轮目标
-- 修正移动端重复选项滚动总长度没有真正变长的问题
-- 只对齐顶部两组 segmented control 的高度
-- 将根目录 `logo.PNG` 设置为网页图标
-
-### 本轮关键判断
-- 上一轮失败的根因是移动端样式虽然新增了 `grid-auto-columns`，但没有覆盖掉桌面端的 `grid-template-columns: repeat(5, ...)`，所以浏览器仍在做 5 等分压缩。
-- 顶部两组 segmented control 高度不一致，根因是右侧日夜切换仍保留了更小的 `min-height`。
-
-### 本轮修改
-- 更新 `src/styles/globals.css`
-  - 在移动端将重复选项从隐式 grid 改为显式 flex 横向排布
-  - 让每个重复选项固定占据接近第一行单项的宽度
-  - 对齐顶部两组 segmented control 的高度
-- 更新 `index.html`
-  - 增加 favicon 链接
-- 新增 `public/logo.PNG`
-  - 从根目录复制，用于网页图标
-
-### 验证结果
-- `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
-
-## 2026-04-28（V2.1-N3：移动端重复选项与种草按钮修正）
-
-### 本轮目标
-- 修正移动端重复选项被压成竖条的问题
-- 修正种草区第三个按钮应为三横线而不是 `+ / -`
-
-### 本轮关键判断
-- 重复选项的问题本质是移动端仍在强制 5 等分网格，导致宽度被压扁，不是高度本身出错。
-- 顶层种草卡片需要两个不同语义的展开控件：
-  - 新增种草：`+ / -`
-  - 种草清单：三横线
-
-### 本轮修改
-- 更新 `src/styles/globals.css`
-  - 移动端重复选项改为单行横向 options
-  - 允许横向滑动，避免被压成竖条
-- 更新 `src/pages/home/HomePage.tsx`
-  - 种草清单展开按钮恢复为三横线 icon
-
-### 验证结果
-- `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
-
-## 2026-04-28（V2.1-N2：移动端与种草标题纠偏）
-
-### 本轮目标
-- 修正移动端“更多设置”没有按两行实现的问题
-- 修正移动端拔草候选项被压成两行的问题
-- 把种草区展开/收起按钮改回 `+ / -`
-- 修正“种草”与“种草清单”两个标题层级
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `app-structure.md`
-- `data-model.md`
-- `constraints.md`
-- `task-list.md`
-- `design-guidelines.md`
-- `dev-log.md`
-- `src/pages/home/HomePage.tsx`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/styles/globals.css`
-
-### 本轮关键判断
-- 移动端“更多设置”走样的根因不是控件本身，而是第一行 settings row 没有声明三列网格。
-- 拔草候选在移动端分成两行的根因是通用媒体查询把 `.candidate-item` 一起改成了单列布局。
-- 顶层卡片标题应是 `种草`，列表面板内部标题才是 `种草清单`。
-
-### 本轮修改
-- 更新 `src/styles/globals.css`
-  - 给“必要 / 准备 / 分次”行补上三列网格
-  - 保持移动端重复规则为同一行五项
-  - 恢复候选项为“标题 + 最右加号”同一行
-- 更新 `src/pages/home/HomePage.tsx`
-  - 顶层标题改回 `种草`
-  - 两个展开/收起按钮改回 `+ / -`
-- 更新 `src/features/templates/TemplateManagerPanel.tsx`
-  - 补回列表面板标题 `种草清单`
-- 更新 `handoff.md`
-  - 记录标题层级与移动端修正
-- 更新 `manual-test-checklist.md`
-  - 补充 `+ / -` 与标题层级的手测口径
-
-### 验证结果
-- `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
-
-## 2026-04-28（V2.1-N：Todo / 种草 UI 误解修正）
-
-### 本轮目标
-- 修正 Todo 输入区顶部工具栏布局
-- 修正“拔草条目”错误替换普通输入区的行为
-- 收紧更多设置区的视觉体量
-- 恢复种草区被误删的标题与辅助文案
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `app-structure.md`
-- `data-model.md`
-- `constraints.md`
-- `task-list.md`
-- `design-guidelines.md`
-- `dev-log.md`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/pages/home/HomePage.tsx`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/styles/globals.css`
-
-### 本轮关键判断
-- 本轮只做 UI 纠偏，不改业务逻辑，不改 schema/storage/recommendation/grassStatus/recurrence/rollover。
-- “拔草条目”不应替换普通输入区，而应作为普通输入区下方的追加筛选与候选区域。
-- “必要 / 重复 / 准备 / 分次”属于附加设置，不应长成第二套主界面。
+- 将 Todo 列表中的“编辑”从行内改标题切换为卡片式编辑。
+- 已完成事项不再提供右侧编辑按钮，只保留完成时间编辑。
+- 普通事项与拔草事项共用 quick add 卡片结构，但遵守不同的可编辑边界。
 
 ### 本轮关键决策
-- Todo 输入区顶部两组 segmented control 保持同一行：
-  - 左侧 `普通条目 / 拔草条目`
-  - 右侧 `白天 / 晚上`
-- 普通输入框、输入框内添加按钮、`...` 更多按钮始终显示。
-- 切到 `拔草条目` 时，只在输入区下方追加：
-  - 种草清单 tag
-  - 场景 tag
-  - 候选列表
-- 更多设置区改为两行紧凑附加设置：
-  - 第一行：`必要 / 准备 / 分次`
-  - 第二行：`不重复 / 每天 / 每周 / 每月 / 每年`
-- 删除 Todo 列表中白天 / 晚上之间的实线分隔，保留背景区分。
-- 恢复种草区标题 `种草清单`，并把展开/收起 icon 改回三横线语义。
+- 复用现有 quick add 浮层做 `create / edit` 两种模式，不再维护单独的行内编辑状态。
+- 编辑普通事项时：
+  - 锁定“普通/拔草条目”切换
+  - 保留日夜切换
+  - 显示 Todo 输入框
+  - 保留附加设置
+- 编辑拔草事项时：
+  - 锁定“普通/拔草条目”切换
+  - 保留日夜切换
+  - 不显示 Todo 输入框
+  - 只允许修改附加设置
+- 已完成事项：
+  - 右侧不再显示编辑按钮
+  - 继续只允许通过“完成于 xx”入口编辑完成时间
+- 编辑卡片点外部时直接关闭，不做自动保存，避免误提交半成品。
 
 ### 本轮修改
 - 更新 `src/features/todo/TodoModePanel.tsx`
-  - 拔草条目改回“追加式”显示，不再替换普通输入区
-  - 更多设置区改成紧凑两行
-  - 删除白天 / 晚上列表间的分隔线节点
-- 更新 `src/pages/home/HomePage.tsx`
-  - 恢复种草区标题 `种草清单`
-  - 展开/收起输入区按钮改回三横线 icon
-- 更新 `src/features/templates/TemplateManagerPanel.tsx`
-  - 在兴趣 stepper 前补回 `兴趣程度` 文案
+  - 移除行内标题编辑状态与 UI
+  - 新增基于 quick add 的编辑模式状态
+  - 支持从现有事项预填编辑卡片
+  - 普通事项编辑可改标题、时段与附加设置
+  - 拔草事项编辑可改时段与附加设置，不显示内容输入
+  - 已完成事项隐藏右侧编辑按钮
 - 更新 `src/styles/globals.css`
-  - 调整顶部双 segmented 同行布局
-  - 收紧更多设置区尺寸与节奏
-  - 种草 stepper 补齐标签文案的样式
-- 更新 `handoff.md`
-  - 记录这轮 UI 误解修正后的当前口径
-- 更新 `manual-test-checklist.md`
-  - 更新 Todo 输入区与种草区的手测预期
-
-### 当前风险与待确认问题
-- 顶部两组 segmented control 现在在移动端仍保持同一行，空间更紧，后续如要继续压缩文字可再做微调。
-- 更多设置区虽然已明显收紧，但准备备注 textarea 仍会在勾选后单独展开，这是当前保留的必要例外。
+  - 为编辑卡片补充底部操作区样式
+  - 为锁定状态下的 segmented button 补充禁用交互样式
 
 ### 验证结果
 - `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
 
-## 2026-04-28（V2.1-M：种草区 UI 收口）
+### 当前风险
+- 编辑卡片中的“重复规则”已经接入保存，但其在“单次事项 <-> 重复事项”之间切换时，涉及实例/模板转换，仍需要后续补一轮人工回归验证。
 
-### 本轮目标
-- 收缩种草输入区，去掉底部文字保存按钮
-- 把种草列表从“完整编辑后台”改成 backlog 风格列表
-- 为种草列表补齐和拔草模式一致的 tag 筛选
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `app-structure.md`
-- `data-model.md`
-- `constraints.md`
-- `task-list.md`
-- `design-guidelines.md`
-- `dev-log.md`
-- `src/pages/home/HomePage.tsx`
-- `src/features/templates/CreateTaskTemplateForm.tsx`
-- `src/features/templates/TemplateFormFields.tsx`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/styles/globals.css`
-
-### 本轮关键判断
-- 本轮只改种草区 UI，不动 Todo 输入区、Todo 列表、schema/storage 和生命周期规则。
-- “种草”标题右侧工具区更适合作为新增保存入口，这样新增表单本身可以退回为轻量输入区域。
-- 种草列表既然当前只展示 `active grass`，就不应继续保留完整编辑后台，而应改成 backlog list。
-
-### 本轮关键决策
-- 种草内容输入改为单行 input。
-- 兴趣程度移到种草内容输入下方。
-- `保存种草` 文本按钮移除，改为标题工具区 `save icon`。
-- 种草列表不再支持完整编辑，只保留：
-  - 兴趣程度 stepper
-  - 删除 / 停用
-- 种草列表筛选改为：
-  - 种草清单 tag 单选
-  - 场景 tag 多选
-  - 不选场景时不过滤
-
-### 本轮修改
-- 更新 `src/pages/home/HomePage.tsx`
-  - 种草标题工具区改为：
-    - 展开 / 收起输入区 icon
-    - 保存 icon
-    - 展开 / 收起种草列表 icon
-  - 保存 icon 通过表单 `id` 直接触发种草保存
-- 更新 `src/components/ui/Icons.tsx`
-  - 补充标题工具区所需的展开 / 收起 / 列表 icon
-- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
-  - 移除底部 `保存种草` 按钮
-  - 向标题工具区暴露当前是否可保存 / 是否正在保存
-- 更新 `src/features/templates/TemplateFormFields.tsx`
-  - 种草内容改为单行输入
-  - 兴趣程度移到文本框下方
-- 更新 `src/features/templates/TemplateManagerPanel.tsx`
-  - 去掉完整编辑面板
-  - 去掉后台式说明文字
-  - 新增活动清单 tag 单选与场景 tag 多选筛选
-  - 条目改为标题 + 兴趣 stepper + 停用 `×`
-- 更新 `src/styles/globals.css`
-  - 为标题工具区 disabled icon、单行输入、种草列表 stepper 和停用按钮补样式
-  - 去掉种草列表的后台感虚线边框
-- 更新 `handoff.md`
-  - 记录种草区 UI 已收口到 backlog 视角
-- 更新 `manual-test-checklist.md`
-  - 增补种草输入区与种草列表筛选 / stepper 的手测口径
-
-### 当前风险与待确认问题
-- 当前保存 icon 仍依赖“新增种草输入区已展开”这一前提；收起状态下会禁用，这和当前工具区设计一致。
-- 种草列表目前仍只展示 `active`，`picked / archived` 的查看能力仍是后续任务。
-- 兴趣 stepper 目前仍按 1~3 限制，未来若扩到 5 级，需要同步调整类型与视觉节奏。
-
-### 验证结果
-- `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
-
-## 2026-04-28（V2.1-L：Todo 输入区 + 拔草面板 UI 收口）
-
-### 本轮目标
-- 将 Todo 输入区改为“普通条目 / 拔草条目”双模式 segmented control
-- 去掉拔草的独立打开 / 收起按钮
-- 收口必要 / 重复 / 准备 / 分次的控件视觉
-- 精简拔草候选列表的展示
-
-### 开始前已阅读
-- `handoff.md`
-- `dev-log.md`
-- `manual-test-checklist.md`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/styles/globals.css`
-- `src/components/ui/Icons.tsx`
-
-### 本轮关键判断
-- 本轮只改 Todo 输入区与拔草面板 UI，不改种草区 UI，不改业务规则，不改 schema/storage。
-- “拔草条目”更适合成为输入区的一种模式，而不是额外按钮打开的二级面板。
-- 普通条目模式应把添加动作收进输入框内部，减少外部按钮噪音。
-- 重复规则若继续使用原生 `select`，会持续和其他三个控件不协调，因此改为同系统的 pill options 更合适。
-
-### 本轮关键决策
-- 顶部第一行改为两组 segmented control：
-  - 左侧：`普通条目 / 拔草条目`
-  - 右侧：太阳 / 月亮
-- 普通条目模式第二行改为：
-  - 输入框
-  - 输入框内加号按钮
-  - `...` 更多按钮
-- 拔草条目模式不再显示：
-  - 打开 / 收起按钮
-  - 默认推荐文案
-  - 候选列表说明
-  - 兴趣等级文字说明
-- 候选列表右侧加号使用黄色系，并按兴趣等级控制透明度
+## 2026-05-02 编辑卡片与种草停靠补丁
 
 ### 本轮修改
 - 更新 `src/features/todo/TodoModePanel.tsx`
-  - 新增 `composerMode`
-  - Todo 输入区改为双 segmented control
-  - 普通条目输入改为输入框内添加按钮
-  - 拔草模式切换后直接展示筛选与列表
-  - 重复规则改为 inline pill options
-  - 候选项改为标题 + 右侧加号
-  - 新增兴趣加号透明度 helper
+  - 编辑卡片底部的“保存修改”改为图标按钮
 - 更新 `src/styles/globals.css`
-  - 为模式切换、输入框内按钮、轻量日夜分段补样式
-  - 为四项执行属性补统一 option grid 样式
-  - 去掉旧拔草按钮 / 虚线分隔的视觉依赖
-  - 精简候选列表样式
-- 更新 `handoff.md`
-  - 记录当前输入区与拔草面板 UI 口径
-- 更新 `dev-log.md`
-  - 记录本轮 UI 收口决策
-- 更新 `manual-test-checklist.md`
-  - 更新输入区与拔草面板的手测口径
-
-### 当前风险与待确认问题
-- 当前 `picked / archived` 的管理视图仍未补，这轮只处理输入区与拔草面板。
-- 拔草模式切换时会保留当前筛选条件，但未来是否要记忆更长期的用户选择仍待确认。
+  - 将重复规则配置行压缩为按钮组下方的紧凑布局
+  - 缩短重复间隔输入框与单位选择宽度
+  - 调整首页右侧主列与种草区布局，保证种草区收起/展开时都固定在页面底部
 
 ### 验证结果
 - `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
 
-## 2026-04-28（V2.1-K：种草生命周期实现第一版）
-
-### 本轮目标
-- 落地 `grassStatus`
-- 让种草在加入 Todo 后离开种草库
-- 让来自种草的一次性 Todo 删除后回库、完成后不回库
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `app-structure.md`
-- `data-model.md`
-- `constraints.md`
-- `task-list.md`
-- `design-guidelines.md`
-- `dev-log.md`
-- `manual-test-checklist.md`
-- `src/features/templates/CreateTaskTemplateForm.tsx`
-- `src/features/templates/TemplateFormFields.tsx`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/features/decision/recommendation.ts`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/db/storage.ts`
-- `src/types/models.ts`
-- `src/db/schema.ts`
-- `src/mocks/app-data.ts`
-
-### 本轮关键判断
-- 本轮在不拆 `TaskTemplate` 的前提下，优先把生命周期状态落到现有模型。
-- `isArchived` 不能继续同时承担“已拔出待消费”和“用户主动停用”两种语义，因此必须引入 `grassStatus`。
-- 推荐、种草表单、从种草创建 Todo、删除回库这几条链必须一起改，否则生命周期会前后不一致。
-
-### 本轮关键决策
-- 新增 `TaskTemplate.grassStatus?: 'active' | 'picked' | 'archived'`
-- 旧数据兼容规则：
-  - `grass + isArchived=true => archived`
-  - `grass + isArchived=false => active`
-- 新写入规则：
-  - `archived => isArchived=true`
-  - `active / picked => isArchived=false`
-- `todo_recurring` 继续只使用 `isArchived`
-- 从种草加入 Todo 时，执行属性改为来自 Todo 添加区当前选择，而不是来自 `grass`
+## 2026-05-02 Todo 浮层锚点与右侧固定高度补丁
 
 ### 本轮修改
-- 更新 `src/types/models.ts`
-  - 为 `TaskTemplate` 增加 `grassStatus`
-- 更新 `src/db/schema.ts`
-  - 为 `TaskTemplate` 增加 `grassStatus` schema
-  - 升级 `APP_DATA_SCHEMA_VERSION`
-- 更新 `src/db/storage.ts`
-  - 为旧数据增加 `grassStatus` fallback
-  - 为新写入与更新增加 `grassStatus <-> isArchived` 同步规则
-- 更新 `src/mocks/app-data.ts`
-  - 调整 mock grass 数据以兼容新口径
-- 更新 `src/features/templates/TemplateFormFields.tsx`
-  - 收缩种草表单，只保留轻量字段
-- 更新 `src/features/templates/CreateTaskTemplateForm.tsx`
-  - 新增 grass 默认写入 `grassStatus = active`
-  - 底层旧执行字段写默认值
-- 更新 `src/features/templates/TemplateManagerPanel.tsx`
-  - 当前默认只显示 `active` grass
-  - 停用时写 `grassStatus = archived`
-- 更新 `src/features/decision/recommendation.ts`
-  - recommendation 只消费 `grassStatus = active`
-  - 改为显式 `sceneTagIds` 筛选
-  - 从种草加入后将原 grass 置为 `picked`
 - 更新 `src/features/todo/TodoModePanel.tsx`
-  - 拔草面板支持显式场景 tag 选择
-  - 从种草加入 Todo 时将执行属性从当前添加区传入
-  - 删除来自种草的一次性 Todo 时恢复原 grass 为 `active`
-  - 完成来自种草 Todo 时不恢复
-- 更新文档：
-  - `product-rules.md`
-  - `data-model.md`
-  - `app-structure.md`
-  - `task-list.md`
-  - `handoff.md`
-  - `dev-log.md`
-  - `manual-test-checklist.md`
-
-### 当前风险与待确认问题
-- `TemplateManagerPanel` 目前只默认显示 `active`，`picked / archived` 的查看切换仍待补。
-- 从种草直接创建 repeating Todo 已接入现有路径，但还需要补更多边界验证。
-- 旧 `grass` 执行字段虽然不再在表单暴露，但底层仍保留，后续仍需继续清理。
+  - 新增 quick add 浮层锚点状态
+  - 新增模式改为锚定到空白加号框下方左对齐
+  - 编辑模式改为锚定到当前事项卡片下方左对齐
+  - Todo 列表区改为内部滚动容器结构
+  - 重复规则配置行按重复类型切换不同对齐方式
+- 更新 `src/styles/globals.css`
+  - `按日历重复` 配置行改为卡片内居中
+  - `完成后重复` 配置行改为卡片内右对齐
+  - 首页右列高度改为固定视口高度分配
+  - Todo 容器改为固定高度，内部滚动
 
 ### 验证结果
 - `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
 
-## 2026-04-28（V2.1-K：种草生命周期方案确认）
+### 当前风险
+- 浮层定位这轮按要求未做边界保护，靠近容器底部或右侧时可能出现遮挡，这是当前已知且刻意保留的行为。
 
-### 本轮目标
-- 确认“种草加入 Todo 后如何离库 / 回库”的生命周期规则
-- 比较复用 `isArchived` 与新增生命周期字段两种方案
-- 在不改源码的前提下同步文档口径
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `data-model.md`
-- `task-list.md`
-- `dev-log.md`
-- `manual-test-checklist.md`
-- `src/features/decision/recommendation.ts`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/db/schema.ts`
-- `src/types/models.ts`
-
-### 本轮关键判断
-- 本轮只改文档，不改源码。
-- 复用 `TaskTemplate.isArchived` 会把“用户主动停用”和“已被加入 Todo 暂时离库”混在一起，长期不可维护。
-- 当前代码已经把 `isArchived` 同时用于：
-  - `grass` 停用过滤
-  - `todo_recurring` 停止重复
-  因此继续给 `grass` 叠加“picked”语义风险更高。
-- 若种草要承担 backlog / inbox 生命周期，就需要能区分：
-  - 仍可被拔草
-  - 已被消费但不算停用
-  - 用户主动停用
-
-### 本轮关键决策
-- 推荐新增 `grassStatus: 'active' | 'picked' | 'archived'`
-- 推荐继续保留 `TaskTemplate` 作为底层复用模型
-- 推荐将 `isArchived` 未来收口为：
-  - `todo_recurring` 的长期有效字段
-  - `grass` 的兼容字段
-- 推荐生命周期规则：
-  - 从种草加入 Todo：`grassStatus = 'picked'`
-  - 来自种草的一次性 Todo 删除：`grassStatus = 'active'`
-  - 来自种草的一次性 Todo 完成：保持 `picked`
-  - 用户停用种草：`grassStatus = 'archived'`
-  - 来自种草转 repeating 后，不因删除 occurrence 或停止重复而自动恢复种草
+## 2026-05-02 重复控件高度统一补丁
 
 ### 本轮修改
-- 更新 `product-rules.md`
-  - 补充种草生命周期与 repeating 边界
-- 更新 `data-model.md`
-  - 为 `grass` 增加推荐生命周期字段设计与兼容策略
-- 更新 `app-structure.md`
-  - 补充种草管理页的状态视图方向
-- 更新 `task-list.md`
-  - 新增生命周期落地任务包
-- 更新 `manual-test-checklist.md`
-  - 补充离库 / 回库目标手测口径
-- 更新 `handoff.md`
-  - 更新当前阶段目标、风险与后续顺序
-- 更新 `dev-log.md`
-  - 记录本轮方案比较与决策
+- 更新 `src/styles/globals.css`
+  - 将 quick add / 编辑卡片里 `必要 / 准备 / 分次 / 不重复 / 按日历重复 / 完成后重复` 六个控件高度统一到与 `1 / 天` 两个选择框一致的 34px
 
-### 当前风险与待确认问题
-- 当前代码尚无 `grassStatus`，老逻辑仍只按 `isArchived` 过滤。
-- “picked 是否在管理页默认隐藏还是作为单独分组显示”仍待产品确认。
-- “从种草加入 Todo 时是否允许直接创建 repeating Todo”仍待最终确认。
-
-### 验证结果
-- 本轮未运行 `lint` / `build`
-- 原因：本轮只改文档，不改源码
-
-## 2026-04-28（V2.1-F：种草 / 拔草规则重写与文档同步）
-
-### 本轮目标
-- 把“种草不是 Todo 模板，种草是轻量收藏池”写成统一规则
-- 把“有空就做场景不再自动语义推断”写成统一规则
-- 同步主规则、数据模型、结构文档、任务拆分、手测口径与交接摘要
-
-### 开始前已阅读
-- `handoff.md`
-- `product-rules.md`
-- `app-structure.md`
-- `data-model.md`
-- `constraints.md`
-- `task-list.md`
-- `design-guidelines.md`
-- `dev-log.md`
-- `manual-test-checklist.md`
-- `src/features/templates/CreateTaskTemplateForm.tsx`
-- `src/features/templates/TemplateFormFields.tsx`
-- `src/features/templates/TemplateManagerPanel.tsx`
-- `src/features/decision/recommendation.ts`
-- `src/features/todo/TodoModePanel.tsx`
-- `src/features/todo/todo-view-model.ts`
-- `src/db/storage.ts`
-- `src/types/models.ts`
-- `src/db/schema.ts`
-
-### 本轮关键判断
-- 本轮只改文档，不改源码。
-- 当前实现里的 `grass` 明显仍是“半个 Todo 模板”，与最新产品心智冲突。
-- 直接先拆底层模型风险较高，文档层应先明确：`TaskTemplate` 可暂时复用，但 `grass` 与 `todo_recurring` 的产品解释必须分离。
-- 场景自动耦合白天 / 晚上、周中 / 周末，会让“有空就做”既像用户标签又像系统语义，当前需要先废弃这套规则。
-
-### 本轮关键决策
-- 将种草定义为轻量收藏池，只保留：
-  - `activityTypeId`
-  - `title`
-  - `sceneTagIds`
-  - `interestLevel`
-- 将以下字段从 `grass` 的用户规则中移除，降级为历史兼容字段：
-  - `isNecessary`
-  - `recurrence`
-  - `requiresPreparation`
-  - `preparationNotes`
-  - `isSegmented`
-  - `date`
-- 将场景规则改为：
-  - 只由用户主动选择
-  - 只按 `sceneTagId` 精确匹配
-  - 不再根据日期、时段、tag 名称做自动推断
-- 对“当天已加入 Todo 的同种草项”当前文档建议采用：
-  - 同时段禁止重复添加
-  - 跨时段候选后置，不作为默认推荐
+## 2026-05-02 文案收尾与准备备注保存修复
 
 ### 本轮修改
-- 更新 `product-rules.md`
-  - 重写种草、场景、拔草规则
-  - 明确废弃的 V1 / 早期 V2 遗留
-- 更新 `data-model.md`
-  - 明确 `TaskTemplate` 暂时复用策略
-  - 标注 `grass` 上的历史兼容字段
-- 更新 `app-structure.md`
-  - 将种草区与拔草区定义改为“收藏池 + 显式筛选”
-- 更新 `task-list.md`
-  - 新增 V2.1-F 到 V2.1-J 的后续拆分
-- 更新 `manual-test-checklist.md`
-  - 改写种草 / 拔草目标手测口径
-- 更新 `handoff.md`
-  - 补充当前文档层结论与后续建议顺序
-- 更新 `dev-log.md`
-  - 记录本轮改动与决策
-
-### 当前风险与待确认问题
-- 当前代码仍按旧规则运行，尤其是：
-  - 种草表单仍暴露执行属性
-  - 拔草仍做自动场景推断
-  - 从种草加入 Todo 仍继承模板执行字段
-- 是否允许“同一天另一时段再次添加同一条种草”，当前仅形成文档建议，尚待实现轮最终确认。
-- 是否允许“从种草直接创建 repeating Todo”，当前仍待确认。
-
-### 验证结果
-- 本轮未运行 `lint` / `build`
-- 原因：本轮只改文档，不改源码
-
-## 2026-04-28（V2.1-E：UI 微调）
-
-### 本轮目标
-- 缩小初始化页主句字号
-- 调整初始化页两个配置块之间的垂直节奏
-- 让 Todo 条目去边框、改成更轻的色块列表
-- 将设置页三段结构合并为一个大卡片内的两个小模块
-
-### 开始前已阅读
-- `handoff.md`
-- `dev-log.md`
-- `src/pages/setup/SetupPage.tsx`
-- `src/features/settings/SettingsPanel.tsx`
-- `src/styles/globals.css`
-
-### 本轮关键判断
-- 本轮只做视觉层微调，不改初始化逻辑、不改 Todo 行为、不改设置功能。
-- 初始化页主句更适合降到“次级标题”层级，而不是继续占用 hero 级视觉权重。
-- Todo 区当前问题主要来自描边感，不需要靠阴影补偿，直接改成无边框色块更贴近轻量列表。
-- 设置页可以继续保留 `设置` 主标题，但把排序设置和测试工具降级为同卡片内的子模块。
-
-### 本轮修改
-- 更新 `src/pages/setup/SetupPage.tsx`
-  - 为初始化页增加局部样式作用域
+- 更新 `src/app/shell/AppShell.tsx`
+  - 左侧日期卡片标题从 `TODAY` 改为 `THIS DAY`
+- 更新 `src/features/todo/TodoModePanel.tsx`
+  - 排序模式标题改为 `待办事项排序`
+  - 排序说明改为“通过上下箭头调整待办事项顺序，跨过日夜分隔线后自动切换背景颜色。”
+  - `准备` 勾选后自动聚焦到准备备注输入区
+  - `准备` 勾选时备注改为必填
+  - 在准备备注输入区按回车可直接保存事项
+  - 编辑卡片保存按钮禁用逻辑同步纳入准备备注必填校验
+- 更新 `src/pages/trash/TrashPage.tsx`
+  - 占位说明文案改为新的开发中说明
 - 更新 `src/features/settings/SettingsPanel.tsx`
-  - 将排序设置与测试工具合并到同一个 `SurfaceCard`
+  - `TESTING` 改为 `RESET`
+  - `测试工具` 改为 `重置应用`
+  - 删除“仅供当前开发 / 测试阶段使用”
+  - 按钮文案改为 `重置`
+  - 重置确认文案去掉“测试用”
 - 更新 `src/styles/globals.css`
-  - 缩小初始化页主句字号
-  - 调整“种草清单”与“有空就做”两个配置块之间的垂直间距
-  - 去掉 Todo 条目明显边框，改为无边框背景色块
-  - 收口设置页为一个主卡片下的两个子模块，并补充分隔线与层级样式
+  - 去掉设置页重置区的粉色框和底色
 
 ### 验证结果
 - `corepack pnpm run lint`：通过
-- `corepack pnpm run build`：通过
-  - 保留既有 Vite chunk size warning，不影响构建成功
+
+## 2026-05-02 应用图标接入与 V1 dmg 打包
+
+### 本轮目标
+- 将根目录 `J-Flow.png` 接入桌面应用打包图标
+- 产出一版明确命名的 `V1` macOS `.dmg`
+- 同步更新打包与交接文档
+
+### 本轮关键决策
+- 当前不单独维护 `.icns` 源文件。
+- 直接将根目录 `J-Flow.png` 复制为打包资源 `build/icon.png`，交给 `electron-builder` 在 macOS 打包阶段处理。
+- 当前产物命名不改包版本号 `0.1.0`，只将 `.dmg` 文件名改为：
+  - `J-Flow-V1.dmg`
+
+### 本轮修改
+- 新增 `build/icon.png`
+  - 来源于根目录 `J-Flow.png`
+- 更新 `package.json`
+  - `build.mac.icon` 指向 `build/icon.png`
+  - `build.dmg.artifactName` 改为 `J-Flow-V1.dmg`
+- 更新 `README.md`
+  - 将 macOS 打包状态更新为已完成
+  - 补充当前图标来源与最新产物路径
+
+### 验证结果
+- `corepack pnpm run package:mac`：通过
+- 成功产出：
+  - `release/J-Flow-V1.dmg`
+  - `release/J-Flow-V1.dmg.blockmap`
+
+### 当前说明
+- `release/` 目录中仍保留旧产物：
+  - `J-Flow-0.1.0.dmg`
+- 这是历史打包结果，本轮未主动清理。
+- `electron-builder` 仍会提示 `package.json` 缺少 `description` 与 `author`，但不阻塞当前打包。

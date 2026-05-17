@@ -1,10 +1,13 @@
 import {
   CircleAlert,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronUp,
   Ellipsis,
+  Copy,
   Moon,
+  NotebookText,
   PencilLine,
   Plus,
   Repeat2,
@@ -12,6 +15,7 @@ import {
   Save,
   Settings2,
   SunMedium,
+  Trash2,
   X,
 } from 'lucide-react'
 import type { LucideProps } from 'lucide-react'
@@ -71,10 +75,26 @@ export function MoreIcon(props: IconProps) {
   return <Ellipsis {...defaultProps} {...props} />
 }
 
+export function CopyIcon(props: IconProps) {
+  return <Copy {...defaultProps} {...props} />
+}
+
 export function RepeatIcon(props: IconProps) {
   return <Repeat2 {...defaultProps} {...props} />
 }
 
 export function ImportantIcon(props: IconProps) {
   return <CircleAlert {...defaultProps} {...props} />
+}
+
+export function CalendarIcon(props: IconProps) {
+  return <CalendarDays {...defaultProps} {...props} />
+}
+
+export function TrashIcon(props: IconProps) {
+  return <Trash2 {...defaultProps} {...props} />
+}
+
+export function LogbookIcon(props: IconProps) {
+  return <NotebookText {...defaultProps} {...props} />
 }

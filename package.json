@@ -7,9 +7,52 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:web": "tsc -b && vite build",
+    "sync:icon": "mkdir -p build && cp J-Flow.PNG build/icon.png",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:desktop:renderer": "vite build --base ./ --outDir dist-desktop/renderer",
+    "build:desktop": "vite build --base ./ --outDir dist-desktop/renderer && tsc -p electron/tsconfig.json",
+    "package:mac": "corepack pnpm run sync:icon && PATH=\"$PWD/scripts:$PATH\" corepack pnpm run build:desktop && PATH=\"$PWD/scripts:$PATH\" electron-builder --mac dmg -c.electronDist=node_modules/electron/dist",
+    "package:win": "corepack pnpm run sync:icon && PATH=\"$PWD/scripts:$PATH\" corepack pnpm run build:desktop && PATH=\"$PWD/scripts:$PATH\" electron-builder --win portable",
+    "dev:desktop": "tsc -p electron/tsconfig.json && concurrently -k \"vite --host localhost --port 4173 --strictPort\" \"wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js\"",
+    "dev:desktop:web": "vite --host localhost --port 4173 --strictPort",
+    "dev:desktop:electron": "wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js",
     "preview": "vite preview",
     "test": "vitest",
     "lint": "tsc --noEmit"
+  },
+  "main": "dist-electron/main.js",
+  "build": {
+    "appId": "com.jflow.desktop",
+    "productName": "J-Flow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-desktop/renderer/**/*",
+      "dist-electron/**/*.js",
+      "!dist-electron/**/*.test.js",
+      "!dist-electron/**/test-fixtures.js",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "J-Flow-V1-win-portable.${ext}",
+      "icon": "build/icon.png"
+    },
+    "dmg": {
+      "artifactName": "J-Flow-V1.4.dmg"
+    }
   },
   "dependencies": {
     "dexie": "^4.0.11",
@@ -24,11 +67,17 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react-swc": "^3.8.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.1.3"
+    "vitest": "^3.1.3",
+    "wait-on": "^9.0.5"
   }
 }

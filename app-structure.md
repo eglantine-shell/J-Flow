@@ -1,271 +1,329 @@
 # 应用结构文档
 
-本文档定义当前 V2.1 下的页面结构、主视图与用户路径。
+本文档定义当前 `J-Flow V3 Desktop` 的推荐结构、页面组织与进程分工。
 
 说明：
-- V2.1 当前处于 Todo 行为重构实现阶段
-- 本文档描述最新结构口径
-- 若结构表述与旧实现冲突，以 `product-rules.md` 为准
+- 当前主线为桌面版
+- 当前桌面版采用 Electron 跨平台方向，macOS 优先开发
+- 当前 `V3.4 Windows Compatibility` 已开始，目标是在现有 Electron Desktop 基础上新增 Windows target
+- 网页端仍保留，但不再作为新增功能主战场
+- 若结构表述与产品规则冲突，以 `product-rules.md` 为准
 
 ---
 
 ## 一、整体结构
 
-J-Flow 仍是单人、本地网页应用。
+J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
+- `Web shell`
+  - 保留 V2 网页端构建与试用
+- `Desktop shell`
+  - 新增 Electron 跨平台桌面壳
+  - 第一阶段优先在 macOS 跑通
+  - 当前继续保留 macOS 能力，同时新增 Windows 打包与路径适配
 
-V2.1 的核心结构继续保持：
-1. 首次初始化页
-2. 主页面
-3. 设置相关页面 / 弹窗
-4. 种草管理相关页面 / 弹窗
+推荐目标是尽量复用：
+- React 页面
+- 路由
+- 视图组件
+- 状态管理
+- 校验逻辑
 
-其中主页面的主语必须明确为：
-- Todo
-- 种草
-
-而不是：
-- 模板管理
-- 来源分支管理
-- occurrence 管理
-
----
-
-## 二、初始化页
-
-### 目标
-
-让用户建立两套轻量认知：
-- 自己会积累哪些种草清单
-- 自己会使用哪些“有空就做”场景
-
-### 内容
-
-1. 欢迎说明
-2. 种草清单默认分类设置
-3. 有空就做场景设置
-4. 完成并进入应用
-
-### 交互要求
-
-- 系统提供默认项
-- 用户可新增
-- 用户可删除
-- 至少保留一个分类和一个场景后才能进入主页面
-
-初始化页不应暗示：
-- 场景会自动映射白天 / 晚上
-- 场景会自动映射周中 / 周末
+尽量隔离差异：
+- 文件系统
+- 本地数据库
+- 导入 / 导出
+- 备份
+- 桌面系统能力
 
 ---
 
-## 三、主页面
+## 二、Electron 分层
 
-V2.1 主页面继续保持四个主要区域：
-1. 头部
-2. 日期
-3. Todo
-4. 种草
+### 1. Main Process
+职责：
+- 创建应用窗口
+- 管理应用生命周期
+- 定位默认数据目录
+- 管理数据库连接
+- 执行导入 / 导出
+- 执行自动备份
+- 打开数据文件夹
+- 暴露未来同步入口
 
-其中 Todo 必须是主页面第一主语。
+当前第一轮实际已落地：
+- `electron/main.ts`
+- 创建最小桌面窗口
+- 开启 `contextIsolation`
+- 关闭 `nodeIntegration`
+- 当前已扩展为：
+  - `app:get-info`
+  - `app:get-data-path`
+  - `app:get-storage-info`
+  - 桌面导入 / 导出
+  - 自动备份
+  - SQLite repository / app-data service
+
+当前 `V3.4` 相关结论：
+- 数据目录统一通过 `app.getPath('userData')`
+- SQLite 主库统一通过 `path.join(dataPath, 'j-flow.sqlite3')`
+- 自动备份目录统一通过 `path.join(dataPath, 'backups')`
+- 打开目录、导入、导出均继续走 Electron 跨平台 API，不写死 macOS 路径
+
+### 2. Preload
+职责：
+- 向 renderer 暴露安全、受控的桌面 API
+- 作为桌面能力桥接层
+
+当前第一轮实际已落地：
+- `electron/preload.ts`
+- 暴露 `window.jflowDesktop`
+- 仅包含：
+  - `getAppInfo()`
+  - `getDataPath()`
+
+建议暴露能力示例：
+- `getAppInfo`
+- `getDataDirectory`
+- `openDataDirectory`
+- `exportJsonBackup`
+- `importJsonBackup`
+- `selectCustomDataDirectory`
+- `todoRepository`
+- `grassRepository`
+
+### 3. Renderer
+职责：
+- 承载现有 React 应用
+- 负责页面、交互、路由、状态管理、表单与展示
+- 通过 bridge 调用桌面能力
 
 ---
 
-## 四、头部
+## 三、目录结构建议
 
-### 展示内容
+推荐后续目录方向：
 
-- 应用名称
-- 设置入口
-- 必要的辅助状态入口
+```text
+/
+  electron/
+    main/
+      index.ts
+      window.ts
+      app-paths.ts
+      backup-service.ts
+      import-export.ts
+      sqlite/
+        index.ts
+        migrations/
+    preload/
+      index.ts
+      api.ts
+  src/
+    app/
+    pages/
+      home/
+      grass-list/
+      settings/
+    features/
+      todo/
+      grass/
+      calendar-jump/
+      repeat-rule/
+    shared/
+    storage/
+      interfaces/
+      web/
+      desktop/
+```
 
-### 目标
+原则：
+- Electron 相关代码与 React renderer 分离
+- 存储 adapter 分离
+- 业务 UI 尽量不直接感知 Electron
 
-- 保持轻量
-- 不抢占 Todo 主体
+当前第一轮实际目录：
+
+```text
+/
+  electron/
+    main.ts
+    preload.ts
+    tsconfig.json
+```
 
 ---
 
-## 五、日期区
+## 四、路由与页面结构
 
-### 展示内容
+### 1. 桌面端推荐页面
+- 今日 / 日期页
+- 种草清单页
+- 日志页
+- 设置页
 
-- 当前选中日期
-- 星期信息
-- 日期切换能力
+### 2. 主页面
+主页面继续以 Todo 为主体，包含：
+- 顶部工具区
+- 日期区
+- Todo 区
+- 底部轻量种草区
 
-### 目标
-
-- 日期是 Todo 的上下文锚点
-- 用户感知到的是“查看某一天的 Todo”
-
----
-
-## 六、Todo 区
-
-### 页面目标
-
-Todo 区是主页面核心，用于承载某一天真实要做的事。
-
-### 用户可见内容
-
-- 普通 Todo
-- 从种草加入的 Todo
-- 重复 Todo 的当前可感知实例
-- 未完成后顺延到今天的 Todo
-
-### 用户可见行为
-
-Todo 区首先应支持成熟 Todo List 直觉下的基础操作：
-- 快速新增
-- 编辑标题
-- 完成
-- 取消完成
+### 3. 种草清单页
+独立页面承担：
+- 查看已保存种草项
+- 筛选
+- 编辑
 - 删除
-- 查看准备备注
-- 推进分次进度
+- 归档
+- 添加到今日 Todo
 
-### 添加入口方向
-
-Todo 添加入口继续维持一个统一入口：
-- 默认快速记一条 Todo
-- 按需展开更多选项
-
-展开后可配置：
-- 从种草添加
-- 必要标记
-- 重复规则
-- 需要准备
-- 分次进度能力
-
-若是从种草加入：
-- 执行属性应在这里设置
-- 而不是从种草模板中继承整套执行规则
-
-### Todo 区的结构要求
-
-Todo 区应基于 `TodoViewModel` 工作：
-- UI 只关心显示什么
-- UI 只关心按钮可不可点
-- 映射层负责吸收底层差异
+### 4. 设置页
+承担：
+- 数据导入 / 导出
+- 数据目录管理
+- 主库文件说明
+- 打开数据文件夹
+- 自动备份设置
+- 分类 / 场景管理
 
 ---
 
-## 七、种草区
+## 五、桌面端导航建议
 
-### 页面目标
+当前更适合桌面版的方向是：
+- 左侧 Sidebar + 右侧 workspace
 
-种草区承载的是“先收藏，以后有空再做”的内容。
+原因：
+- 日期切换、月历和主导航都需要长期常驻
+- Todo 仍是主页面，但独立页已经不止两个
+- 桌面端长期打开时，侧栏心智更稳定
 
-### 页面职责
+当前不优先：
+- 底部导航
+  - 更偏移动端心智
+- 回到只有顶部轻导航的结构
+  - 已不足以承接当前 Desktop 版本的信息密度
 
-- 展示种草条目列表
-- 展示种草清单
-- 展示场景标签
-- 作为 Todo 的可选输入来源
-- 提供拔草入口
+建议 Sidebar 包含：
+- 今日
+- 种草清单
+- 日志
+- 设置
 
-### 结构边界
+当前第一轮已落地：
+- Sidebar 已支持：
+  - 今日
+  - 种草清单
+  - 日志
+  - 设置
 
-种草区不是普通 Todo 的前置流程。
-
-种草区也不是 Todo 模板编辑器。
-
-用户在种草区管理的，应是轻量收藏信息：
-- 属于哪个种草清单
-- 内容标题
-- 适合哪些场景
-- 兴趣程度
-
-以及生命周期状态：
-- 仍在种草库
-- 已被加入 Todo
-- 已停用
-
-而不是：
-- 是否必要
-- 是否重复
-- 是否需要准备
-- 是否分次
-- 属于哪一天
+若保留主页种草清单入口，可在种草区标题附近提供：
+- “查看种草清单”按钮
+- 或列表 icon 跳转入口
 
 ---
 
-## 八、拔草推荐
+## 六、Todo 与种草页面关系
 
-### 页面目标
+### 1. 主页面保留种草区
+- 主页底部保留种草输入入口
+- 继续支持：
+  - 展开 / 收起种草区
+  - 保存当前种草
 
-当用户想从收藏池里挑一条加入 Todo 时，帮助其快速筛选。
+### 2. 主页不再承载完整种草清单浏览
+- 原“展开 / 收起种草清单”不再用于在主页中展开完整列表
+- 改为跳转到独立种草清单页更合适
 
-### 表达方式
+当前第一轮已落地：
+- 主页原列表按钮改为跳转到独立种草清单页
+- 独立页当前直接承接 `TemplateManagerPanel`
 
-V2.1 中，拔草推荐更适合继续作为：
-- Todo 添加区中的一种动作
-- 种草区进入 Todo 的辅助入口
-
-它不是独立主模式。
-
-### 交互结构
-
-拔草时应由用户显式选择：
-1. 一个种草清单
-2. 零个或多个场景 tag
-
-然后展示符合条件的候选。
-
-若用户未选场景：
-- 不按场景过滤
-
-若用户已选场景：
-- 只按 `sceneTagId` 交集过滤
-
-### 结构边界
-
-拔草推荐只负责“选哪条加入 Todo”。
-
-它不负责定义：
-- Todo 的完成语义
-- Todo 的删除语义
-- Todo 的顺延语义
-- 场景自动推断
+### 3. Todo 页面调用种草清单
+- Todo 添加入口中仍支持：
+  - 从种草中选择
+  - 推荐拔草
+- 数据来源与独立种草清单页面共享同一套存储
 
 ---
 
-## 九、设置页 / 设置弹窗
+## 七、桌面端与网页端复用策略
 
-V2.1 暂时仍保留：
-- 分类管理
-- 场景管理
-- 排序或偏好设置
-- 数据测试与重置入口
+### 1. 继续保留网页端构建能力
+- 网页端仍可运行与构建
+- 桌面端新增独立启动与打包命令
+- 当前已验证：
+  - `pnpm run dev`
+  - `pnpm run build`
+  - `pnpm run dev:desktop`
+  - `pnpm run build:desktop`
+  - `pnpm run lint`
 
-本轮不改这些结构。
+### 2. 共用部分
+- 页面组件
+- 业务规则
+- 路由定义的大部分结构
+- 表单校验
+- 视图模型
+
+### 3. 平台差异部分
+- 本地数据库
+- 用户数据目录
+- 打开目录能力
+- 原生文件对话框
+- 打包目标
+
+### 4. 当前 Windows 目标
+- 第一轮仅新增 `portable` 打包目标
+- 不改变现有 Web shell
+- 不替换现有 macOS Desktop shell
+- 不新增 Windows 专属业务分支
+- 2026-05-02 已在 macOS 环境下产出第一版 Windows `portable` 包，但当前仍待 Windows 真机排查启动问题
+
+Windows 数据安全要求：
+- 用户数据不放在打包产物目录
+- Windows 下统一写入 Electron `userData`
+- 推荐通过 JSON 导出 / 导入做跨平台迁移
+- 不建议直接复制 SQLite 主库跨平台迁移
+- 文件系统
+- 数据目录
+- 自动备份
+- 打开文件夹
+
+### 4. 当前桌面数据目录口径
+- 设置页中展示的“桌面数据目录”指 Electron `userData` 目录。
+- 当前 SQLite 运行时主库文件位于该目录下：
+  - `j-flow.sqlite3`
+- 自动备份位于该目录下：
+  - `backups/`
+- 手动导出 / 导入使用系统文件对话框：
+  - 默认从数据目录起步
+  - 但导出的 JSON 文件并不强制写回数据目录
 
 ---
 
-## 十、种草管理页 / 详情弹窗
+## 八、开发与打包命令建议
 
-后续仍可保留种草管理能力，例如：
-- 查看已有种草
-- 编辑种草
-- 停用种草
+推荐命令设计：
+- `pnpm run dev`
+  - 网页端开发
+  - 默认端口：`5173`
+- `pnpm run build`
+  - 网页端构建
+- `pnpm run build:web`
+  - 网页端构建
+- `pnpm run build:electron`
+  - 编译 Electron 主进程与 preload
+- `pnpm run dev:desktop`
+  - Electron + Vite 开发
+  - Desktop renderer 默认端口：`4173`
+- `pnpm run build:desktop`
+  - 桌面端构建
+- `pnpm run package:win`
+  - Windows 打包
 
-但种草管理页应朝“收藏池管理”收口，而不是“Todo 模板管理”。
-
-应优先展示与编辑：
-- `activityTypeId`
-- `title`
-- `sceneTagIds`
-- `interestLevel`
-- 生命周期状态
-
-不应继续强调：
-- `date`
-- `recurrence`
-- `isNecessary`
-- `requiresPreparation`
-- `isSegmented`
-
-推荐的管理视图方向：
-- 默认展示 `active`
-- 可切换查看 `picked`
-- 可切换查看 `archived`
+当前 dev 链路说明：
+- Electron dev URL：
+  - `http://localhost:4173/J-Flow/`
+- `wait-on` 等待真实页面可访问后再启动 Electron。
+- `loadURL` 已增加基础错误处理。

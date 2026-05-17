@@ -8,6 +8,7 @@ export const mockSeedAppData: AppData = {
     initialized: false,
     tieBreakerOrder: 'desc',
     weatherEnabled: false,
+    completedAtRoundingMinutes: 5,
     createdAt,
     updatedAt,
   },
@@ -54,6 +55,8 @@ export const mockSeedAppData: AppData = {
   taskTemplates: [],
   recurringTaskInstances: [],
   dayPlanItems: [],
+  logbookEntries: [],
+  segmentedProgressLogs: [],
 }
 
 export const mockAppData: AppData = {
@@ -61,6 +64,7 @@ export const mockAppData: AppData = {
     initialized: true,
     tieBreakerOrder: 'desc',
     weatherEnabled: false,
+    completedAtRoundingMinutes: 5,
     createdAt,
     updatedAt,
   },
@@ -315,4 +319,6 @@ export const mockAppData: AppData = {
       createdAt: '2026-04-17T07:30:00.000Z',
     },
   ],
+  logbookEntries: [],
+  segmentedProgressLogs: [],
 }

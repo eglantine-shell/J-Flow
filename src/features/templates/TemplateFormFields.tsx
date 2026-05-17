@@ -32,11 +32,24 @@ export const createInitialTaskTemplateFormState = (): TaskTemplateFormState => (
   interestLevel: 2,
 })
 
+export const GRASS_BATCH_MAX_LINES = 20
+
+export function parseGrassBatchTitles(title: string) {
+  return title
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
 export function validateTaskTemplateForm(formState: TaskTemplateFormState) {
+  const parsedTitles = parseGrassBatchTitles(formState.title)
+
   return !formState.activityTypeId
     ? '请选择种草清单。'
-    : formState.title.trim().length === 0
+    : parsedTitles.length === 0
       ? '请填写种草内容。'
+      : parsedTitles.length > GRASS_BATCH_MAX_LINES
+        ? `一次最多保存 ${GRASS_BATCH_MAX_LINES} 条种草。`
       : null
 }
 
@@ -279,9 +292,9 @@ export function TaskTemplateFormFields({
       </div>
 
       <div className="template-form__row template-form__row--content">
-        <input
+        <textarea
           className="template-form__content-input"
-          type="text"
+          rows={4}
           value={formState.title}
           onChange={(event) => {
             setFormState((current) => ({
@@ -289,7 +302,7 @@ export function TaskTemplateFormFields({
               title: event.target.value,
             }))
           }}
-          placeholder="输入种草内容"
+          placeholder="输入种草内容，每行一条，空行会忽略，最多 20 条"
           aria-label="种草内容"
         />
       </div>
@@ -297,26 +310,28 @@ export function TaskTemplateFormFields({
       <div className="template-form__row">
         <div className="template-form__inline-field template-form__inline-field--interest">
           <span>兴趣程度</span>
-          <div className="segmented-control">
-            {interestOptions.map((option) => (
-              <button
-                key={option.value}
-                className={
-                  option.value === formState.interestLevel
-                    ? 'segmented-control__button segmented-control__button--active'
-                    : 'segmented-control__button'
-                }
-                type="button"
-                onClick={() => {
-                  setFormState((current) => ({
-                    ...current,
-                    interestLevel: option.value,
-                  }))
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="template-form__interest-control">
+            <div className="segmented-control">
+              {interestOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={
+                    option.value === formState.interestLevel
+                      ? 'segmented-control__button segmented-control__button--active'
+                      : 'segmented-control__button'
+                  }
+                  type="button"
+                  onClick={() => {
+                    setFormState((current) => ({
+                      ...current,
+                      interestLevel: option.value,
+                    }))
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { db } from '@/db/client'
 import {
   APP_DATA_RECORD_ID,
   APP_DATA_SCHEMA_VERSION,
@@ -6,6 +5,8 @@ import {
   appDataSchema,
   type AppDataRecord,
 } from '@/db/schema'
+import { normalizeCompletedAtRoundingMinutes } from '@/features/todo/completed-at-rounding'
+import { resolveRepeatRule, serializeRepeatRule } from '@/features/recurrence/repeat-rule'
 import { mockSeedAppData } from '@/mocks'
 import type {
   ActivityType,
@@ -41,9 +42,8 @@ type TaskTemplateUpdateInput = Partial<Omit<TaskTemplate, 'id'>> & Pick<TaskTemp
 type RecurringTaskInstanceUpdateInput = Partial<Omit<RecurringTaskInstance, 'id'>> &
   Pick<RecurringTaskInstance, 'id'>
 type DayPlanItemUpdateInput = Partial<Omit<DayPlanItem, 'id'>> & Pick<DayPlanItem, 'id'>
-type AppSettingsUpdateInput = Partial<Omit<AppSettings, 'createdAt' | 'updatedAt'>>
-
 const STORAGE_META_KEY = 'app_data_schema_version'
+type AppSettingsUpdateInput = Partial<Omit<AppSettings, 'createdAt' | 'updatedAt'>>
 
 const cloneAppData = (appData: AppData): AppData => structuredClone(appData)
 
@@ -77,17 +77,47 @@ const resolveGrassStatus = (
 
 const normalizeLegacyAppData = (appData: AppData): AppData => ({
   ...appData,
+  logbookEntries: appData.logbookEntries ?? [],
+  segmentedProgressLogs: appData.segmentedProgressLogs ?? [],
+  settings: {
+    ...appData.settings,
+    completedAtRoundingMinutes: normalizeCompletedAtRoundingMinutes(
+      appData.settings.completedAtRoundingMinutes,
+    ),
+  },
   taskTemplates: appData.taskTemplates.map((template) => ({
     ...template,
+    ...serializeRepeatRule(resolveRepeatRule(template)),
     grassStatus: resolveGrassStatus(template),
     isArchived:
       template.templateKind === 'grass'
         ? resolveGrassStatus(template) === 'archived'
         : template.isArchived,
   })),
+  recurringTaskInstances: appData.recurringTaskInstances.map((instance) => ({
+    ...instance,
+    ...(() => {
+      const repeatRule = resolveRepeatRule(instance)
+      const serializedRepeatRule = serializeRepeatRule(repeatRule)
+
+      return {
+        recurrence:
+          serializedRepeatRule.recurrence === 'none'
+            ? instance.recurrence
+            : serializedRepeatRule.recurrence,
+        repeatType:
+          serializedRepeatRule.repeatType === 'none'
+            ? undefined
+            : serializedRepeatRule.repeatType,
+        repeatIntervalUnit: serializedRepeatRule.repeatIntervalUnit,
+        repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
+      }
+    })(),
+  })),
   dayPlanItems: appData.dayPlanItems.map((item) => ({
     ...item,
     originDate: resolveDayPlanItemOriginDate(item),
+    deletedAt: item.deletedAt,
   })),
 })
 
@@ -110,22 +140,123 @@ const buildRecord = (payload: AppData): AppDataRecord =>
     updatedAt: nowIso(),
   })
 
+async function getWebDb() {
+  const { db } = await import('@/db/client')
+
+  return db
+}
+
+const getDesktopStorageApi = () => {
+  if (typeof window === 'undefined' || !window.jflowDesktop) {
+    return null
+  }
+
+  return window.jflowDesktop
+}
+
+const getDesktopRepositoryApi = () => {
+  const desktopApi = getDesktopStorageApi()
+
+  if (!desktopApi?.repository) {
+    return null
+  }
+
+  return desktopApi.repository
+}
+
+const isDesktopStorageEnabled = () => Boolean(getDesktopStorageApi())
+
+async function getDesktopAppData() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository) {
+    throw new Error('Desktop repository bridge unavailable')
+  }
+
+  const appData = await desktopRepository.appData.get()
+
+  return appData ? parseAppData(appData) : null
+}
+
+async function replaceDesktopAppData(appData: AppData) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository) {
+    throw new Error('Desktop repository bridge unavailable')
+  }
+
+  return parseAppData(await desktopRepository.appData.replace(parseAppData(appData)))
+}
+
+async function resetDesktopAppData(seed: AppData) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository) {
+    throw new Error('Desktop repository bridge unavailable')
+  }
+
+  return parseAppData(await desktopRepository.appData.reset(parseAppData(seed)))
+}
+
+async function exportDesktopAppData() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository) {
+    throw new Error('Desktop repository bridge unavailable')
+  }
+
+  return parseAppData(await desktopRepository.appData.exportSnapshot())
+}
+
+async function importDesktopAppData(appData: AppData) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository) {
+    throw new Error('Desktop repository bridge unavailable')
+  }
+
+  return parseAppData(await desktopRepository.appData.importSnapshot(parseAppData(appData)))
+}
+
 async function readAppDataRecord() {
+  const db = await getWebDb()
   const record = await db.appData.get(APP_DATA_RECORD_ID)
 
   if (!record) {
     return null
   }
 
-  const parsedRecord = appDataRecordSchema.parse(record)
+  const rawRecord = record as Partial<AppDataRecord> & {
+    payload?: AppData
+  }
+  const parsedPayload = parseAppData(rawRecord.payload ?? mockSeedAppData)
+  const parsedRecord = appDataRecordSchema.parse({
+    id: rawRecord.id ?? APP_DATA_RECORD_ID,
+    schemaVersion: rawRecord.schemaVersion ?? APP_DATA_SCHEMA_VERSION,
+    payload: parsedPayload,
+    updatedAt: rawRecord.updatedAt ?? nowIso(),
+  })
 
   return {
     ...parsedRecord,
-    payload: parseAppData(parsedRecord.payload),
+    payload: parsedPayload,
+  }
+}
+
+async function readLegacyIndexedDbSnapshotForDesktopMigration() {
+  try {
+    const db = await getWebDb()
+    await db.open()
+    const existingRecord = await readAppDataRecord()
+
+    return existingRecord ? cloneAppData(existingRecord.payload) : null
+  } catch {
+    return null
   }
 }
 
 async function persistAppData(appData: AppData) {
+  const db = await getWebDb()
   const parsed = parseAppData(appData)
   const record = buildRecord(parsed)
 
@@ -141,10 +272,35 @@ async function persistAppData(appData: AppData) {
 }
 
 async function mutateAppData(mutator: AppDataUpdater) {
-  const current = await getAppData()
-  const next = mutator(cloneAppData(current))
+  const db = await getWebDb()
+  let persisted: AppData | null = null
 
-  return persistAppData(next)
+  await db.transaction('rw', db.appData, db.meta, async () => {
+    const existingRecord = await db.appData.get(APP_DATA_RECORD_ID)
+    const current = existingRecord
+      ? parseAppData(
+          ((existingRecord as Partial<AppDataRecord> & {
+            payload?: AppData
+          }).payload ?? mockSeedAppData),
+        )
+      : parseAppData(mockSeedAppData)
+    const next = parseAppData(mutator(cloneAppData(current)))
+    const record = buildRecord(next)
+
+    await db.appData.put(record)
+    await db.meta.put({
+      key: STORAGE_META_KEY,
+      value: String(record.schemaVersion),
+    })
+
+    persisted = cloneAppData(next)
+  })
+
+  if (!persisted) {
+    throw new Error('App data mutation failed')
+  }
+
+  return persisted
 }
 
 function updateById<T extends { id: string }>(
@@ -221,12 +377,15 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     title: input.title,
     date: input.date ?? todayDateString(),
     activityTypeId: input.activityTypeId,
-    sceneTagIds: input.sceneTagIds,
+    sceneTagIds: [...input.sceneTagIds],
     interestLevel: input.interestLevel,
     isNecessary: input.isNecessary,
     requiresPreparation: input.requiresPreparation,
     preparationNotes: input.preparationNotes,
     recurrence: input.recurrence,
+    repeatType: input.repeatType,
+    repeatIntervalUnit: input.repeatIntervalUnit,
+    repeatIntervalValue: input.repeatIntervalValue,
     isSegmented: input.isSegmented,
     createdAt: input.createdAt ?? timestamp,
     updatedAt: input.updatedAt ?? timestamp,
@@ -245,7 +404,11 @@ function normalizeRecurringTaskInstance(
     id: input.id ?? createId('recurring-instance'),
     templateId: input.templateId,
     dateKey: input.dateKey,
+    targetDate: input.targetDate,
     recurrence: input.recurrence,
+    repeatType: input.repeatType,
+    repeatIntervalUnit: input.repeatIntervalUnit,
+    repeatIntervalValue: input.repeatIntervalValue,
     status: input.status,
     progressState: input.progressState,
     progressPercent: input.progressPercent,
@@ -282,10 +445,26 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     status: input.status,
     createdAt: input.createdAt ?? nowIso(),
     completedAt: input.completedAt,
+    deletedAt: input.deletedAt,
   }
 }
 
 export async function initializeAppData(seed: AppData = mockSeedAppData) {
+  if (isDesktopStorageEnabled()) {
+    const appData = await getDesktopAppData()
+
+    if (appData) {
+      return cloneAppData(appData)
+    }
+
+    const migrationSeed =
+      (await readLegacyIndexedDbSnapshotForDesktopMigration()) ?? parseAppData(seed)
+    const initialized = await replaceDesktopAppData(migrationSeed)
+
+    return cloneAppData(initialized)
+  }
+
+  const db = await getWebDb()
   await db.open()
 
   const existingRecord = await readAppDataRecord()
@@ -298,6 +477,16 @@ export async function initializeAppData(seed: AppData = mockSeedAppData) {
 }
 
 export async function getAppData() {
+  if (isDesktopStorageEnabled()) {
+    const appData = await getDesktopAppData()
+
+    if (appData) {
+      return cloneAppData(appData)
+    }
+
+    return initializeAppData()
+  }
+
   const existingRecord = await readAppDataRecord()
 
   if (existingRecord) {
@@ -308,26 +497,55 @@ export async function getAppData() {
 }
 
 export async function exportAppDataSnapshot() {
+  if (isDesktopStorageEnabled()) {
+    return cloneAppData(await exportDesktopAppData())
+  }
+
   return cloneAppData(await getAppData())
 }
 
 export async function replaceAppData(appData: AppData) {
+  if (isDesktopStorageEnabled()) {
+    return cloneAppData(await replaceDesktopAppData(appData))
+  }
+
   return persistAppData(appData)
 }
 
 export async function importAppDataSnapshot(appData: AppData) {
-  return persistAppData(appData)
+  if (isDesktopStorageEnabled()) {
+    return cloneAppData(await importDesktopAppData(appData))
+  }
+
+  return replaceAppData(appData)
 }
 
 export async function updateAppData(updater: AppDataUpdater) {
+  if (isDesktopStorageEnabled()) {
+    const current = (await getDesktopAppData()) ?? parseAppData(mockSeedAppData)
+    const next = parseAppData(updater(cloneAppData(current)))
+
+    return cloneAppData(await replaceDesktopAppData(next))
+  }
+
   return mutateAppData(updater)
 }
 
 export async function resetAppData(seed: AppData = mockSeedAppData) {
-  return persistAppData(seed)
+  if (isDesktopStorageEnabled()) {
+    return cloneAppData(await resetDesktopAppData(seed))
+  }
+
+  return replaceAppData(seed)
 }
 
 async function updateSettings(input: AppSettingsUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.settings.update(input)
+  }
+
   let settings: AppSettings | null = null
 
   await mutateAppData((current) => {
@@ -351,15 +569,33 @@ async function updateSettings(input: AppSettingsUpdateInput) {
 }
 
 async function listSceneTags() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.sceneTags.list()
+  }
+
   return (await getAppData()).sceneTags
 }
 
 async function getSceneTagById(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.sceneTags.getById(id)
+  }
+
   return (await listSceneTags()).find((item) => item.id === id) ?? null
 }
 
 async function createSceneTag(input: SceneTagCreateInput) {
   const entity = normalizeSceneTag(input)
+
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.sceneTags.create(entity)
+  }
 
   await mutateAppData((current) => ({
     ...current,
@@ -370,6 +606,18 @@ async function createSceneTag(input: SceneTagCreateInput) {
 }
 
 async function updateSceneTag(input: SceneTagUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    const entity = await desktopRepository.sceneTags.update(input)
+
+    if (!entity) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    return entity
+  }
+
   let entity: SceneTag | null = null
 
   await mutateAppData((current) => {
@@ -390,6 +638,12 @@ async function updateSceneTag(input: SceneTagUpdateInput) {
 }
 
 async function deleteSceneTag(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.sceneTags.delete(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {
@@ -406,6 +660,12 @@ async function deleteSceneTag(id: string) {
 }
 
 async function deleteSceneTagAndDetachTemplates(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.sceneTags.deleteAndDetachTemplates(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {
@@ -435,15 +695,33 @@ async function deleteSceneTagAndDetachTemplates(id: string) {
 }
 
 async function listActivityTypes() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.activityTypes.list()
+  }
+
   return (await getAppData()).activityTypes
 }
 
 async function getActivityTypeById(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.activityTypes.getById(id)
+  }
+
   return (await listActivityTypes()).find((item) => item.id === id) ?? null
 }
 
 async function createActivityType(input: ActivityTypeCreateInput) {
   const entity = normalizeActivityType(input)
+
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.activityTypes.create(entity)
+  }
 
   await mutateAppData((current) => ({
     ...current,
@@ -454,6 +732,18 @@ async function createActivityType(input: ActivityTypeCreateInput) {
 }
 
 async function updateActivityType(input: ActivityTypeUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    const entity = await desktopRepository.activityTypes.update(input)
+
+    if (!entity) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    return entity
+  }
+
   let entity: ActivityType | null = null
 
   await mutateAppData((current) => {
@@ -474,6 +764,12 @@ async function updateActivityType(input: ActivityTypeUpdateInput) {
 }
 
 async function deleteActivityType(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.activityTypes.delete(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {
@@ -490,6 +786,12 @@ async function deleteActivityType(id: string) {
 }
 
 async function deleteActivityTypeIfUnused(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.activityTypes.deleteIfUnused(id)
+  }
+
   const current = await getAppData()
 
   if (current.taskTemplates.some((template) => template.activityTypeId === id)) {
@@ -508,15 +810,33 @@ async function deleteActivityTypeIfUnused(id: string) {
 }
 
 async function listTaskTemplates() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.taskTemplates.list()
+  }
+
   return (await getAppData()).taskTemplates
 }
 
 async function getTaskTemplateById(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.taskTemplates.getById(id)
+  }
+
   return (await listTaskTemplates()).find((item) => item.id === id) ?? null
 }
 
 async function createTaskTemplate(input: TaskTemplateCreateInput) {
   const entity = normalizeTaskTemplate(input)
+
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.taskTemplates.create(entity)
+  }
 
   await mutateAppData((current) => ({
     ...current,
@@ -527,6 +847,46 @@ async function createTaskTemplate(input: TaskTemplateCreateInput) {
 }
 
 async function updateTaskTemplate(input: TaskTemplateUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    const existing = await desktopRepository.taskTemplates.getById(input.id)
+
+    if (!existing) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    const merged = {
+      ...existing,
+      ...input,
+      updatedAt: input.updatedAt ?? nowIso(),
+    }
+
+    const next =
+      merged.templateKind !== 'grass'
+        ? {
+            ...merged,
+            grassStatus: undefined,
+          }
+        : (() => {
+            const grassStatus = resolveGrassStatus(merged)
+
+            return {
+              ...merged,
+              grassStatus,
+              isArchived: grassStatus === 'archived',
+            }
+          })()
+
+    const entity = await desktopRepository.taskTemplates.update(next)
+
+    if (!entity) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    return entity
+  }
+
   let entity: TaskTemplate | null = null
 
   await mutateAppData((current) => {
@@ -570,6 +930,12 @@ async function updateTaskTemplate(input: TaskTemplateUpdateInput) {
 }
 
 async function deleteTaskTemplate(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.taskTemplates.delete(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {
@@ -586,15 +952,33 @@ async function deleteTaskTemplate(id: string) {
 }
 
 async function listRecurringTaskInstances() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.recurringTaskInstances.list()
+  }
+
   return (await getAppData()).recurringTaskInstances
 }
 
 async function getRecurringTaskInstanceById(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.recurringTaskInstances.getById(id)
+  }
+
   return (await listRecurringTaskInstances()).find((item) => item.id === id) ?? null
 }
 
 async function createRecurringTaskInstance(input: RecurringTaskInstanceCreateInput) {
   const entity = normalizeRecurringTaskInstance(input)
+
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.recurringTaskInstances.create(entity)
+  }
 
   await mutateAppData((current) => ({
     ...current,
@@ -605,6 +989,18 @@ async function createRecurringTaskInstance(input: RecurringTaskInstanceCreateInp
 }
 
 async function updateRecurringTaskInstance(input: RecurringTaskInstanceUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    const entity = await desktopRepository.recurringTaskInstances.update(input)
+
+    if (!entity) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    return entity
+  }
+
   let entity: RecurringTaskInstance | null = null
 
   await mutateAppData((current) => {
@@ -625,6 +1021,12 @@ async function updateRecurringTaskInstance(input: RecurringTaskInstanceUpdateInp
 }
 
 async function deleteRecurringTaskInstance(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.recurringTaskInstances.delete(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {
@@ -641,15 +1043,33 @@ async function deleteRecurringTaskInstance(id: string) {
 }
 
 async function listDayPlanItems() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.dayPlanItems.list()
+  }
+
   return (await getAppData()).dayPlanItems
 }
 
 async function getDayPlanItemById(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.dayPlanItems.getById(id)
+  }
+
   return (await listDayPlanItems()).find((item) => item.id === id) ?? null
 }
 
 async function createDayPlanItem(input: DayPlanItemCreateInput) {
   const entity = normalizeDayPlanItem(input)
+
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.dayPlanItems.create(entity)
+  }
 
   await mutateAppData((current) => ({
     ...current,
@@ -660,6 +1080,18 @@ async function createDayPlanItem(input: DayPlanItemCreateInput) {
 }
 
 async function updateDayPlanItem(input: DayPlanItemUpdateInput) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    const entity = await desktopRepository.dayPlanItems.update(input)
+
+    if (!entity) {
+      throw new Error(`Entity not found: ${input.id}`)
+    }
+
+    return entity
+  }
+
   let entity: DayPlanItem | null = null
 
   await mutateAppData((current) => {
@@ -680,6 +1112,12 @@ async function updateDayPlanItem(input: DayPlanItemUpdateInput) {
 }
 
 async function deleteDayPlanItem(id: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (desktopRepository) {
+    return desktopRepository.dayPlanItems.delete(id)
+  }
+
   let removed = false
 
   await mutateAppData((current) => {

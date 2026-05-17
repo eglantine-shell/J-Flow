@@ -7,7 +7,12 @@ import {
   type AppData,
   type AppSettings,
   type DayPlanItem,
+  type LogbookCompletedItem,
+  type LogbookDeletedItem,
+  type LogbookEntry,
+  type LogbookUnfinishedItem,
   type RecurringTaskInstance,
+  type SegmentedProgressLog,
   type SceneTag,
   type TaskTemplate,
 } from '@/types'
@@ -21,6 +26,9 @@ const progressPercentSchema = z
   .min(PROGRESS_PERCENT_MIN)
   .max(PROGRESS_PERCENT_MAX)
 const grassStatusSchema = z.enum(['active', 'picked', 'archived'])
+const repeatTypeSchema = z.enum(['none', 'calendar', 'afterCompletion'])
+const repeatIntervalUnitSchema = z.enum(['day', 'week', 'month', 'year'])
+const repeatIntervalValueSchema = z.number().int().min(1).max(100)
 
 export const sceneTagSchema = z.object({
   id: z.string().min(1),
@@ -48,6 +56,9 @@ export const taskTemplateSchema = z.object({
   requiresPreparation: z.boolean(),
   preparationNotes: z.string(),
   recurrence: z.enum(['none', 'daily', 'weekly', 'monthly', 'yearly']),
+  repeatType: repeatTypeSchema.optional(),
+  repeatIntervalUnit: repeatIntervalUnitSchema.optional(),
+  repeatIntervalValue: repeatIntervalValueSchema.optional(),
   isSegmented: z.boolean(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
@@ -67,7 +78,11 @@ export const recurringTaskInstanceSchema = z.object({
   id: z.string().min(1),
   templateId: z.string().min(1),
   dateKey: z.string().min(1),
+  targetDate: dateSchema.optional(),
   recurrence: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  repeatType: z.enum(['calendar', 'afterCompletion']).optional(),
+  repeatIntervalUnit: repeatIntervalUnitSchema.optional(),
+  repeatIntervalValue: repeatIntervalValueSchema.optional(),
   status: z.enum(['pending', 'completed', 'expired']),
   progressState: z.enum(['not_started', 'in_progress', 'completed']),
   progressPercent: progressPercentSchema,
@@ -107,12 +122,58 @@ export const dayPlanItemSchema = z.object({
   status: z.enum(['pending', 'completed', 'deleted']),
   createdAt: isoDatetimeSchema,
   completedAt: isoDatetimeSchema.optional(),
+  deletedAt: isoDatetimeSchema.optional(),
 }) satisfies z.ZodType<DayPlanItem>
+
+export const logbookCompletedItemSchema = z.object({
+  id: z.string().min(1),
+  titleSnapshot: z.string().min(1),
+  time: z.string().regex(/^\d{2}[:：]\d{2}$/),
+  kind: z.enum(['completed', 'picked']),
+  isNecessary: z.boolean(),
+}) satisfies z.ZodType<LogbookCompletedItem>
+
+export const logbookUnfinishedItemSchema = z.object({
+  id: z.string().min(1),
+  titleSnapshot: z.string().min(1),
+  isNecessary: z.boolean(),
+  progressPercent: progressPercentSchema.optional(),
+}) satisfies z.ZodType<LogbookUnfinishedItem>
+
+export const logbookDeletedItemSchema = z.object({
+  id: z.string().min(1),
+  titleSnapshot: z.string().min(1),
+  isNecessary: z.boolean(),
+}) satisfies z.ZodType<LogbookDeletedItem>
+
+export const segmentedProgressLogSchema = z.object({
+  date: dateSchema,
+  itemId: z.string().min(1),
+  titleSnapshot: z.string().min(1),
+  isNecessary: z.boolean(),
+  fromProgress: progressPercentSchema,
+  toProgress: progressPercentSchema,
+}) satisfies z.ZodType<SegmentedProgressLog>
+
+export const logbookEntrySchema = z.object({
+  date: dateSchema,
+  completedItems: z.array(logbookCompletedItemSchema),
+  unfinishedItems: z.array(logbookUnfinishedItemSchema),
+  deletedItems: z.array(logbookDeletedItemSchema),
+  remark: z.string(),
+  generatedAt: isoDatetimeSchema,
+}) satisfies z.ZodType<LogbookEntry>
 
 export const appSettingsSchema = z.object({
   initialized: z.boolean(),
   tieBreakerOrder: z.enum(['asc', 'desc']),
   weatherEnabled: z.boolean(),
+  completedAtRoundingMinutes: z.union([
+    z.literal(0),
+    z.literal(5),
+    z.literal(10),
+    z.literal(30),
+  ]),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
 }) satisfies z.ZodType<AppSettings>
@@ -124,10 +185,12 @@ export const appDataSchema = z.object({
   taskTemplates: z.array(taskTemplateSchema),
   recurringTaskInstances: z.array(recurringTaskInstanceSchema),
   dayPlanItems: z.array(dayPlanItemSchema),
+  logbookEntries: z.array(logbookEntrySchema),
+  segmentedProgressLogs: z.array(segmentedProgressLogSchema),
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 5
+export const APP_DATA_SCHEMA_VERSION = 9
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

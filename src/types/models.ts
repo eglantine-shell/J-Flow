@@ -4,6 +4,14 @@ export type GrassStatus = 'active' | 'picked' | 'archived'
 export type TemplateKind = 'grass' | 'todo_recurring'
 
 export type RecurrenceRule = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
+export type RepeatType = 'none' | 'calendar' | 'afterCompletion'
+export type RepeatIntervalUnit = 'day' | 'week' | 'month' | 'year'
+
+export type RepeatRule = {
+  repeatType: RepeatType
+  intervalValue?: number
+  intervalUnit?: RepeatIntervalUnit
+}
 
 export type TimeBlock = 'day' | 'night'
 
@@ -25,6 +33,8 @@ export type RecurringInstanceStatus = 'pending' | 'completed' | 'expired'
 export type ProgressState = 'not_started' | 'in_progress' | 'completed'
 
 export type TieBreakerOrder = 'asc' | 'desc'
+export type CompletedAtRoundingMinutes = 0 | 5 | 10 | 30
+export type LogbookCompletedKind = 'completed' | 'picked'
 
 export type ProgressPercent = number
 
@@ -64,6 +74,9 @@ export interface TaskTemplate {
   requiresPreparation: boolean
   preparationNotes: string
   recurrence: RecurrenceRule
+  repeatType?: RepeatType
+  repeatIntervalUnit?: RepeatIntervalUnit
+  repeatIntervalValue?: number
   isSegmented: boolean
   createdAt: string
   updatedAt: string
@@ -75,7 +88,11 @@ export interface RecurringTaskInstance {
   id: string
   templateId: string
   dateKey: RecurrenceDateKey
+  targetDate?: string
   recurrence: Exclude<RecurrenceRule, 'none'>
+  repeatType?: Exclude<RepeatType, 'none'>
+  repeatIntervalUnit?: RepeatIntervalUnit
+  repeatIntervalValue?: number
   status: RecurringInstanceStatus
   progressState: ProgressState
   progressPercent: ProgressPercent
@@ -110,12 +127,53 @@ export interface DayPlanItem {
   status: DayPlanItemStatus
   createdAt: string
   completedAt?: string
+  deletedAt?: string
+}
+
+export interface LogbookCompletedItem {
+  id: string
+  titleSnapshot: string
+  time: string
+  kind: LogbookCompletedKind
+  isNecessary: boolean
+}
+
+export interface LogbookUnfinishedItem {
+  id: string
+  titleSnapshot: string
+  isNecessary: boolean
+  progressPercent?: ProgressPercent
+}
+
+export interface LogbookDeletedItem {
+  id: string
+  titleSnapshot: string
+  isNecessary: boolean
+}
+
+export interface SegmentedProgressLog {
+  date: string
+  itemId: string
+  titleSnapshot: string
+  isNecessary: boolean
+  fromProgress: ProgressPercent
+  toProgress: ProgressPercent
+}
+
+export interface LogbookEntry {
+  date: string
+  completedItems: LogbookCompletedItem[]
+  unfinishedItems: LogbookUnfinishedItem[]
+  deletedItems: LogbookDeletedItem[]
+  remark: string
+  generatedAt: string
 }
 
 export interface AppSettings {
   initialized: boolean
   tieBreakerOrder: TieBreakerOrder
   weatherEnabled: boolean
+  completedAtRoundingMinutes: CompletedAtRoundingMinutes
   createdAt: string
   updatedAt: string
 }
@@ -139,4 +197,6 @@ export interface AppData {
   taskTemplates: TaskTemplate[]
   recurringTaskInstances: RecurringTaskInstance[]
   dayPlanItems: DayPlanItem[]
+  logbookEntries: LogbookEntry[]
+  segmentedProgressLogs: SegmentedProgressLog[]
 }

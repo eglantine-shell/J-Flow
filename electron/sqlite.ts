@@ -1,0 +1,1524 @@
+import { DatabaseSync } from 'node:sqlite'
+import path from 'node:path'
+
+import type {
+  ActivityType,
+  AppData,
+  AppSettings,
+  AppSettingsUpdateInput,
+  DayPlanItem,
+  DayPlanItemUpdateInput,
+  LogbookEntry,
+  RecurringTaskInstance,
+  RecurringTaskInstanceUpdateInput,
+  SceneTag,
+  SceneTagUpdateInput,
+  TaskTemplate,
+  TaskTemplateUpdateInput,
+  ActivityTypeUpdateInput,
+} from './types.js'
+
+const SQLITE_FILENAME = 'j-flow.sqlite3'
+const SQLITE_SCHEMA_VERSION = 1
+const SETTINGS_ROW_ID = 1
+const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
+const META_APP_DATA_REVISION = 'app_data_revision'
+const DEFAULT_COMPLETED_AT_ROUNDING_MINUTES: AppSettings['completedAtRoundingMinutes'] = 5
+
+type SnapshotResult =
+  | {
+      ok: true
+      appData: AppData
+      revision: number
+      databasePath: string
+    }
+  | {
+      ok: false
+      reason: 'conflict'
+      revision: number
+      databasePath: string
+    }
+
+let cachedDatabasePath: string | null = null
+let cachedDatabase: DatabaseSync | null = null
+
+const cloneAppData = (appData: AppData): AppData => structuredClone(appData)
+const nowIso = () => new Date().toISOString()
+
+const toBoolean = (value: unknown) => Number(value) === 1
+
+const toNullableString = (value: unknown) =>
+  typeof value === 'string' && value.length > 0 ? value : undefined
+
+const serializeStringArray = (value: string[]) => JSON.stringify(value)
+
+const parseStringArray = (value: unknown) => {
+  if (typeof value !== 'string' || value.length === 0) {
+    return []
+  }
+
+  const parsed = JSON.parse(value)
+
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+}
+
+const parseJsonArray = <Item>(
+  value: unknown,
+  isItem: (input: unknown) => input is Item,
+) => {
+  if (typeof value !== 'string' || value.length === 0) {
+    return []
+  }
+
+  const parsed = JSON.parse(value)
+
+  return Array.isArray(parsed) ? parsed.filter(isItem) : []
+}
+
+const serializeJsonArray = <Item>(value: Item[]) => JSON.stringify(value)
+
+const isLogbookCompletedItem = (value: unknown): value is LogbookEntry['completedItems'][number] => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.titleSnapshot === 'string' &&
+    typeof candidate.time === 'string' &&
+    (candidate.kind === 'completed' || candidate.kind === 'picked') &&
+    typeof candidate.isNecessary === 'boolean'
+  )
+}
+
+const isLogbookUnfinishedItem = (value: unknown): value is LogbookEntry['unfinishedItems'][number] => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.titleSnapshot === 'string' &&
+    typeof candidate.isNecessary === 'boolean' &&
+    (candidate.progressPercent === undefined || typeof candidate.progressPercent === 'number')
+  )
+}
+
+const isLogbookDeletedItem = (value: unknown): value is LogbookEntry['deletedItems'][number] => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.titleSnapshot === 'string' &&
+    typeof candidate.isNecessary === 'boolean'
+  )
+}
+
+const getDatabasePath = (dataPath: string) => path.join(dataPath, SQLITE_FILENAME)
+
+export const getSqliteDatabasePath = (dataPath: string) => getDatabasePath(dataPath)
+
+const getDatabase = (dataPath: string) => {
+  const databasePath = getDatabasePath(dataPath)
+
+  if (!cachedDatabase || cachedDatabasePath !== databasePath) {
+    cachedDatabase?.close()
+    cachedDatabase = new DatabaseSync(databasePath)
+    cachedDatabasePath = databasePath
+
+    cachedDatabase.exec('PRAGMA journal_mode = WAL;')
+    cachedDatabase.exec('PRAGMA synchronous = NORMAL;')
+    ensureSchema(cachedDatabase)
+  }
+
+  return cachedDatabase
+}
+
+const ensureSchema = (database: DatabaseSync) => {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      initialized INTEGER NOT NULL,
+      tie_breaker_order TEXT NOT NULL,
+      weather_enabled INTEGER NOT NULL,
+      completed_time_rounding_minutes INTEGER NOT NULL DEFAULT 5,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS scene_tags (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      is_built_in INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS activity_types (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      is_built_in INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS task_templates (
+      id TEXT PRIMARY KEY,
+      template_kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      date_value TEXT NOT NULL,
+      activity_type_id TEXT,
+      scene_tag_ids_json TEXT NOT NULL,
+      interest_level INTEGER NOT NULL,
+      is_necessary INTEGER NOT NULL,
+      requires_preparation INTEGER NOT NULL,
+      preparation_notes TEXT NOT NULL,
+      recurrence TEXT NOT NULL,
+      repeat_type TEXT,
+      repeat_interval_unit TEXT,
+      repeat_interval_value INTEGER,
+      is_segmented INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      grass_status TEXT,
+      is_archived INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS recurring_task_instances (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      target_date TEXT,
+      recurrence TEXT NOT NULL,
+      repeat_type TEXT,
+      repeat_interval_unit TEXT,
+      repeat_interval_value INTEGER,
+      status TEXT NOT NULL,
+      progress_state TEXT NOT NULL,
+      progress_percent REAL NOT NULL,
+      progress_note TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS day_plan_items (
+      id TEXT PRIMARY KEY,
+      date_value TEXT NOT NULL,
+      origin_date TEXT,
+      target_date TEXT,
+      time_block TEXT NOT NULL,
+      time_block_source TEXT NOT NULL,
+      sort_order REAL NOT NULL,
+      source TEXT NOT NULL,
+      template_id TEXT,
+      recurring_instance_id TEXT,
+      consumes_date_trigger INTEGER,
+      root_item_id TEXT,
+      continuation_of_item_id TEXT,
+      carried_from_date TEXT,
+      title TEXT NOT NULL,
+      activity_type_id TEXT,
+      is_necessary INTEGER NOT NULL,
+      requires_preparation INTEGER NOT NULL,
+      preparation_notes TEXT NOT NULL,
+      is_segmented INTEGER NOT NULL,
+      progress_state TEXT NOT NULL,
+      progress_percent REAL NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      deleted_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS logbook_entries (
+      date_value TEXT PRIMARY KEY,
+      completed_items_json TEXT NOT NULL,
+      unfinished_items_json TEXT NOT NULL,
+      deleted_items_json TEXT NOT NULL,
+      remark TEXT NOT NULL,
+      generated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS segmented_progress_logs (
+      date_value TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      title_snapshot TEXT NOT NULL,
+      is_necessary INTEGER NOT NULL,
+      from_progress REAL NOT NULL,
+      to_progress REAL NOT NULL,
+      PRIMARY KEY (date_value, item_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_task_templates_kind_status
+      ON task_templates (template_kind, grass_status, is_archived);
+    CREATE INDEX IF NOT EXISTS idx_recurring_task_instances_template
+      ON recurring_task_instances (template_id, date_key);
+    CREATE INDEX IF NOT EXISTS idx_day_plan_items_date_status
+      ON day_plan_items (date_value, status, time_block);
+  `)
+
+  writeMeta(database, META_SQLITE_SCHEMA_VERSION, String(SQLITE_SCHEMA_VERSION))
+
+  if (readRevision(database) < 0) {
+    writeMeta(database, META_APP_DATA_REVISION, '0')
+  }
+
+  const dayPlanItemColumns = database
+    .prepare('PRAGMA table_info(day_plan_items)')
+    .all() as Array<{ name?: unknown }>
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'deleted_at')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN deleted_at TEXT;
+    `)
+  }
+}
+
+const readMeta = (database: DatabaseSync, key: string) => {
+  const row = database
+    .prepare('SELECT value FROM meta WHERE key = ?')
+    .get(key) as { value: string } | undefined
+
+  return row?.value ?? null
+}
+
+const writeMeta = (database: DatabaseSync, key: string, value: string) => {
+  database
+    .prepare(`
+      INSERT INTO meta (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `)
+    .run(key, value)
+}
+
+const readRevision = (database: DatabaseSync) => {
+  const revision = readMeta(database, META_APP_DATA_REVISION)
+
+  return revision ? Number(revision) : -1
+}
+
+const runMutation = <Result>(
+  database: DatabaseSync,
+  mutate: () => Result,
+) => {
+  database.exec('BEGIN IMMEDIATE')
+
+  try {
+    const result = mutate()
+    const nextRevision = Math.max(readRevision(database), 0) + 1
+
+    writeMeta(database, META_APP_DATA_REVISION, String(nextRevision))
+    writeMeta(database, META_SQLITE_SCHEMA_VERSION, String(SQLITE_SCHEMA_VERSION))
+    database.exec('COMMIT')
+
+    return result
+  } catch (error) {
+    database.exec('ROLLBACK')
+    throw error
+  }
+}
+
+const mapSettingsRow = (row: Record<string, unknown>): AppSettings => ({
+  initialized: toBoolean(row.initialized),
+  tieBreakerOrder: row.tie_breaker_order as AppSettings['tieBreakerOrder'],
+  weatherEnabled: toBoolean(row.weather_enabled),
+  completedAtRoundingMinutes:
+    (row.completed_time_rounding_minutes as AppSettings['completedAtRoundingMinutes'] | undefined) ??
+    DEFAULT_COMPLETED_AT_ROUNDING_MINUTES,
+  createdAt: row.created_at as string,
+  updatedAt: row.updated_at as string,
+})
+
+const mapTemplateRow = (row: Record<string, unknown>): TaskTemplate => ({
+  id: row.id as string,
+  templateKind: row.template_kind as TaskTemplate['templateKind'],
+  title: row.title as string,
+  date: row.date_value as string,
+  activityTypeId: toNullableString(row.activity_type_id),
+  sceneTagIds: parseStringArray(row.scene_tag_ids_json),
+  interestLevel: row.interest_level as TaskTemplate['interestLevel'],
+  isNecessary: toBoolean(row.is_necessary),
+  requiresPreparation: toBoolean(row.requires_preparation),
+  preparationNotes: row.preparation_notes as string,
+  recurrence: row.recurrence as TaskTemplate['recurrence'],
+  repeatType: toNullableString(row.repeat_type) as TaskTemplate['repeatType'],
+  repeatIntervalUnit: toNullableString(row.repeat_interval_unit) as TaskTemplate['repeatIntervalUnit'],
+  repeatIntervalValue:
+    row.repeat_interval_value === null || row.repeat_interval_value === undefined
+      ? undefined
+      : Number(row.repeat_interval_value),
+  isSegmented: toBoolean(row.is_segmented),
+  createdAt: row.created_at as string,
+  updatedAt: row.updated_at as string,
+  grassStatus: toNullableString(row.grass_status) as TaskTemplate['grassStatus'],
+  isArchived: toBoolean(row.is_archived),
+})
+
+const mapRecurringInstanceRow = (row: Record<string, unknown>): RecurringTaskInstance => ({
+  id: row.id as string,
+  templateId: row.template_id as string,
+  dateKey: row.date_key as string,
+  targetDate: toNullableString(row.target_date),
+  recurrence: row.recurrence as RecurringTaskInstance['recurrence'],
+  repeatType: toNullableString(row.repeat_type) as RecurringTaskInstance['repeatType'],
+  repeatIntervalUnit:
+    toNullableString(row.repeat_interval_unit) as RecurringTaskInstance['repeatIntervalUnit'],
+  repeatIntervalValue:
+    row.repeat_interval_value === null || row.repeat_interval_value === undefined
+      ? undefined
+      : Number(row.repeat_interval_value),
+  status: row.status as RecurringTaskInstance['status'],
+  progressState: row.progress_state as RecurringTaskInstance['progressState'],
+  progressPercent: Number(row.progress_percent),
+  progressNote: row.progress_note as string,
+  generatedAt: row.generated_at as string,
+  completedAt: toNullableString(row.completed_at),
+})
+
+const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => ({
+  id: row.id as string,
+  date: row.date_value as string,
+  originDate: toNullableString(row.origin_date),
+  targetDate: toNullableString(row.target_date),
+  timeBlock: row.time_block as DayPlanItem['timeBlock'],
+  timeBlockSource: row.time_block_source as DayPlanItem['timeBlockSource'],
+  sortOrder: Number(row.sort_order),
+  source: row.source as DayPlanItem['source'],
+  templateId: toNullableString(row.template_id),
+  recurringInstanceId: toNullableString(row.recurring_instance_id),
+  consumesDateTrigger:
+    row.consumes_date_trigger === null || row.consumes_date_trigger === undefined
+      ? undefined
+      : toBoolean(row.consumes_date_trigger),
+  rootItemId: toNullableString(row.root_item_id),
+  continuationOfItemId: toNullableString(row.continuation_of_item_id),
+  carriedFromDate: toNullableString(row.carried_from_date),
+  title: row.title as string,
+  activityTypeId: toNullableString(row.activity_type_id),
+  isNecessary: toBoolean(row.is_necessary),
+  requiresPreparation: toBoolean(row.requires_preparation),
+  preparationNotes: row.preparation_notes as string,
+  isSegmented: toBoolean(row.is_segmented),
+  progressState: row.progress_state as DayPlanItem['progressState'],
+  progressPercent: Number(row.progress_percent),
+  status: row.status as DayPlanItem['status'],
+  createdAt: row.created_at as string,
+  completedAt: toNullableString(row.completed_at),
+  deletedAt: toNullableString(row.deleted_at),
+})
+
+const mapLogbookEntryRow = (row: Record<string, unknown>): LogbookEntry => ({
+  date: row.date_value as string,
+  completedItems: parseJsonArray(row.completed_items_json, isLogbookCompletedItem),
+  unfinishedItems: parseJsonArray(row.unfinished_items_json, isLogbookUnfinishedItem),
+  deletedItems: parseJsonArray(row.deleted_items_json, isLogbookDeletedItem),
+  remark: row.remark as string,
+  generatedAt: row.generated_at as string,
+})
+
+const readAppData = (database: DatabaseSync): AppData | null => {
+  const settingsRow = database
+    .prepare('SELECT * FROM settings WHERE id = ?')
+    .get(SETTINGS_ROW_ID) as Record<string, unknown> | undefined
+
+  if (!settingsRow) {
+    return null
+  }
+
+  const sceneTags = database
+    .prepare('SELECT * FROM scene_tags ORDER BY created_at ASC')
+    .all() as Array<Record<string, unknown>>
+  const activityTypes = database
+    .prepare('SELECT * FROM activity_types ORDER BY created_at ASC')
+    .all() as Array<Record<string, unknown>>
+  const taskTemplates = database
+    .prepare('SELECT * FROM task_templates ORDER BY updated_at DESC')
+    .all() as Array<Record<string, unknown>>
+  const recurringTaskInstances = database
+    .prepare('SELECT * FROM recurring_task_instances ORDER BY generated_at ASC')
+    .all() as Array<Record<string, unknown>>
+  const dayPlanItems = database
+    .prepare('SELECT * FROM day_plan_items ORDER BY created_at ASC')
+    .all() as Array<Record<string, unknown>>
+  const logbookEntries = database
+    .prepare('SELECT * FROM logbook_entries ORDER BY date_value DESC')
+    .all() as Array<Record<string, unknown>>
+  const segmentedProgressLogs = database
+    .prepare('SELECT * FROM segmented_progress_logs ORDER BY date_value DESC, item_id ASC')
+    .all() as Array<Record<string, unknown>>
+
+  return {
+    settings: mapSettingsRow(settingsRow),
+    sceneTags: sceneTags.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      createdAt: row.created_at as string,
+      isBuiltIn: toBoolean(row.is_built_in),
+    })),
+    activityTypes: activityTypes.map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      createdAt: row.created_at as string,
+      isBuiltIn: toBoolean(row.is_built_in),
+    })),
+    taskTemplates: taskTemplates.map(mapTemplateRow),
+    recurringTaskInstances: recurringTaskInstances.map(mapRecurringInstanceRow),
+    dayPlanItems: dayPlanItems.map(mapDayPlanItemRow),
+    logbookEntries: logbookEntries.map(mapLogbookEntryRow),
+    segmentedProgressLogs: segmentedProgressLogs.map((row) => ({
+      date: row.date_value as string,
+      itemId: row.item_id as string,
+      titleSnapshot: row.title_snapshot as string,
+      isNecessary: toBoolean(row.is_necessary),
+      fromProgress: Number(row.from_progress),
+      toProgress: Number(row.to_progress),
+    })),
+  }
+}
+
+const clearAppData = (database: DatabaseSync) => {
+  database.exec(`
+    DELETE FROM segmented_progress_logs;
+    DELETE FROM logbook_entries;
+    DELETE FROM day_plan_items;
+    DELETE FROM recurring_task_instances;
+    DELETE FROM task_templates;
+    DELETE FROM activity_types;
+    DELETE FROM scene_tags;
+    DELETE FROM settings;
+  `)
+
+  const settingsColumns = database
+    .prepare('PRAGMA table_info(settings)')
+    .all() as Array<{ name?: unknown }>
+
+  if (!settingsColumns.some((column) => column.name === 'completed_time_rounding_minutes')) {
+    database.exec(`
+      ALTER TABLE settings
+      ADD COLUMN completed_time_rounding_minutes INTEGER NOT NULL DEFAULT 5;
+    `)
+  }
+}
+
+const insertAppData = (database: DatabaseSync, appData: AppData) => {
+  database
+    .prepare(`
+      INSERT INTO settings (
+        id, initialized, tie_breaker_order, weather_enabled,
+        completed_time_rounding_minutes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      SETTINGS_ROW_ID,
+      appData.settings.initialized ? 1 : 0,
+      appData.settings.tieBreakerOrder,
+      appData.settings.weatherEnabled ? 1 : 0,
+      appData.settings.completedAtRoundingMinutes,
+      appData.settings.createdAt,
+      appData.settings.updatedAt,
+    )
+
+  const insertSceneTag = database.prepare(`
+    INSERT INTO scene_tags (id, name, created_at, is_built_in)
+    VALUES (?, ?, ?, ?)
+  `)
+  const insertActivityType = database.prepare(`
+    INSERT INTO activity_types (id, name, created_at, is_built_in)
+    VALUES (?, ?, ?, ?)
+  `)
+  const insertTaskTemplate = database.prepare(`
+    INSERT INTO task_templates (
+      id, template_kind, title, date_value, activity_type_id, scene_tag_ids_json,
+      interest_level, is_necessary, requires_preparation, preparation_notes,
+      recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
+      is_segmented, created_at, updated_at, grass_status, is_archived
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const insertRecurringTaskInstance = database.prepare(`
+    INSERT INTO recurring_task_instances (
+      id, template_id, date_key, target_date, recurrence, repeat_type,
+      repeat_interval_unit, repeat_interval_value, status, progress_state,
+      progress_percent, progress_note, generated_at, completed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const insertDayPlanItem = database.prepare(`
+    INSERT INTO day_plan_items (
+      id, date_value, origin_date, target_date, time_block, time_block_source,
+      sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
+      root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
+      is_necessary, requires_preparation, preparation_notes, is_segmented,
+      progress_state, progress_percent, status, created_at, completed_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const insertLogbookEntry = database.prepare(`
+    INSERT INTO logbook_entries (
+      date_value, completed_items_json, unfinished_items_json, deleted_items_json, remark, generated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `)
+  const insertSegmentedProgressLog = database.prepare(`
+    INSERT INTO segmented_progress_logs (
+      date_value, item_id, title_snapshot, is_necessary, from_progress, to_progress
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `)
+
+  for (const sceneTag of appData.sceneTags) {
+    insertSceneTag.run(
+      sceneTag.id,
+      sceneTag.name,
+      sceneTag.createdAt,
+      sceneTag.isBuiltIn ? 1 : 0,
+    )
+  }
+
+  for (const activityType of appData.activityTypes) {
+    insertActivityType.run(
+      activityType.id,
+      activityType.name,
+      activityType.createdAt,
+      activityType.isBuiltIn ? 1 : 0,
+    )
+  }
+
+  for (const template of appData.taskTemplates) {
+    insertTaskTemplate.run(
+      template.id,
+      template.templateKind,
+      template.title,
+      template.date,
+      template.activityTypeId ?? null,
+      serializeStringArray(template.sceneTagIds),
+      template.interestLevel,
+      template.isNecessary ? 1 : 0,
+      template.requiresPreparation ? 1 : 0,
+      template.preparationNotes,
+      template.recurrence,
+      template.repeatType ?? null,
+      template.repeatIntervalUnit ?? null,
+      template.repeatIntervalValue ?? null,
+      template.isSegmented ? 1 : 0,
+      template.createdAt,
+      template.updatedAt,
+      template.grassStatus ?? null,
+      template.isArchived ? 1 : 0,
+    )
+  }
+
+  for (const instance of appData.recurringTaskInstances) {
+    insertRecurringTaskInstance.run(
+      instance.id,
+      instance.templateId,
+      instance.dateKey,
+      instance.targetDate ?? null,
+      instance.recurrence,
+      instance.repeatType ?? null,
+      instance.repeatIntervalUnit ?? null,
+      instance.repeatIntervalValue ?? null,
+      instance.status,
+      instance.progressState,
+      instance.progressPercent,
+      instance.progressNote,
+      instance.generatedAt,
+      instance.completedAt ?? null,
+    )
+  }
+
+  for (const item of appData.dayPlanItems) {
+    insertDayPlanItem.run(
+      item.id,
+      item.date,
+      item.originDate ?? null,
+      item.targetDate ?? null,
+      item.timeBlock,
+      item.timeBlockSource,
+      item.sortOrder,
+      item.source,
+      item.templateId ?? null,
+      item.recurringInstanceId ?? null,
+      item.consumesDateTrigger === undefined ? null : item.consumesDateTrigger ? 1 : 0,
+      item.rootItemId ?? null,
+      item.continuationOfItemId ?? null,
+      item.carriedFromDate ?? null,
+      item.title,
+      item.activityTypeId ?? null,
+      item.isNecessary ? 1 : 0,
+      item.requiresPreparation ? 1 : 0,
+      item.preparationNotes,
+      item.isSegmented ? 1 : 0,
+      item.progressState,
+      item.progressPercent,
+      item.status,
+      item.createdAt,
+      item.completedAt ?? null,
+      item.deletedAt ?? null,
+    )
+  }
+
+  for (const entry of appData.logbookEntries) {
+    insertLogbookEntry.run(
+      entry.date,
+      serializeJsonArray(entry.completedItems),
+      serializeJsonArray(entry.unfinishedItems),
+      serializeJsonArray(entry.deletedItems),
+      entry.remark,
+      entry.generatedAt,
+    )
+  }
+
+  for (const log of appData.segmentedProgressLogs) {
+    insertSegmentedProgressLog.run(
+      log.date,
+      log.itemId,
+      log.titleSnapshot,
+      log.isNecessary ? 1 : 0,
+      log.fromProgress,
+      log.toProgress,
+    )
+  }
+}
+
+const listSceneTags = (database: DatabaseSync) =>
+  (
+    database.prepare('SELECT * FROM scene_tags ORDER BY created_at ASC').all() as Array<
+      Record<string, unknown>
+    >
+  ).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+    isBuiltIn: toBoolean(row.is_built_in),
+  }))
+
+const getSceneTagById = (database: DatabaseSync, id: string) => {
+  const row = database.prepare('SELECT * FROM scene_tags WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined
+
+  return row
+    ? {
+        id: row.id as string,
+        name: row.name as string,
+        createdAt: row.created_at as string,
+        isBuiltIn: toBoolean(row.is_built_in),
+      }
+    : null
+}
+
+const listActivityTypes = (database: DatabaseSync) =>
+  (
+    database.prepare('SELECT * FROM activity_types ORDER BY created_at ASC').all() as Array<
+      Record<string, unknown>
+    >
+  ).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    createdAt: row.created_at as string,
+    isBuiltIn: toBoolean(row.is_built_in),
+  }))
+
+const getActivityTypeById = (database: DatabaseSync, id: string) => {
+  const row = database.prepare('SELECT * FROM activity_types WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined
+
+  return row
+    ? {
+        id: row.id as string,
+        name: row.name as string,
+        createdAt: row.created_at as string,
+        isBuiltIn: toBoolean(row.is_built_in),
+      }
+    : null
+}
+
+const listTaskTemplates = (database: DatabaseSync) =>
+  (
+    database.prepare('SELECT * FROM task_templates ORDER BY updated_at DESC').all() as Array<
+      Record<string, unknown>
+    >
+  ).map(mapTemplateRow)
+
+const getTaskTemplateById = (database: DatabaseSync, id: string) => {
+  const row = database.prepare('SELECT * FROM task_templates WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined
+
+  return row ? mapTemplateRow(row) : null
+}
+
+const listRecurringTaskInstances = (database: DatabaseSync) =>
+  (
+    database
+      .prepare('SELECT * FROM recurring_task_instances ORDER BY generated_at ASC')
+      .all() as Array<Record<string, unknown>>
+  ).map(mapRecurringInstanceRow)
+
+const getRecurringTaskInstanceById = (database: DatabaseSync, id: string) => {
+  const row = database.prepare('SELECT * FROM recurring_task_instances WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined
+
+  return row ? mapRecurringInstanceRow(row) : null
+}
+
+const listDayPlanItems = (database: DatabaseSync) =>
+  (
+    database.prepare('SELECT * FROM day_plan_items ORDER BY created_at ASC').all() as Array<
+      Record<string, unknown>
+    >
+  ).map(mapDayPlanItemRow)
+
+const getDayPlanItemById = (database: DatabaseSync, id: string) => {
+  const row = database.prepare('SELECT * FROM day_plan_items WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined
+
+  return row ? mapDayPlanItemRow(row) : null
+}
+
+const upsertSettings = (database: DatabaseSync, settings: AppSettings) => {
+  database
+    .prepare(`
+      INSERT INTO settings (
+        id, initialized, tie_breaker_order, weather_enabled,
+        completed_time_rounding_minutes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        initialized = excluded.initialized,
+        tie_breaker_order = excluded.tie_breaker_order,
+        weather_enabled = excluded.weather_enabled,
+        completed_time_rounding_minutes = excluded.completed_time_rounding_minutes,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
+    `)
+    .run(
+      SETTINGS_ROW_ID,
+      settings.initialized ? 1 : 0,
+      settings.tieBreakerOrder,
+      settings.weatherEnabled ? 1 : 0,
+      settings.completedAtRoundingMinutes,
+      settings.createdAt,
+      settings.updatedAt,
+    )
+}
+
+const insertSceneTag = (database: DatabaseSync, sceneTag: SceneTag) => {
+  database
+    .prepare(`
+      INSERT INTO scene_tags (id, name, created_at, is_built_in)
+      VALUES (?, ?, ?, ?)
+    `)
+    .run(sceneTag.id, sceneTag.name, sceneTag.createdAt, sceneTag.isBuiltIn ? 1 : 0)
+}
+
+const replaceSceneTag = (database: DatabaseSync, sceneTag: SceneTag) => {
+  database
+    .prepare(`
+      UPDATE scene_tags
+      SET name = ?, created_at = ?, is_built_in = ?
+      WHERE id = ?
+    `)
+    .run(sceneTag.name, sceneTag.createdAt, sceneTag.isBuiltIn ? 1 : 0, sceneTag.id)
+}
+
+const insertActivityType = (database: DatabaseSync, activityType: ActivityType) => {
+  database
+    .prepare(`
+      INSERT INTO activity_types (id, name, created_at, is_built_in)
+      VALUES (?, ?, ?, ?)
+    `)
+    .run(
+      activityType.id,
+      activityType.name,
+      activityType.createdAt,
+      activityType.isBuiltIn ? 1 : 0,
+    )
+}
+
+const replaceActivityType = (database: DatabaseSync, activityType: ActivityType) => {
+  database
+    .prepare(`
+      UPDATE activity_types
+      SET name = ?, created_at = ?, is_built_in = ?
+      WHERE id = ?
+    `)
+    .run(
+      activityType.name,
+      activityType.createdAt,
+      activityType.isBuiltIn ? 1 : 0,
+      activityType.id,
+    )
+}
+
+const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) => {
+  database
+    .prepare(`
+      INSERT INTO task_templates (
+        id, template_kind, title, date_value, activity_type_id, scene_tag_ids_json,
+        interest_level, is_necessary, requires_preparation, preparation_notes,
+        recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
+        is_segmented, created_at, updated_at, grass_status, is_archived
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      template.id,
+      template.templateKind,
+      template.title,
+      template.date,
+      template.activityTypeId ?? null,
+      serializeStringArray(template.sceneTagIds),
+      template.interestLevel,
+      template.isNecessary ? 1 : 0,
+      template.requiresPreparation ? 1 : 0,
+      template.preparationNotes,
+      template.recurrence,
+      template.repeatType ?? null,
+      template.repeatIntervalUnit ?? null,
+      template.repeatIntervalValue ?? null,
+      template.isSegmented ? 1 : 0,
+      template.createdAt,
+      template.updatedAt,
+      template.grassStatus ?? null,
+      template.isArchived ? 1 : 0,
+    )
+}
+
+const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) => {
+  database
+    .prepare(`
+      UPDATE task_templates
+      SET
+        template_kind = ?,
+        title = ?,
+        date_value = ?,
+        activity_type_id = ?,
+        scene_tag_ids_json = ?,
+        interest_level = ?,
+        is_necessary = ?,
+        requires_preparation = ?,
+        preparation_notes = ?,
+        recurrence = ?,
+        repeat_type = ?,
+        repeat_interval_unit = ?,
+        repeat_interval_value = ?,
+        is_segmented = ?,
+        created_at = ?,
+        updated_at = ?,
+        grass_status = ?,
+        is_archived = ?
+      WHERE id = ?
+    `)
+    .run(
+      template.templateKind,
+      template.title,
+      template.date,
+      template.activityTypeId ?? null,
+      serializeStringArray(template.sceneTagIds),
+      template.interestLevel,
+      template.isNecessary ? 1 : 0,
+      template.requiresPreparation ? 1 : 0,
+      template.preparationNotes,
+      template.recurrence,
+      template.repeatType ?? null,
+      template.repeatIntervalUnit ?? null,
+      template.repeatIntervalValue ?? null,
+      template.isSegmented ? 1 : 0,
+      template.createdAt,
+      template.updatedAt,
+      template.grassStatus ?? null,
+      template.isArchived ? 1 : 0,
+      template.id,
+    )
+}
+
+const insertRecurringTaskInstanceRow = (
+  database: DatabaseSync,
+  instance: RecurringTaskInstance,
+) => {
+  database
+    .prepare(`
+      INSERT INTO recurring_task_instances (
+        id, template_id, date_key, target_date, recurrence, repeat_type,
+        repeat_interval_unit, repeat_interval_value, status, progress_state,
+        progress_percent, progress_note, generated_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      instance.id,
+      instance.templateId,
+      instance.dateKey,
+      instance.targetDate ?? null,
+      instance.recurrence,
+      instance.repeatType ?? null,
+      instance.repeatIntervalUnit ?? null,
+      instance.repeatIntervalValue ?? null,
+      instance.status,
+      instance.progressState,
+      instance.progressPercent,
+      instance.progressNote,
+      instance.generatedAt,
+      instance.completedAt ?? null,
+    )
+}
+
+const replaceRecurringTaskInstanceRow = (
+  database: DatabaseSync,
+  instance: RecurringTaskInstance,
+) => {
+  database
+    .prepare(`
+      UPDATE recurring_task_instances
+      SET
+        template_id = ?,
+        date_key = ?,
+        target_date = ?,
+        recurrence = ?,
+        repeat_type = ?,
+        repeat_interval_unit = ?,
+        repeat_interval_value = ?,
+        status = ?,
+        progress_state = ?,
+        progress_percent = ?,
+        progress_note = ?,
+        generated_at = ?,
+        completed_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      instance.templateId,
+      instance.dateKey,
+      instance.targetDate ?? null,
+      instance.recurrence,
+      instance.repeatType ?? null,
+      instance.repeatIntervalUnit ?? null,
+      instance.repeatIntervalValue ?? null,
+      instance.status,
+      instance.progressState,
+      instance.progressPercent,
+      instance.progressNote,
+      instance.generatedAt,
+      instance.completedAt ?? null,
+      instance.id,
+    )
+}
+
+const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
+  database
+    .prepare(`
+      INSERT INTO day_plan_items (
+        id, date_value, origin_date, target_date, time_block, time_block_source,
+        sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
+        root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
+        is_necessary, requires_preparation, preparation_notes, is_segmented,
+        progress_state, progress_percent, status, created_at, completed_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      item.id,
+      item.date,
+      item.originDate ?? null,
+      item.targetDate ?? null,
+      item.timeBlock,
+      item.timeBlockSource,
+      item.sortOrder,
+      item.source,
+      item.templateId ?? null,
+      item.recurringInstanceId ?? null,
+      item.consumesDateTrigger === undefined ? null : item.consumesDateTrigger ? 1 : 0,
+      item.rootItemId ?? null,
+      item.continuationOfItemId ?? null,
+      item.carriedFromDate ?? null,
+      item.title,
+      item.activityTypeId ?? null,
+      item.isNecessary ? 1 : 0,
+      item.requiresPreparation ? 1 : 0,
+      item.preparationNotes,
+      item.isSegmented ? 1 : 0,
+      item.progressState,
+      item.progressPercent,
+      item.status,
+      item.createdAt,
+      item.completedAt ?? null,
+      item.deletedAt ?? null,
+    )
+}
+
+const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
+  database
+    .prepare(`
+      UPDATE day_plan_items
+      SET
+        date_value = ?,
+        origin_date = ?,
+        target_date = ?,
+        time_block = ?,
+        time_block_source = ?,
+        sort_order = ?,
+        source = ?,
+        template_id = ?,
+        recurring_instance_id = ?,
+        consumes_date_trigger = ?,
+        root_item_id = ?,
+        continuation_of_item_id = ?,
+        carried_from_date = ?,
+        title = ?,
+        activity_type_id = ?,
+        is_necessary = ?,
+        requires_preparation = ?,
+        preparation_notes = ?,
+        is_segmented = ?,
+        progress_state = ?,
+        progress_percent = ?,
+        status = ?,
+        created_at = ?,
+        completed_at = ?,
+        deleted_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      item.date,
+      item.originDate ?? null,
+      item.targetDate ?? null,
+      item.timeBlock,
+      item.timeBlockSource,
+      item.sortOrder,
+      item.source,
+      item.templateId ?? null,
+      item.recurringInstanceId ?? null,
+      item.consumesDateTrigger === undefined ? null : item.consumesDateTrigger ? 1 : 0,
+      item.rootItemId ?? null,
+      item.continuationOfItemId ?? null,
+      item.carriedFromDate ?? null,
+      item.title,
+      item.activityTypeId ?? null,
+      item.isNecessary ? 1 : 0,
+      item.requiresPreparation ? 1 : 0,
+      item.preparationNotes,
+      item.isSegmented ? 1 : 0,
+      item.progressState,
+      item.progressPercent,
+      item.status,
+      item.createdAt,
+      item.completedAt ?? null,
+      item.deletedAt ?? null,
+      item.id,
+    )
+}
+
+export const getSqliteSnapshot = (dataPath: string) => {
+  const database = getDatabase(dataPath)
+  const appData = readAppData(database)
+
+  return {
+    appData: appData ? cloneAppData(appData) : null,
+    revision: Math.max(readRevision(database), 0),
+    databasePath: getDatabasePath(dataPath),
+  }
+}
+
+export const getSqliteAppData = (dataPath: string) => {
+  const database = getDatabase(dataPath)
+  const appData = readAppData(database)
+
+  return appData ? cloneAppData(appData) : null
+}
+
+export const replaceSqliteSnapshot = (
+  dataPath: string,
+  appData: AppData,
+  expectedRevision?: number,
+): SnapshotResult => {
+  const database = getDatabase(dataPath)
+  const databasePath = getDatabasePath(dataPath)
+
+  database.exec('BEGIN IMMEDIATE')
+
+  try {
+    const currentRevision = Math.max(readRevision(database), 0)
+
+    if (
+      expectedRevision !== undefined &&
+      expectedRevision !== null &&
+      currentRevision !== expectedRevision
+    ) {
+      database.exec('ROLLBACK')
+
+      return {
+        ok: false,
+        reason: 'conflict',
+        revision: currentRevision,
+        databasePath,
+      }
+    }
+
+    clearAppData(database)
+    insertAppData(database, appData)
+
+    const nextRevision = currentRevision + 1
+    writeMeta(database, META_APP_DATA_REVISION, String(nextRevision))
+    writeMeta(database, META_SQLITE_SCHEMA_VERSION, String(SQLITE_SCHEMA_VERSION))
+
+    database.exec('COMMIT')
+
+    return {
+      ok: true,
+      appData: cloneAppData(appData),
+      revision: nextRevision,
+      databasePath,
+    }
+  } catch (error) {
+    database.exec('ROLLBACK')
+    throw error
+  }
+}
+
+export const getSqliteSettings = (dataPath: string) => {
+  const appData = getSqliteSnapshot(dataPath).appData
+
+  return appData?.settings ?? null
+}
+
+export const updateSqliteSettings = (dataPath: string, input: AppSettingsUpdateInput) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = readAppData(database)?.settings
+
+    if (!current) {
+      throw new Error('Settings not initialized')
+    }
+
+    const next: AppSettings = {
+      ...current,
+      ...input,
+      updatedAt: nowIso(),
+    }
+
+    upsertSettings(database, next)
+
+    return next
+  })
+}
+
+export const listSqliteSceneTags = (dataPath: string) => listSceneTags(getDatabase(dataPath))
+
+export const getSqliteSceneTagById = (dataPath: string, id: string) =>
+  getSceneTagById(getDatabase(dataPath), id)
+
+export const createSqliteSceneTag = (dataPath: string, sceneTag: SceneTag) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    insertSceneTag(database, sceneTag)
+
+    return sceneTag
+  })
+}
+
+export const updateSqliteSceneTag = (dataPath: string, input: SceneTagUpdateInput) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getSceneTagById(database, input.id)
+
+    if (!current) {
+      return null
+    }
+
+    const next: SceneTag = {
+      ...current,
+      ...input,
+    }
+
+    replaceSceneTag(database, next)
+
+    return next
+  })
+}
+
+export const deleteSqliteSceneTag = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const result = database.prepare('DELETE FROM scene_tags WHERE id = ?').run(id) as {
+      changes?: number
+    }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
+
+export const deleteSqliteSceneTagAndDetachTemplates = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const sceneTag = getSceneTagById(database, id)
+
+    if (!sceneTag) {
+      return false
+    }
+
+    database.prepare('DELETE FROM scene_tags WHERE id = ?').run(id)
+
+    const affectedTemplates = (
+      database.prepare('SELECT * FROM task_templates').all() as Array<Record<string, unknown>>
+    )
+      .map(mapTemplateRow)
+      .filter((template) => template.sceneTagIds.includes(id))
+
+    for (const template of affectedTemplates) {
+      replaceTaskTemplateRow(database, {
+        ...template,
+        sceneTagIds: template.sceneTagIds.filter((sceneTagId) => sceneTagId !== id),
+        updatedAt: nowIso(),
+      })
+    }
+
+    return true
+  })
+}
+
+export const listSqliteActivityTypes = (dataPath: string) =>
+  listActivityTypes(getDatabase(dataPath))
+
+export const getSqliteActivityTypeById = (dataPath: string, id: string) =>
+  getActivityTypeById(getDatabase(dataPath), id)
+
+export const createSqliteActivityType = (dataPath: string, activityType: ActivityType) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    insertActivityType(database, activityType)
+
+    return activityType
+  })
+}
+
+export const updateSqliteActivityType = (dataPath: string, input: ActivityTypeUpdateInput) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getActivityTypeById(database, input.id)
+
+    if (!current) {
+      return null
+    }
+
+    const next: ActivityType = {
+      ...current,
+      ...input,
+    }
+
+    replaceActivityType(database, next)
+
+    return next
+  })
+}
+
+export const deleteSqliteActivityType = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const result = database.prepare('DELETE FROM activity_types WHERE id = ?').run(id) as {
+      changes?: number
+    }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
+
+export const deleteSqliteActivityTypeIfUnused = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const isInUse = (
+      database
+        .prepare(
+          'SELECT 1 FROM task_templates WHERE activity_type_id = ? LIMIT 1',
+        )
+        .get(id) as Record<string, unknown> | undefined
+    )
+
+    if (isInUse) {
+      return {
+        removed: false,
+        reason: 'in_use' as const,
+      }
+    }
+
+    const result = database.prepare('DELETE FROM activity_types WHERE id = ?').run(id) as {
+      changes?: number
+    }
+    const removed = Number(result.changes ?? 0) > 0
+
+    return {
+      removed,
+      reason: removed ? null : ('not_found' as const),
+    }
+  })
+}
+
+export const listSqliteTaskTemplates = (dataPath: string) =>
+  listTaskTemplates(getDatabase(dataPath))
+
+export const getSqliteTaskTemplateById = (dataPath: string, id: string) =>
+  getTaskTemplateById(getDatabase(dataPath), id)
+
+export const createSqliteTaskTemplate = (dataPath: string, template: TaskTemplate) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    insertTaskTemplateRow(database, template)
+
+    return template
+  })
+}
+
+export const updateSqliteTaskTemplate = (dataPath: string, input: TaskTemplateUpdateInput) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getTaskTemplateById(database, input.id)
+
+    if (!current) {
+      return null
+    }
+
+    const next: TaskTemplate = {
+      ...current,
+      ...input,
+    }
+
+    replaceTaskTemplateRow(database, next)
+
+    return next
+  })
+}
+
+export const deleteSqliteTaskTemplate = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const result = database.prepare('DELETE FROM task_templates WHERE id = ?').run(id) as {
+      changes?: number
+    }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
+
+export const listSqliteRecurringTaskInstances = (dataPath: string) =>
+  listRecurringTaskInstances(getDatabase(dataPath))
+
+export const getSqliteRecurringTaskInstanceById = (dataPath: string, id: string) =>
+  getRecurringTaskInstanceById(getDatabase(dataPath), id)
+
+export const createSqliteRecurringTaskInstance = (
+  dataPath: string,
+  instance: RecurringTaskInstance,
+) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    insertRecurringTaskInstanceRow(database, instance)
+
+    return instance
+  })
+}
+
+export const updateSqliteRecurringTaskInstance = (
+  dataPath: string,
+  input: RecurringTaskInstanceUpdateInput,
+) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getRecurringTaskInstanceById(database, input.id)
+
+    if (!current) {
+      return null
+    }
+
+    const next: RecurringTaskInstance = {
+      ...current,
+      ...input,
+    }
+
+    replaceRecurringTaskInstanceRow(database, next)
+
+    return next
+  })
+}
+
+export const deleteSqliteRecurringTaskInstance = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const result = database
+      .prepare('DELETE FROM recurring_task_instances WHERE id = ?')
+      .run(id) as { changes?: number }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
+
+export const listSqliteDayPlanItems = (dataPath: string) =>
+  listDayPlanItems(getDatabase(dataPath))
+
+export const getSqliteDayPlanItemById = (dataPath: string, id: string) =>
+  getDayPlanItemById(getDatabase(dataPath), id)
+
+export const createSqliteDayPlanItem = (dataPath: string, item: DayPlanItem) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    insertDayPlanItemRow(database, item)
+
+    return item
+  })
+}
+
+export const updateSqliteDayPlanItem = (dataPath: string, input: DayPlanItemUpdateInput) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getDayPlanItemById(database, input.id)
+
+    if (!current) {
+      return null
+    }
+
+    const next: DayPlanItem = {
+      ...current,
+      ...input,
+    }
+
+    replaceDayPlanItemRow(database, next)
+
+    return next
+  })
+}
+
+export const deleteSqliteDayPlanItem = (dataPath: string, id: string) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const result = database.prepare('DELETE FROM day_plan_items WHERE id = ?').run(id) as {
+      changes?: number
+    }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
