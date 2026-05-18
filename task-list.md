@@ -19,6 +19,13 @@
 - 重构种草清单体验
 - 之后再做 Windows 兼容与打包适配
 
+当前补充状态：
+- 同步目前仍处于设计阶段
+- 已完成：
+  - `docs/sync-design.md`
+  - `docs/sync-implementation-plan.md`
+- 当前尚未开始同步实现
+
 ---
 
 ## V2 Web 保留状态
@@ -258,6 +265,48 @@
 - 当前不是重写 Windows 版，而是扩展跨平台桌面打包与路径兼容
 
 ### 任务
+
+## V3.5 Folder Sync Design
+
+### 优先级
+- Planned
+
+### 目标
+- 为桌面端第一版“本地文件夹同步”完成产品方案与实现前规格
+- 当前只做文档设计，不进入代码实现
+
+### 同步第一版边界
+- 只支持桌面端
+- 每台设备继续使用自己的本地 SQLite
+- 用户选择同步文件夹
+- 只做“立即同步”
+- 同步前自动创建本地备份
+- 冲突先用“最后修改的一方胜出”
+- 不做账号系统
+- 不做 WebDAV
+- 不做实时同步
+- 不同步 SQLite 文件本体
+- 不把 JSON 备份当同步用
+
+### 当前已完成
+- `docs/sync-design.md`
+- `docs/sync-implementation-plan.md`
+
+### 当前未开始
+- `deviceId` 持久化
+- 同步文件夹配置落地
+- sync items / tombstones 文件写入
+- 远端合并逻辑
+- 设置页同步入口
+
+### 后续实现建议顺序
+- Sync 1：`deviceId` 与 sync metadata
+- Sync 2：同步文件夹选择、保存、读写测试
+- Sync 3：本地实体导出为 sync items
+- Sync 4：远端 sync items 导入与合并
+- Sync 5：立即同步按钮与结果提示
+- Sync 6：锁、错误处理与自动备份收口
+- Sync 7：后续自动同步预留
 - Windows 打包
 - Windows 真机测试
 - 路径差异适配

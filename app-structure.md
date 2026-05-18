@@ -75,11 +75,17 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 - 作为桌面能力桥接层
 
 当前第一轮实际已落地：
-- `electron/preload.ts`
+- `electron/preload.cts`
 - 暴露 `window.jflowDesktop`
 - 仅包含：
   - `getAppInfo()`
   - `getDataPath()`
+
+当前 `Sync 1` 已补入的 bridge 基础：
+- `repository.sync.getState()`
+- `repository.sync.listChanges()`
+- 仅用于读取本机同步元数据与本地待同步变化
+- 当前不包含同步文件夹选择、同步目录初始化或立即同步能力
 
 建议暴露能力示例：
 - `getAppInfo`
@@ -147,7 +153,7 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 /
   electron/
     main.ts
-    preload.ts
+    preload.cts
     tsconfig.json
 ```
 

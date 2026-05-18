@@ -64,6 +64,26 @@
 - `JSON` 作为完整备份与迁移格式
 - 若短期必须过渡，可先保留 Web 侧 IndexedDB 与 Desktop 侧 JSON 导入桥接，但这只是过渡方案
 
+### 5. Sync 1 本地同步元数据补充
+- `SQLite` 继续作为每台设备自己的运行时主库。
+- 第一版本地文件夹同步不会直接同步 `j-flow.sqlite3` 文件本体。
+- 当前已在桌面端本地库中增加两类同步辅助表：
+  - `sync_meta`
+  - `sync_changes`
+- `sync_meta` 当前用于保存：
+  - `deviceId`
+  - `lastSyncedAt`
+  - `lastSyncStatus`
+  - `lastSyncError`
+- `sync_changes` 当前用于记录本机业务变化：
+  - `entityType`
+  - `entityId`
+  - `changeType`
+  - `changedAt`
+  - `syncedAt`
+  - `deviceId`
+- 这些表只服务于后续同步实现，不改变当前产品的业务展示。
+
 ---
 
 ## 三、推荐实体
