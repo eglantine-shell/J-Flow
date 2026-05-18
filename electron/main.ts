@@ -25,11 +25,13 @@ import {
   getSqliteAppData,
   getSqliteDatabasePath,
   getSqliteDayPlanItemById,
+  getSqliteLocalSyncState,
   getSqliteRecurringTaskInstanceById,
   getSqliteSceneTagById,
   getSqliteSettings,
   getSqliteSnapshot,
   getSqliteTaskTemplateById,
+  listSqliteSyncChanges,
   listSqliteActivityTypes,
   listSqliteDayPlanItems,
   listSqliteRecurringTaskInstances,
@@ -59,7 +61,7 @@ import type {
 } from './types.js'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
-const preloadPath = path.join(currentDir, 'preload.js')
+const preloadPath = path.join(currentDir, 'preload.cjs')
 const rendererDistPath = path.join(currentDir, '../dist-desktop/renderer/index.html')
 const devServerUrl = process.env.VITE_DEV_SERVER_URL
 
@@ -316,6 +318,18 @@ const registerAppIpc = () => {
     const dataPath = await ensureDataDirectory()
 
     return getSqliteSettings(dataPath)
+  })
+
+  ipcMain.handle('db:sync:get-state', async () => {
+    const dataPath = await ensureDataDirectory()
+
+    return getSqliteLocalSyncState(dataPath)
+  })
+
+  ipcMain.handle('db:sync:list-changes', async () => {
+    const dataPath = await ensureDataDirectory()
+
+    return listSqliteSyncChanges(dataPath)
   })
 
   ipcMain.handle('db:settings:update', async (_event, payload: AppSettingsUpdateInput) => {

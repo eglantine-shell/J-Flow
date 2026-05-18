@@ -1,5 +1,118 @@
 # 项目交接摘要
 
+## 最新状态（2026-05-18，同步方案文档，优先参考）
+- 本轮没有开始实现同步。
+- 本轮未改：
+  - 数据库 schema
+  - 设置页 UI
+  - SQLite 存储逻辑
+  - JSON 导入导出逻辑
+- 本轮已新增：
+  - `docs/sync-design.md`
+- 当前同步方案文档已明确第一版方向：
+  - 只支持桌面端
+  - 每台设备继续使用自己的本地 SQLite
+  - 用户在设置页选择同步文件夹
+  - 同步文件夹可位于 iCloud Drive / OneDrive / Dropbox / 坚果云 / NAS
+  - J-Flow 通过同步文件夹交换数据变化
+  - 第一版只做“立即同步”
+  - 同步前自动创建本地备份
+  - 冲突先采用“最后修改的一方胜出”
+  - 不做账号系统
+  - 不做 WebDAV
+  - 不做实时同步
+  - 不同步 SQLite 文件本体
+  - 不把 JSON 备份当同步用
+- 当前状态仍是：
+  - 已有同步产品方案文档
+  - 尚未进入同步实现
+  - 若要开始做代码，需要先基于这份文档继续细化技术方案和规则边界
+
+## 最新状态（2026-05-18，同步实现前规格文档，优先参考）
+- 本轮继续只做文档，不开始实现同步。
+- 本轮未改：
+  - 代码实现
+  - SQLite schema
+  - 设置页 UI
+  - 同步按钮或同步逻辑
+- 本轮已新增：
+  - `docs/sync-implementation-plan.md`
+- 当前已将第一版同步继续细化为实现前规格，明确了：
+  - 同步文件夹目录结构
+  - sync item 文件最小格式
+  - tombstone 删除同步规则
+  - `deviceId` 规则
+  - `last-write-wins` 冲突细化口径
+  - 各类数据的同步范围
+  - “立即同步”步骤拆分
+  - 第一版明确不做的范围
+  - 后续实现里程碑拆分
+- 当前同步仍处于设计阶段，尚未进入实现。
+- 若后续开始写代码，建议先以：
+  - `docs/sync-design.md`
+  - `docs/sync-implementation-plan.md`
+  作为同步实现的直接规格入口
+
+## 最新状态（2026-05-18，同步实现前规格补充细节，优先参考）
+- 本轮继续只改文档，不开始实现同步。
+- 本轮继续未改：
+  - 代码实现
+  - SQLite schema
+  - 设置页 UI
+- 当前已在 `docs/sync-implementation-plan.md` 中补充：
+  - `entityType` 与目录名映射表
+  - `updatedAt` 的稳定来源要求
+  - 本地删除记录机制建议
+  - 本地 `lastSyncedAt` 与本地变化识别基础
+  - 第一版 LWW 的设备时间假设
+  - 最小 lock 文件格式建议
+  - `sync-info.json` 最小字段建议
+- 当前同步仍处于“可开始实现前的规格补完”阶段，尚未进入任何代码落地。
+
+## 最新状态（2026-05-17，Windows 真机打包与启动修复，优先参考）
+- 本轮目标：
+  - 在 Windows 真机上跑通 `package:win`
+  - 验证 `release/J-Flow-V1-win-portable.exe` 启动
+  - 不做新功能
+  - 优先解决此前 Windows 包“打开没反应”
+- 当前已确认根因：
+  - packaged preload 之前以 `.js` 形式输出
+  - 项目根为 `"type": "module"` 且 Electron tsconfig 使用 `NodeNext`
+  - TypeScript 会让 preload 产物带 ESM 语法
+  - Electron preload 加载时因此报：
+    - `Unable to load preload script`
+    - `SyntaxError`
+- 当前已修复：
+  - `electron/preload.ts` 已改为 `electron/preload.cts`
+  - 编译产物变为：
+    - `dist-electron/preload.cjs`
+  - `electron/main.ts` 已改为加载：
+    - `preload.cjs`
+  - `package.json` 的 Windows 打包文件清单已包含：
+    - `dist-electron/**/*.cjs`
+- 当前 Windows 打包链路已调整：
+  - `sync:icon` 改为跨平台 Node 脚本：
+    - `scripts/sync-icon.mjs`
+  - `package:win` 已改为 Windows 可执行命令链
+  - `package:win` 内置 Electron / electron-builder 镜像环境变量
+  - `package:win` 当前使用：
+    - `electron-builder --win portable -c.npmRebuild=false`
+- 当前验证结果：
+  - `package:win` 已在 Windows 真机跑通
+  - `release/win-unpacked/J-Flow.exe` 启动后 10 秒仍存活
+  - `release/J-Flow-V1-win-portable.exe` 启动后 15 秒仍存活，并能拉起 J-Flow 子进程
+  - 启动日志中未再出现 preload 加载失败
+  - 启动日志中未见 renderer 文件加载失败
+- 当前 Windows 打包风险：
+  - 本轮为绕过当前 Windows 用户无 symlink 权限导致的 `winCodeSign` 解压失败，配置了：
+    - `build.win.signAndEditExecutable=false`
+  - 这意味着当前 Windows 包仍是本地测试包，正式发布前需要再处理签名 / exe resource edit 环境。
+- 本轮没有改：
+  - 产品规则
+  - UI 功能
+  - SQLite 数据目录规则
+  - 业务数据模型
+
 ## 最新状态（2026-05-17，GitHub 发布前整理，优先参考）
 - 本轮目标不是开发新功能，而是整理仓库对外可读性。
 - 本轮未改：
@@ -900,3 +1013,28 @@
   - 重复规则从 `none -> repeating`
   - 重复规则从 `repeating -> none`
 - 当前“重复规则”编辑已接入，但它同时影响 `dayPlanItems / taskTemplates / recurringTaskInstances`，后续改动不要只盯 UI。
+
+## 2026-05-18 Sync 1 当前有效状态
+
+- 本地文件夹同步已进入实现阶段，但当前只完成 `Sync 1` 基础层。
+- 已落地的内容：
+  - 桌面端首次初始化会生成并持久化本机 `deviceId`
+  - 本地同步元数据保存于 SQLite `sync_meta`
+  - 本地变更记录保存于 SQLite `sync_changes`
+  - `lastSyncedAt` 的本地保存位置已明确为 `sync_meta`
+  - `settings / sceneTags / activityTypes / taskTemplates / recurringTaskInstances / dayPlanItems` 已具备稳定 `updatedAt` 语义
+  - 本地删除会写 `sync_changes(changeType=delete)`，不再只是删业务表
+- 当前可通过 preload bridge 读取：
+  - `repository.sync.getState()`
+  - `repository.sync.listChanges()`
+- 当前仍未实现：
+  - 同步文件夹选择
+  - 同步目录初始化
+  - `items/` 导出
+  - `tombstones/` 导出
+  - 立即同步按钮
+  - 自动同步
+
+## Sync 1 接手提醒
+- 后续如果进入 `Sync 2`，应在现有 `sync_meta / sync_changes` 基础上继续，不要重做本地元数据结构。
+- 后续如果扩展同步范围到 `logbookEntries / segmentedProgressLogs`，请先确认产品规则，不要为了同步先扩表。

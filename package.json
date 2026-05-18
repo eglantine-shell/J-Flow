@@ -8,12 +8,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:web": "tsc -b && vite build",
-    "sync:icon": "mkdir -p build && cp J-Flow.PNG build/icon.png",
+    "sync:icon": "node scripts/sync-icon.mjs",
     "build:electron": "tsc -p electron/tsconfig.json",
     "build:desktop:renderer": "vite build --base ./ --outDir dist-desktop/renderer",
     "build:desktop": "vite build --base ./ --outDir dist-desktop/renderer && tsc -p electron/tsconfig.json",
-    "package:mac": "corepack pnpm run sync:icon && PATH=\"$PWD/scripts:$PATH\" corepack pnpm run build:desktop && PATH=\"$PWD/scripts:$PATH\" electron-builder --mac dmg -c.electronDist=node_modules/electron/dist",
-    "package:win": "corepack pnpm run sync:icon && PATH=\"$PWD/scripts:$PATH\" corepack pnpm run build:desktop && PATH=\"$PWD/scripts:$PATH\" electron-builder --win portable",
+    "package:mac": "pnpm run sync:icon && pnpm run build:desktop && electron-builder --mac dmg -c.electronDist=node_modules/electron/dist",
+    "package:win": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win portable -c.npmRebuild=false",
     "dev:desktop": "tsc -p electron/tsconfig.json && concurrently -k \"vite --host localhost --port 4173 --strictPort\" \"wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js\"",
     "dev:desktop:web": "vite --host localhost --port 4173 --strictPort",
     "dev:desktop:electron": "wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js",
@@ -31,6 +31,9 @@
     "files": [
       "dist-desktop/renderer/**/*",
       "dist-electron/**/*.js",
+      "dist-electron/**/*.cjs",
+      "!dist-electron/preload.js",
+      "!dist-electron/preload.js.map",
       "!dist-electron/**/*.test.js",
       "!dist-electron/**/test-fixtures.js",
       "package.json"
@@ -48,7 +51,11 @@
         "portable"
       ],
       "artifactName": "J-Flow-V1-win-portable.${ext}",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "toolsets": {
+      "winCodeSign": "1.1.0"
     },
     "dmg": {
       "artifactName": "J-Flow-V1.4.dmg"

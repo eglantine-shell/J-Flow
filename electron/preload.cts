@@ -1,20 +1,27 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require('electron') as {
+  contextBridge: {
+    exposeInMainWorld: (apiKey: string, api: unknown) => void
+  }
+  ipcRenderer: {
+    invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+  }
+}
 
-import type {
-  ActivityType,
-  ActivityTypeUpdateInput,
-  AppData,
-  AppSettings,
-  AppSettingsUpdateInput,
-  DayPlanItem,
-  DayPlanItemUpdateInput,
-  RecurringTaskInstance,
-  RecurringTaskInstanceUpdateInput,
-  SceneTag,
-  SceneTagUpdateInput,
-  TaskTemplate,
-  TaskTemplateUpdateInput,
-} from './types.js'
+type ActivityType = unknown
+type ActivityTypeUpdateInput = unknown
+type AppData = unknown
+type AppSettings = unknown
+type AppSettingsUpdateInput = unknown
+type DayPlanItem = unknown
+type DayPlanItemUpdateInput = unknown
+type LocalSyncState = unknown
+type RecurringTaskInstance = unknown
+type RecurringTaskInstanceUpdateInput = unknown
+type SceneTag = unknown
+type SceneTagUpdateInput = unknown
+type SyncChange = unknown
+type TaskTemplate = unknown
+type TaskTemplateUpdateInput = unknown
 
 contextBridge.exposeInMainWorld('jflowDesktop', {
   getAppInfo: () => ipcRenderer.invoke('app:get-info'),
@@ -63,6 +70,10 @@ contextBridge.exposeInMainWorld('jflowDesktop', {
       get: () => ipcRenderer.invoke('db:settings:get') as Promise<AppSettings | null>,
       update: (payload: AppSettingsUpdateInput) =>
         ipcRenderer.invoke('db:settings:update', payload) as Promise<AppSettings>,
+    },
+    sync: {
+      getState: () => ipcRenderer.invoke('db:sync:get-state') as Promise<LocalSyncState>,
+      listChanges: () => ipcRenderer.invoke('db:sync:list-changes') as Promise<SyncChange[]>,
     },
     sceneTags: {
       list: () => ipcRenderer.invoke('db:scene-tags:list') as Promise<SceneTag[]>,

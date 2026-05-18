@@ -13,6 +13,6 @@
     "rootDir": ".",
     "sourceMap": true
   },
-  "include": ["./**/*.ts"],
+  "include": ["./**/*.ts", "./**/*.cts"],
   "exclude": ["./**/*.test.ts"]
 }

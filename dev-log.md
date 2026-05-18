@@ -1,5 +1,195 @@
 # Dev Log
 
+## 2026-05-18（同步方案：实现前规格补充细节）
+
+### 本轮目标
+- 继续只改文档
+- 补齐第一版同步开始实现前最容易出偏差的关键细节
+
+### 本轮关键判断
+- 当前同步仍处于设计阶段，本轮继续不进入实现。
+- 第一版同步如果不先明确：
+  - `entityType` 与目录名映射
+  - `updatedAt` 的稳定来源
+  - 本地删除记录机制
+  - 本地变化识别基础
+  - LWW 的时间假设
+  - lock 文件格式
+  - `sync-info.json` 最小字段
+  后续实现很容易出现多处口径不一致。
+
+### 本轮修改
+- 更新 `docs/sync-implementation-plan.md`
+  - 新增 `entityType` 与目录名映射表
+  - 明确 `updatedAt` 不能在导出 sync item 时无脑刷新
+  - 明确旧数据需要初始化 `updatedAt`
+  - 明确本地删除不能只依赖远端 tombstone
+  - 推荐补本地 `sync_changes` / `deleted_entities` / 本地 tombstone 机制
+  - 明确 `lastSyncedAt` 的本地职责
+  - 明确第一版 LWW 依赖设备时间基本准确
+  - 新增最小 lock 文件格式建议
+  - 新增 `sync-info.json` 最小字段建议
+
+### 验证结果
+- 本轮仅更新文档，未改代码实现。
+
+### 当前未完成 / 风险
+- 目前仍是实现前规格，不代表已经决定具体把本地同步元数据放在 SQLite meta、独立本地表还是本地配置文件。
+- 若后续进入实现，仍需要先选定：
+  - 本地 `sync_changes` 的具体落点
+  - 旧数据 `updatedAt` 初始化时机
+  - 锁过期与异常恢复的最终策略
+
+## 2026-05-18（同步方案：实现前规格文档）
+
+### 本轮目标
+- 继续只做同步文档
+- 不写实现代码
+- 把第一版本地文件夹同步从产品说明细化为可执行的实现前规格
+
+### 本轮关键判断
+- 当前同步仍处于设计阶段，本轮继续不进入实现。
+- 第一版同步继续保持最小范围：
+  - 只支持桌面端
+  - 每台设备继续使用自己的本地 SQLite
+  - 用户选择同步文件夹
+  - 只做“立即同步”
+  - 同步前自动创建本地备份
+  - 冲突先用“最后修改的一方胜出”
+  - 不做账号系统 / WebDAV / 自动同步 / 实时同步
+  - 不同步 SQLite 文件本体
+  - 不把 JSON 备份当同步包
+
+### 本轮修改
+- 新增 `docs/sync-implementation-plan.md`
+  - 细化：
+    - 同步文件夹结构
+    - sync item 文件最小格式
+    - tombstone 规则
+    - `deviceId` 规则
+    - 冲突规则细化
+    - 同步数据范围表格
+    - “立即同步”步骤拆分
+    - 第一版不做什么
+    - 后续实现里程碑
+- 更新 `docs/sync-design.md`
+  - 在文末补充实现前规格文档入口
+- 更新 `handoff.md`
+  - 记录同步仍处于设计阶段，尚未实现
+- 更新 `task-list.md`
+  - 新增同步设计里程碑说明，并标注尚未进入实现
+
+### 验证结果
+- 本轮仅新增与更新文档，未改代码实现。
+
+### 当前未完成 / 风险
+- 当前文档已经足够指导第一版实现拆分，但仍未放开“开始实现同步”的阶段约束。
+- 若后续进入实现，仍建议先再确认：
+  - `settings` 最终哪些字段参与跨设备同步
+  - tombstone 长期保留策略是否后续要提供清理能力
+  - `logbookEntries` 与 `segmentedProgressLogs` 后续是否继续保持全量同步
+  - 同步结果提示是否需要展示覆盖统计
+
+## 2026-05-18（同步方案：第一版产品设计文档）
+
+### 本轮目标
+- 不开始实现同步
+- 不改数据库 schema
+- 不改设置页 UI
+- 先把“最简单、可落地、可读懂”的同步方案写成产品文档
+
+### 本轮关键判断
+- 当前 `constraints.md` 仍然写着“当前不做云同步”，因此本轮只做设计文档，不直接进入实现。
+- 用户已明确第一版同步边界：
+  - 只支持桌面端
+  - 每台设备继续使用自己的本地 SQLite
+  - 用户选择同步文件夹
+  - 只做“立即同步”
+  - 同步前自动创建本地备份
+  - 冲突先用“最后修改的一方胜出”
+  - 不做账号系统 / 云服务器 / WebDAV / 实时同步
+  - 不同步 SQLite 文件本体
+  - 不把 JSON 备份当同步用
+
+### 本轮修改
+- 新增 `docs/sync-design.md`
+  - 用产品语言说明：
+    - 同步解决什么问题
+    - 同步与备份的区别
+    - 为什么不直接同步 SQLite
+    - 第一版同步用户流程
+    - 同步文件夹里大概放什么
+    - 哪些数据需要同步
+    - 哪些数据不需要同步
+    - 第一版冲突处理方式
+    - 后续演进方向
+
+### 验证结果
+- 本轮仅新增设计文档，未改代码实现。
+
+### 当前未完成 / 风险
+- 当前只是产品方案文档，不代表已放开“开始实现云同步”的阶段约束。
+- 若后续进入实现，需要先同步调整相关规则文档，明确：
+  - 第一版同步是否正式纳入当前阶段目标
+  - 哪些设置字段跨设备同步
+  - 日志与分次推进记录是否全部纳入同步主数据
+- 当前文档有意避免深入到底层实现细节；后续实现前仍需补一版技术设计。
+
+## 2026-05-17（V3.4 Windows 真机打包与启动修复）
+
+### 本轮目标
+- 在 Windows 真机上跑通 `package:win` 与 exe 启动验证
+- 不做新功能
+- 优先排查此前 Windows portable 包“双击打开没反应”的问题
+
+### 本轮关键判断
+- 此前“打开没反应”的直接原因不是业务逻辑，而是 packaged Electron preload 加载失败：
+  - 初始产物中 `preload.js` 带 ESM `import`
+  - 改成 `require` 后，TypeScript 在 `"type": "module"` + `NodeNext` 下仍会输出 `export {}`
+  - Electron preload 按 CommonJS 语境加载时因此报语法错
+- 最小修复是把 preload 源文件改为 `.cts`，让 TypeScript 输出 `preload.cjs`，并让 main process 指向该 `.cjs` 文件。
+- Windows 打包脚本需要避免 Unix shell 写法；图标同步改为 Node 脚本。
+- 当前 Windows 环境下 `electron-builder` 的 legacy `winCodeSign` 解压会因为无 symlink 权限失败，因此本轮先关闭 Windows exe resource edit：
+  - `build.win.signAndEditExecutable=false`
+  - 这是打包链路兼容处理，不是产品功能变化。
+
+### 本轮修改
+- 新增 `scripts/sync-icon.mjs`
+  - 用跨平台 Node 脚本将 `J-Flow.PNG` 同步为 `build/icon.png`
+- 更新 `package.json`
+  - `sync:icon` 改为调用 Node 脚本
+  - `package:win` 改为 Windows 可执行的命令链
+  - `package:win` 内置 Electron / electron-builder 镜像环境变量
+  - `package:win` 增加 `-c.npmRebuild=false`
+  - Windows 打包配置纳入 `dist-electron/**/*.cjs`
+  - Windows 配置增加 `signAndEditExecutable=false`
+- 将 `electron/preload.ts` 改为 `electron/preload.cts`
+  - 让 preload 编译为 CommonJS `.cjs`
+  - preload 运行时仍只暴露原有 `window.jflowDesktop` bridge，不新增功能
+- 更新 `electron/main.ts`
+  - preload 路径从 `preload.js` 改为 `preload.cjs`
+- 更新 `electron/tsconfig.json`
+  - 纳入 `./**/*.cts`
+
+### 验证结果
+- `package:win`：已在 Windows 真机跑通
+- `release/win-unpacked/J-Flow.exe`：
+  - 启动后 10 秒仍存活
+  - 未再出现 `Unable to load preload script`
+  - 未再出现 preload `SyntaxError`
+  - 未见 renderer `ERR_FILE_NOT_FOUND`
+- `release/J-Flow-V1-win-portable.exe`：
+  - 启动后 15 秒 portable 进程仍存活
+  - 成功拉起 J-Flow 子进程
+  - 未见 preload / renderer 加载错误
+- 额外验证：
+  - `dist-electron/preload.cjs` 中已无 ESM `import` / `export`
+
+### 当前未完成 / 风险
+- 当前 Windows portable 包为未签名本地测试包。
+- 因 `signAndEditExecutable=false`，Windows exe 的资源编辑能力被关闭；后续如要正式发布，需要再解决 Windows `winCodeSign` / symlink 权限或签名环境问题。
+- 本轮没有新增产品功能，也没有改 SQLite 数据路径规则。
+
 ## 2026-05-17（仓库整理：GitHub 发布前可读性收口）
 
 ### 本轮目标
@@ -3222,3 +3412,57 @@
   - `J-Flow-0.1.0.dmg`
 - 这是历史打包结果，本轮未主动清理。
 - `electron-builder` 仍会提示 `package.json` 缺少 `description` 与 `author`，但不阻塞当前打包。
+
+## 2026-05-18 Sync 1 本地同步元数据基础
+
+### 本轮目标
+- 开始本地文件夹同步实现，但只做 `Sync 1`
+- 建立 `deviceId`、本地同步元数据与本地变更追踪基础
+- 不实现同步文件夹、`items/`、`tombstones/`、立即同步或设置页 UI
+
+### 本轮修改
+- 更新 `electron/sqlite.ts`
+  - SQLite schema version 升级到 `2`
+  - 新增本地表：
+    - `sync_meta`
+    - `sync_changes`
+  - 新增同步元信息默认项：
+    - `deviceId`
+    - `lastSyncedAt`
+    - `lastSyncStatus`
+    - `lastSyncError`
+  - 为 `scene_tags`、`activity_types`、`recurring_task_instances`、`day_plan_items` 补齐 `updated_at`
+  - 旧数据 migration 中自动初始化缺失的 `updated_at`
+  - `settings / sceneTags / activityTypes / taskTemplates / recurringTaskInstances / dayPlanItems` 的 SQLite 写路径已接入 `sync_changes`
+  - 删除实体时不再只删业务表，同时写入本地 `delete` 变化记录
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`
+  - 新增只读 bridge：
+    - `repository.sync.getState()`
+    - `repository.sync.listChanges()`
+- 更新 `src/types/models.ts`、`electron/types.ts`、`src/db/schema.ts`
+  - 为参与 Sync 1 的主要实体补齐稳定 `updatedAt`
+  - 新增 `LocalSyncState` 与 `SyncChange` 类型
+- 更新 `src/db/storage.ts`
+  - 旧数据 normalize 时为 `sceneTags / activityTypes / recurringTaskInstances / dayPlanItems` 初始化 `updatedAt`
+  - Web 路径的创建 / 修改逻辑同步补齐 `updatedAt`
+- 更新若干测试 / fixture / mock / 页面辅助代码
+  - 以适配 `updatedAt` 成为稳定必填字段
+
+### 关键决策
+- `deviceId` 当前存放在 SQLite `sync_meta`，仅桌面端生成，不参与跨设备同步。
+- `lastSyncedAt` 当前也存放在 SQLite `sync_meta`，作为后续“读取本地自上次同步后的变化”的本地依据。
+- 第一版本地删除记录采用 `sync_changes(changeType=delete)`，不依赖远端 tombstone 才知道本地删过什么。
+- `updatedAt` 必须来自业务修改时刻，不能在未来导出 sync item 时临时刷新。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 仍未实现同步文件夹选择
+- 仍未实现同步目录初始化
+- 仍未写入 `items/`
+- 仍未写入 `tombstones/`
+- 仍未实现“立即同步”
