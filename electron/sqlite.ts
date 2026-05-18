@@ -1,29 +1,38 @@
 import { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
 import type {
   ActivityType,
+  ActivityTypeUpdateInput,
   AppData,
   AppSettings,
   AppSettingsUpdateInput,
   DayPlanItem,
   DayPlanItemUpdateInput,
+  LocalSyncState,
   LogbookEntry,
   RecurringTaskInstance,
   RecurringTaskInstanceUpdateInput,
   SceneTag,
   SceneTagUpdateInput,
+  SyncChange,
+  SyncChangeType,
+  SyncEntityType,
   TaskTemplate,
   TaskTemplateUpdateInput,
-  ActivityTypeUpdateInput,
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
-const SQLITE_SCHEMA_VERSION = 1
+const SQLITE_SCHEMA_VERSION = 2
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
 const DEFAULT_COMPLETED_AT_ROUNDING_MINUTES: AppSettings['completedAtRoundingMinutes'] = 5
+const SYNC_META_DEVICE_ID = 'deviceId'
+const SYNC_META_LAST_SYNCED_AT = 'lastSyncedAt'
+const SYNC_META_LAST_SYNC_STATUS = 'lastSyncStatus'
+const SYNC_META_LAST_SYNC_ERROR = 'lastSyncError'
 
 type SnapshotResult =
   | {
@@ -163,6 +172,7 @@ const ensureSchema = (database: DatabaseSync) => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       is_built_in INTEGER NOT NULL
     );
 
@@ -170,6 +180,7 @@ const ensureSchema = (database: DatabaseSync) => {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       is_built_in INTEGER NOT NULL
     );
 
@@ -209,6 +220,7 @@ const ensureSchema = (database: DatabaseSync) => {
       progress_percent REAL NOT NULL,
       progress_note TEXT NOT NULL,
       generated_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       completed_at TEXT
     );
 
@@ -237,8 +249,24 @@ const ensureSchema = (database: DatabaseSync) => {
       progress_percent REAL NOT NULL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
       completed_at TEXT,
       deleted_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_changes (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      change_type TEXT NOT NULL,
+      changed_at TEXT NOT NULL,
+      synced_at TEXT,
+      device_id TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS logbook_entries (
@@ -266,6 +294,10 @@ const ensureSchema = (database: DatabaseSync) => {
       ON recurring_task_instances (template_id, date_key);
     CREATE INDEX IF NOT EXISTS idx_day_plan_items_date_status
       ON day_plan_items (date_value, status, time_block);
+    CREATE INDEX IF NOT EXISTS idx_sync_changes_synced_at
+      ON sync_changes (synced_at, changed_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_changes_entity
+      ON sync_changes (entity_type, entity_id);
   `)
 
   writeMeta(database, META_SQLITE_SCHEMA_VERSION, String(SQLITE_SCHEMA_VERSION))
@@ -278,12 +310,72 @@ const ensureSchema = (database: DatabaseSync) => {
     .prepare('PRAGMA table_info(day_plan_items)')
     .all() as Array<{ name?: unknown }>
 
+  const sceneTagColumns = database
+    .prepare('PRAGMA table_info(scene_tags)')
+    .all() as Array<{ name?: unknown }>
+  const activityTypeColumns = database
+    .prepare('PRAGMA table_info(activity_types)')
+    .all() as Array<{ name?: unknown }>
+  const recurringTaskInstanceColumns = database
+    .prepare('PRAGMA table_info(recurring_task_instances)')
+    .all() as Array<{ name?: unknown }>
+
   if (!dayPlanItemColumns.some((column) => column.name === 'deleted_at')) {
     database.exec(`
       ALTER TABLE day_plan_items
       ADD COLUMN deleted_at TEXT;
     `)
   }
+
+  if (!sceneTagColumns.some((column) => column.name === 'updated_at')) {
+    database.exec(`
+      ALTER TABLE scene_tags
+      ADD COLUMN updated_at TEXT;
+    `)
+    database.exec(`
+      UPDATE scene_tags
+      SET updated_at = created_at
+      WHERE updated_at IS NULL OR updated_at = '';
+    `)
+  }
+
+  if (!activityTypeColumns.some((column) => column.name === 'updated_at')) {
+    database.exec(`
+      ALTER TABLE activity_types
+      ADD COLUMN updated_at TEXT;
+    `)
+    database.exec(`
+      UPDATE activity_types
+      SET updated_at = created_at
+      WHERE updated_at IS NULL OR updated_at = '';
+    `)
+  }
+
+  if (!recurringTaskInstanceColumns.some((column) => column.name === 'updated_at')) {
+    database.exec(`
+      ALTER TABLE recurring_task_instances
+      ADD COLUMN updated_at TEXT;
+    `)
+    database.exec(`
+      UPDATE recurring_task_instances
+      SET updated_at = COALESCE(completed_at, generated_at)
+      WHERE updated_at IS NULL OR updated_at = '';
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'updated_at')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN updated_at TEXT;
+    `)
+    database.exec(`
+      UPDATE day_plan_items
+      SET updated_at = COALESCE(deleted_at, completed_at, created_at)
+      WHERE updated_at IS NULL OR updated_at = '';
+    `)
+  }
+
+  ensureSyncMetaDefaults(database)
 }
 
 const readMeta = (database: DatabaseSync, key: string) => {
@@ -303,6 +395,161 @@ const writeMeta = (database: DatabaseSync, key: string, value: string) => {
     `)
     .run(key, value)
 }
+
+const readSyncMeta = (database: DatabaseSync, key: string) => {
+  const row = database
+    .prepare('SELECT value FROM sync_meta WHERE key = ?')
+    .get(key) as { value: string | null } | undefined
+
+  return row?.value ?? null
+}
+
+const writeSyncMeta = (database: DatabaseSync, key: string, value: string | null) => {
+  database
+    .prepare(`
+      INSERT INTO sync_meta (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `)
+    .run(key, value)
+}
+
+const ensureSyncMetaDefaults = (database: DatabaseSync) => {
+  if (!readSyncMeta(database, SYNC_META_DEVICE_ID)) {
+    writeSyncMeta(database, SYNC_META_DEVICE_ID, randomUUID())
+  }
+
+  if (readSyncMeta(database, SYNC_META_LAST_SYNCED_AT) === null) {
+    writeSyncMeta(database, SYNC_META_LAST_SYNCED_AT, null)
+  }
+
+  if (readSyncMeta(database, SYNC_META_LAST_SYNC_STATUS) === null) {
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_STATUS, null)
+  }
+
+  if (readSyncMeta(database, SYNC_META_LAST_SYNC_ERROR) === null) {
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_ERROR, null)
+  }
+}
+
+const getDeviceId = (database: DatabaseSync) => {
+  const deviceId = readSyncMeta(database, SYNC_META_DEVICE_ID)
+
+  if (deviceId) {
+    return deviceId
+  }
+
+  const nextDeviceId = randomUUID()
+  writeSyncMeta(database, SYNC_META_DEVICE_ID, nextDeviceId)
+
+  return nextDeviceId
+}
+
+const buildSyncChangeId = (entityType: SyncEntityType, entityId: string) =>
+  `${entityType}:${entityId}`
+
+const queueSnapshotSyncChanges = (database: DatabaseSync, appData: AppData) => {
+  resetSyncChanges(database)
+
+  recordSyncChange(database, {
+    entityType: 'settings',
+    entityId: 'app-settings',
+    changeType: 'upsert',
+    changedAt: appData.settings.updatedAt,
+  })
+
+  for (const sceneTag of appData.sceneTags) {
+    recordSyncChange(database, {
+      entityType: 'sceneTag',
+      entityId: sceneTag.id,
+      changeType: 'upsert',
+      changedAt: sceneTag.updatedAt,
+    })
+  }
+
+  for (const activityType of appData.activityTypes) {
+    recordSyncChange(database, {
+      entityType: 'activityType',
+      entityId: activityType.id,
+      changeType: 'upsert',
+      changedAt: activityType.updatedAt,
+    })
+  }
+
+  for (const template of appData.taskTemplates) {
+    recordSyncChange(database, {
+      entityType: 'taskTemplate',
+      entityId: template.id,
+      changeType: 'upsert',
+      changedAt: template.updatedAt,
+    })
+  }
+
+  for (const instance of appData.recurringTaskInstances) {
+    recordSyncChange(database, {
+      entityType: 'recurringTaskInstance',
+      entityId: instance.id,
+      changeType: 'upsert',
+      changedAt: instance.updatedAt,
+    })
+  }
+
+  for (const item of appData.dayPlanItems) {
+    recordSyncChange(database, {
+      entityType: 'dayPlanItem',
+      entityId: item.id,
+      changeType: item.status === 'deleted' ? 'delete' : 'upsert',
+      changedAt: item.deletedAt || item.updatedAt,
+    })
+  }
+}
+
+const recordSyncChange = (
+  database: DatabaseSync,
+  input: {
+    entityType: SyncEntityType
+    entityId: string
+    changeType: SyncChangeType
+    changedAt: string
+  },
+) => {
+  const deviceId = getDeviceId(database)
+
+  database
+    .prepare(`
+      INSERT INTO sync_changes (
+        id, entity_type, entity_id, change_type, changed_at, synced_at, device_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        change_type = excluded.change_type,
+        changed_at = excluded.changed_at,
+        synced_at = NULL,
+        device_id = excluded.device_id
+    `)
+    .run(
+      buildSyncChangeId(input.entityType, input.entityId),
+      input.entityType,
+      input.entityId,
+      input.changeType,
+      input.changedAt,
+      null,
+      deviceId,
+    )
+}
+
+const resetSyncChanges = (database: DatabaseSync) => {
+  database.exec('DELETE FROM sync_changes;')
+}
+
+const mapSyncChangeRow = (row: Record<string, unknown>): SyncChange => ({
+  id: row.id as string,
+  entityType: row.entity_type as SyncEntityType,
+  entityId: row.entity_id as string,
+  changeType: row.change_type as SyncChangeType,
+  changedAt: row.changed_at as string,
+  syncedAt: toNullableString(row.synced_at) ?? null,
+  deviceId: row.device_id as string,
+})
 
 const readRevision = (database: DatabaseSync) => {
   const revision = readMeta(database, META_APP_DATA_REVISION)
@@ -385,6 +632,7 @@ const mapRecurringInstanceRow = (row: Record<string, unknown>): RecurringTaskIns
   progressPercent: Number(row.progress_percent),
   progressNote: row.progress_note as string,
   generatedAt: row.generated_at as string,
+  updatedAt: row.updated_at as string,
   completedAt: toNullableString(row.completed_at),
 })
 
@@ -416,6 +664,7 @@ const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => ({
   progressPercent: Number(row.progress_percent),
   status: row.status as DayPlanItem['status'],
   createdAt: row.created_at as string,
+  updatedAt: row.updated_at as string,
   completedAt: toNullableString(row.completed_at),
   deletedAt: toNullableString(row.deleted_at),
 })
@@ -466,12 +715,14 @@ const readAppData = (database: DatabaseSync): AppData | null => {
       id: row.id as string,
       name: row.name as string,
       createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
       isBuiltIn: toBoolean(row.is_built_in),
     })),
     activityTypes: activityTypes.map((row) => ({
       id: row.id as string,
       name: row.name as string,
       createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
       isBuiltIn: toBoolean(row.is_built_in),
     })),
     taskTemplates: taskTemplates.map(mapTemplateRow),
@@ -532,12 +783,12 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
     )
 
   const insertSceneTag = database.prepare(`
-    INSERT INTO scene_tags (id, name, created_at, is_built_in)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO scene_tags (id, name, created_at, updated_at, is_built_in)
+    VALUES (?, ?, ?, ?, ?)
   `)
   const insertActivityType = database.prepare(`
-    INSERT INTO activity_types (id, name, created_at, is_built_in)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO activity_types (id, name, created_at, updated_at, is_built_in)
+    VALUES (?, ?, ?, ?, ?)
   `)
   const insertTaskTemplate = database.prepare(`
     INSERT INTO task_templates (
@@ -551,8 +802,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
     INSERT INTO recurring_task_instances (
       id, template_id, date_key, target_date, recurrence, repeat_type,
       repeat_interval_unit, repeat_interval_value, status, progress_state,
-      progress_percent, progress_note, generated_at, completed_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      progress_percent, progress_note, generated_at, updated_at, completed_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertDayPlanItem = database.prepare(`
     INSERT INTO day_plan_items (
@@ -560,8 +811,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
       root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
       is_necessary, requires_preparation, preparation_notes, is_segmented,
-      progress_state, progress_percent, status, created_at, completed_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertLogbookEntry = database.prepare(`
     INSERT INTO logbook_entries (
@@ -579,6 +830,7 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       sceneTag.id,
       sceneTag.name,
       sceneTag.createdAt,
+      sceneTag.updatedAt,
       sceneTag.isBuiltIn ? 1 : 0,
     )
   }
@@ -588,6 +840,7 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       activityType.id,
       activityType.name,
       activityType.createdAt,
+      activityType.updatedAt,
       activityType.isBuiltIn ? 1 : 0,
     )
   }
@@ -631,6 +884,7 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       instance.progressPercent,
       instance.progressNote,
       instance.generatedAt,
+      instance.updatedAt,
       instance.completedAt ?? null,
     )
   }
@@ -661,6 +915,7 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       item.progressPercent,
       item.status,
       item.createdAt,
+      item.updatedAt,
       item.completedAt ?? null,
       item.deletedAt ?? null,
     )
@@ -698,6 +953,7 @@ const listSceneTags = (database: DatabaseSync) =>
     id: row.id as string,
     name: row.name as string,
     createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
     isBuiltIn: toBoolean(row.is_built_in),
   }))
 
@@ -711,6 +967,7 @@ const getSceneTagById = (database: DatabaseSync, id: string) => {
         id: row.id as string,
         name: row.name as string,
         createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
         isBuiltIn: toBoolean(row.is_built_in),
       }
     : null
@@ -725,6 +982,7 @@ const listActivityTypes = (database: DatabaseSync) =>
     id: row.id as string,
     name: row.name as string,
     createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
     isBuiltIn: toBoolean(row.is_built_in),
   }))
 
@@ -738,6 +996,7 @@ const getActivityTypeById = (database: DatabaseSync, id: string) => {
         id: row.id as string,
         name: row.name as string,
         createdAt: row.created_at as string,
+        updatedAt: row.updated_at as string,
         isBuiltIn: toBoolean(row.is_built_in),
       }
     : null
@@ -817,32 +1076,45 @@ const upsertSettings = (database: DatabaseSync, settings: AppSettings) => {
 const insertSceneTag = (database: DatabaseSync, sceneTag: SceneTag) => {
   database
     .prepare(`
-      INSERT INTO scene_tags (id, name, created_at, is_built_in)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO scene_tags (id, name, created_at, updated_at, is_built_in)
+      VALUES (?, ?, ?, ?, ?)
     `)
-    .run(sceneTag.id, sceneTag.name, sceneTag.createdAt, sceneTag.isBuiltIn ? 1 : 0)
+    .run(
+      sceneTag.id,
+      sceneTag.name,
+      sceneTag.createdAt,
+      sceneTag.updatedAt,
+      sceneTag.isBuiltIn ? 1 : 0,
+    )
 }
 
 const replaceSceneTag = (database: DatabaseSync, sceneTag: SceneTag) => {
   database
     .prepare(`
       UPDATE scene_tags
-      SET name = ?, created_at = ?, is_built_in = ?
+      SET name = ?, created_at = ?, updated_at = ?, is_built_in = ?
       WHERE id = ?
     `)
-    .run(sceneTag.name, sceneTag.createdAt, sceneTag.isBuiltIn ? 1 : 0, sceneTag.id)
+    .run(
+      sceneTag.name,
+      sceneTag.createdAt,
+      sceneTag.updatedAt,
+      sceneTag.isBuiltIn ? 1 : 0,
+      sceneTag.id,
+    )
 }
 
 const insertActivityType = (database: DatabaseSync, activityType: ActivityType) => {
   database
     .prepare(`
-      INSERT INTO activity_types (id, name, created_at, is_built_in)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO activity_types (id, name, created_at, updated_at, is_built_in)
+      VALUES (?, ?, ?, ?, ?)
     `)
     .run(
       activityType.id,
       activityType.name,
       activityType.createdAt,
+      activityType.updatedAt,
       activityType.isBuiltIn ? 1 : 0,
     )
 }
@@ -851,12 +1123,13 @@ const replaceActivityType = (database: DatabaseSync, activityType: ActivityType)
   database
     .prepare(`
       UPDATE activity_types
-      SET name = ?, created_at = ?, is_built_in = ?
+      SET name = ?, created_at = ?, updated_at = ?, is_built_in = ?
       WHERE id = ?
     `)
     .run(
       activityType.name,
       activityType.createdAt,
+      activityType.updatedAt,
       activityType.isBuiltIn ? 1 : 0,
       activityType.id,
     )
@@ -952,8 +1225,8 @@ const insertRecurringTaskInstanceRow = (
       INSERT INTO recurring_task_instances (
         id, template_id, date_key, target_date, recurrence, repeat_type,
         repeat_interval_unit, repeat_interval_value, status, progress_state,
-        progress_percent, progress_note, generated_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        progress_percent, progress_note, generated_at, updated_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       instance.id,
@@ -969,6 +1242,7 @@ const insertRecurringTaskInstanceRow = (
       instance.progressPercent,
       instance.progressNote,
       instance.generatedAt,
+      instance.updatedAt,
       instance.completedAt ?? null,
     )
 }
@@ -993,6 +1267,7 @@ const replaceRecurringTaskInstanceRow = (
         progress_percent = ?,
         progress_note = ?,
         generated_at = ?,
+        updated_at = ?,
         completed_at = ?
       WHERE id = ?
     `)
@@ -1009,6 +1284,7 @@ const replaceRecurringTaskInstanceRow = (
       instance.progressPercent,
       instance.progressNote,
       instance.generatedAt,
+      instance.updatedAt,
       instance.completedAt ?? null,
       instance.id,
     )
@@ -1022,8 +1298,8 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
         sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
         root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
         is_necessary, requires_preparation, preparation_notes, is_segmented,
-        progress_state, progress_percent, status, created_at, completed_at, deleted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       item.id,
@@ -1050,6 +1326,7 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.progressPercent,
       item.status,
       item.createdAt,
+      item.updatedAt,
       item.completedAt ?? null,
       item.deletedAt ?? null,
     )
@@ -1083,6 +1360,7 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
         progress_percent = ?,
         status = ?,
         created_at = ?,
+        updated_at = ?,
         completed_at = ?,
         deleted_at = ?
       WHERE id = ?
@@ -1111,6 +1389,7 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.progressPercent,
       item.status,
       item.createdAt,
+      item.updatedAt,
       item.completedAt ?? null,
       item.deletedAt ?? null,
       item.id,
@@ -1165,6 +1444,7 @@ export const replaceSqliteSnapshot = (
 
     clearAppData(database)
     insertAppData(database, appData)
+    queueSnapshotSyncChanges(database, appData)
 
     const nextRevision = currentRevision + 1
     writeMeta(database, META_APP_DATA_REVISION, String(nextRevision))
@@ -1190,6 +1470,27 @@ export const getSqliteSettings = (dataPath: string) => {
   return appData?.settings ?? null
 }
 
+export const getSqliteLocalSyncState = (dataPath: string): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return {
+    deviceId: getDeviceId(database),
+    lastSyncedAt: readSyncMeta(database, SYNC_META_LAST_SYNCED_AT),
+    lastSyncStatus: readSyncMeta(database, SYNC_META_LAST_SYNC_STATUS),
+    lastSyncError: readSyncMeta(database, SYNC_META_LAST_SYNC_ERROR),
+  }
+}
+
+export const listSqliteSyncChanges = (dataPath: string): SyncChange[] => {
+  const database = getDatabase(dataPath)
+
+  return (
+    database
+      .prepare('SELECT * FROM sync_changes ORDER BY changed_at ASC, id ASC')
+      .all() as Array<Record<string, unknown>>
+  ).map(mapSyncChangeRow)
+}
+
 export const updateSqliteSettings = (dataPath: string, input: AppSettingsUpdateInput) => {
   const database = getDatabase(dataPath)
 
@@ -1207,6 +1508,12 @@ export const updateSqliteSettings = (dataPath: string, input: AppSettingsUpdateI
     }
 
     upsertSettings(database, next)
+    recordSyncChange(database, {
+      entityType: 'settings',
+      entityId: 'app-settings',
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
 
     return next
   })
@@ -1221,9 +1528,20 @@ export const createSqliteSceneTag = (dataPath: string, sceneTag: SceneTag) => {
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
-    insertSceneTag(database, sceneTag)
+    const next: SceneTag = {
+      ...sceneTag,
+      updatedAt: sceneTag.updatedAt || sceneTag.createdAt,
+    }
 
-    return sceneTag
+    insertSceneTag(database, next)
+    recordSyncChange(database, {
+      entityType: 'sceneTag',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
+
+    return next
   })
 }
 
@@ -1240,9 +1558,16 @@ export const updateSqliteSceneTag = (dataPath: string, input: SceneTagUpdateInpu
     const next: SceneTag = {
       ...current,
       ...input,
+      updatedAt: nowIso(),
     }
 
     replaceSceneTag(database, next)
+    recordSyncChange(database, {
+      entityType: 'sceneTag',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
 
     return next
   })
@@ -1252,8 +1577,23 @@ export const deleteSqliteSceneTag = (dataPath: string, id: string) => {
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const sceneTag = getSceneTagById(database, id)
+
+    if (!sceneTag) {
+      return false
+    }
+
     const result = database.prepare('DELETE FROM scene_tags WHERE id = ?').run(id) as {
       changes?: number
+    }
+
+    if (Number(result.changes ?? 0) > 0) {
+      recordSyncChange(database, {
+        entityType: 'sceneTag',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
     }
 
     return Number(result.changes ?? 0) > 0
@@ -1279,12 +1619,27 @@ export const deleteSqliteSceneTagAndDetachTemplates = (dataPath: string, id: str
       .filter((template) => template.sceneTagIds.includes(id))
 
     for (const template of affectedTemplates) {
-      replaceTaskTemplateRow(database, {
+      const nextTemplate: TaskTemplate = {
         ...template,
         sceneTagIds: template.sceneTagIds.filter((sceneTagId) => sceneTagId !== id),
         updatedAt: nowIso(),
+      }
+
+      replaceTaskTemplateRow(database, nextTemplate)
+      recordSyncChange(database, {
+        entityType: 'taskTemplate',
+        entityId: nextTemplate.id,
+        changeType: 'upsert',
+        changedAt: nextTemplate.updatedAt,
       })
     }
+
+    recordSyncChange(database, {
+      entityType: 'sceneTag',
+      entityId: id,
+      changeType: 'delete',
+      changedAt: nowIso(),
+    })
 
     return true
   })
@@ -1300,9 +1655,20 @@ export const createSqliteActivityType = (dataPath: string, activityType: Activit
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
-    insertActivityType(database, activityType)
+    const next: ActivityType = {
+      ...activityType,
+      updatedAt: activityType.updatedAt || activityType.createdAt,
+    }
 
-    return activityType
+    insertActivityType(database, next)
+    recordSyncChange(database, {
+      entityType: 'activityType',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
+
+    return next
   })
 }
 
@@ -1319,9 +1685,16 @@ export const updateSqliteActivityType = (dataPath: string, input: ActivityTypeUp
     const next: ActivityType = {
       ...current,
       ...input,
+      updatedAt: nowIso(),
     }
 
     replaceActivityType(database, next)
+    recordSyncChange(database, {
+      entityType: 'activityType',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
 
     return next
   })
@@ -1331,8 +1704,23 @@ export const deleteSqliteActivityType = (dataPath: string, id: string) => {
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const activityType = getActivityTypeById(database, id)
+
+    if (!activityType) {
+      return false
+    }
+
     const result = database.prepare('DELETE FROM activity_types WHERE id = ?').run(id) as {
       changes?: number
+    }
+
+    if (Number(result.changes ?? 0) > 0) {
+      recordSyncChange(database, {
+        entityType: 'activityType',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
     }
 
     return Number(result.changes ?? 0) > 0
@@ -1363,6 +1751,15 @@ export const deleteSqliteActivityTypeIfUnused = (dataPath: string, id: string) =
     }
     const removed = Number(result.changes ?? 0) > 0
 
+    if (removed) {
+      recordSyncChange(database, {
+        entityType: 'activityType',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
+    }
+
     return {
       removed,
       reason: removed ? null : ('not_found' as const),
@@ -1381,6 +1778,12 @@ export const createSqliteTaskTemplate = (dataPath: string, template: TaskTemplat
 
   return runMutation(database, () => {
     insertTaskTemplateRow(database, template)
+    recordSyncChange(database, {
+      entityType: 'taskTemplate',
+      entityId: template.id,
+      changeType: 'upsert',
+      changedAt: template.updatedAt,
+    })
 
     return template
   })
@@ -1399,9 +1802,16 @@ export const updateSqliteTaskTemplate = (dataPath: string, input: TaskTemplateUp
     const next: TaskTemplate = {
       ...current,
       ...input,
+      updatedAt: input.updatedAt ?? nowIso(),
     }
 
     replaceTaskTemplateRow(database, next)
+    recordSyncChange(database, {
+      entityType: 'taskTemplate',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
 
     return next
   })
@@ -1411,8 +1821,23 @@ export const deleteSqliteTaskTemplate = (dataPath: string, id: string) => {
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const template = getTaskTemplateById(database, id)
+
+    if (!template) {
+      return false
+    }
+
     const result = database.prepare('DELETE FROM task_templates WHERE id = ?').run(id) as {
       changes?: number
+    }
+
+    if (Number(result.changes ?? 0) > 0) {
+      recordSyncChange(database, {
+        entityType: 'taskTemplate',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
     }
 
     return Number(result.changes ?? 0) > 0
@@ -1432,9 +1857,20 @@ export const createSqliteRecurringTaskInstance = (
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
-    insertRecurringTaskInstanceRow(database, instance)
+    const next: RecurringTaskInstance = {
+      ...instance,
+      updatedAt: instance.updatedAt || instance.completedAt || instance.generatedAt,
+    }
 
-    return instance
+    insertRecurringTaskInstanceRow(database, next)
+    recordSyncChange(database, {
+      entityType: 'recurringTaskInstance',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
+
+    return next
   })
 }
 
@@ -1454,9 +1890,16 @@ export const updateSqliteRecurringTaskInstance = (
     const next: RecurringTaskInstance = {
       ...current,
       ...input,
+      updatedAt: nowIso(),
     }
 
     replaceRecurringTaskInstanceRow(database, next)
+    recordSyncChange(database, {
+      entityType: 'recurringTaskInstance',
+      entityId: next.id,
+      changeType: 'upsert',
+      changedAt: next.updatedAt,
+    })
 
     return next
   })
@@ -1466,9 +1909,24 @@ export const deleteSqliteRecurringTaskInstance = (dataPath: string, id: string) 
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const instance = getRecurringTaskInstanceById(database, id)
+
+    if (!instance) {
+      return false
+    }
+
     const result = database
       .prepare('DELETE FROM recurring_task_instances WHERE id = ?')
       .run(id) as { changes?: number }
+
+    if (Number(result.changes ?? 0) > 0) {
+      recordSyncChange(database, {
+        entityType: 'recurringTaskInstance',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
+    }
 
     return Number(result.changes ?? 0) > 0
   })
@@ -1484,9 +1942,20 @@ export const createSqliteDayPlanItem = (dataPath: string, item: DayPlanItem) => 
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
-    insertDayPlanItemRow(database, item)
+    const next: DayPlanItem = {
+      ...item,
+      updatedAt: item.updatedAt || item.deletedAt || item.completedAt || item.createdAt,
+    }
 
-    return item
+    insertDayPlanItemRow(database, next)
+    recordSyncChange(database, {
+      entityType: 'dayPlanItem',
+      entityId: next.id,
+      changeType: next.status === 'deleted' ? 'delete' : 'upsert',
+      changedAt: next.deletedAt || next.updatedAt,
+    })
+
+    return next
   })
 }
 
@@ -1503,9 +1972,16 @@ export const updateSqliteDayPlanItem = (dataPath: string, input: DayPlanItemUpda
     const next: DayPlanItem = {
       ...current,
       ...input,
+      updatedAt: input.updatedAt ?? nowIso(),
     }
 
     replaceDayPlanItemRow(database, next)
+    recordSyncChange(database, {
+      entityType: 'dayPlanItem',
+      entityId: next.id,
+      changeType: next.status === 'deleted' ? 'delete' : 'upsert',
+      changedAt: next.deletedAt || next.updatedAt,
+    })
 
     return next
   })
@@ -1515,8 +1991,23 @@ export const deleteSqliteDayPlanItem = (dataPath: string, id: string) => {
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const item = getDayPlanItemById(database, id)
+
+    if (!item) {
+      return false
+    }
+
     const result = database.prepare('DELETE FROM day_plan_items WHERE id = ?').run(id) as {
       changes?: number
+    }
+
+    if (Number(result.changes ?? 0) > 0) {
+      recordSyncChange(database, {
+        entityType: 'dayPlanItem',
+        entityId: id,
+        changeType: 'delete',
+        changedAt: nowIso(),
+      })
     }
 
     return Number(result.changes ?? 0) > 0

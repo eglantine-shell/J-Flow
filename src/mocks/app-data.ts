@@ -17,18 +17,21 @@ export const mockSeedAppData: AppData = {
       id: 'scene-weekday-evening',
       name: '工作日晚上',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
     {
       id: 'scene-weekend',
       name: '周末',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
     {
       id: 'scene-holiday',
       name: '长假',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
   ],
@@ -37,18 +40,21 @@ export const mockSeedAppData: AppData = {
       id: 'activity-reading',
       name: '阅读',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
     {
       id: 'activity-movie',
       name: '观影',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
     {
       id: 'activity-travel',
       name: '旅游',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
   ],
@@ -75,6 +81,7 @@ export const mockAppData: AppData = {
       id: 'activity-study',
       name: '学习',
       createdAt,
+      updatedAt,
       isBuiltIn: true,
     },
   ],
@@ -181,6 +188,7 @@ export const mockAppData: AppData = {
       progressPercent: 40,
       progressNote: '已完成桌面清理，抽屉还未整理。',
       generatedAt: '2026-04-13T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
     {
       id: 'recurring-study-english-2026-04-17',
@@ -192,6 +200,7 @@ export const mockAppData: AppData = {
       progressPercent: 0,
       progressNote: '今日份已生成，待完成。',
       generatedAt: '2026-04-17T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
     {
       id: 'recurring-clean-desk-2026-W15',
@@ -203,6 +212,7 @@ export const mockAppData: AppData = {
       progressPercent: 60,
       progressNote: '上周未完成，已过期。',
       generatedAt: '2026-04-06T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
   ],
   dayPlanItems: [
@@ -225,6 +235,7 @@ export const mockAppData: AppData = {
       progressPercent: 40,
       status: 'pending',
       createdAt: '2026-04-17T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
     {
       id: 'day-item-pay-rent-morning',
@@ -244,6 +255,7 @@ export const mockAppData: AppData = {
       progressPercent: 0,
       status: 'pending',
       createdAt: '2026-04-17T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
     {
       id: 'day-item-read-book-evening',
@@ -263,6 +275,7 @@ export const mockAppData: AppData = {
       progressPercent: 30,
       status: 'pending',
       createdAt: '2026-04-17T10:00:00.000Z',
+      updatedAt: '2026-04-17T10:00:00.000Z',
     },
     {
       id: 'day-item-study-english-morning',
@@ -283,6 +296,7 @@ export const mockAppData: AppData = {
       progressPercent: 0,
       status: 'pending',
       createdAt: '2026-04-17T00:00:00.000Z',
+      updatedAt: '2026-04-17T09:30:00.000Z',
     },
     {
       id: 'day-item-temp-grocery',
@@ -300,6 +314,7 @@ export const mockAppData: AppData = {
       progressPercent: 0,
       status: 'pending',
       createdAt: '2026-04-17T08:00:00.000Z',
+      updatedAt: '2026-04-17T08:00:00.000Z',
     },
     {
       id: 'day-item-temp-duplicate-book',
@@ -317,6 +332,7 @@ export const mockAppData: AppData = {
       progressPercent: 0,
       status: 'pending',
       createdAt: '2026-04-17T07:30:00.000Z',
+      updatedAt: '2026-04-17T07:30:00.000Z',
     },
   ],
   logbookEntries: [],

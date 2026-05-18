@@ -14,27 +14,31 @@ import type {
   AppSettings,
   DayPlanItem,
   GrassStatus,
+  LocalSyncState,
   RecurringTaskInstance,
   SceneTag,
+  SyncChange,
   TaskTemplate,
 } from '@/types'
 
 type AppDataUpdater = (current: AppData) => AppData
 
-type SceneTagCreateInput = Omit<SceneTag, 'id' | 'createdAt'> &
-  Partial<Pick<SceneTag, 'id' | 'createdAt'>>
+type SceneTagCreateInput = Omit<SceneTag, 'id' | 'createdAt' | 'updatedAt'> &
+  Partial<Pick<SceneTag, 'id' | 'createdAt' | 'updatedAt'>>
 
-type ActivityTypeCreateInput = Omit<ActivityType, 'id' | 'createdAt'> &
-  Partial<Pick<ActivityType, 'id' | 'createdAt'>>
+type ActivityTypeCreateInput = Omit<ActivityType, 'id' | 'createdAt' | 'updatedAt'> &
+  Partial<Pick<ActivityType, 'id' | 'createdAt' | 'updatedAt'>>
 
 type TaskTemplateCreateInput = Omit<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date'> &
   Partial<Pick<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date'>>
 
-type RecurringTaskInstanceCreateInput = Omit<RecurringTaskInstance, 'id' | 'generatedAt'> &
-  Partial<Pick<RecurringTaskInstance, 'id' | 'generatedAt'>>
+type RecurringTaskInstanceCreateInput = Omit<
+  RecurringTaskInstance,
+  'id' | 'generatedAt' | 'updatedAt'
+> & Partial<Pick<RecurringTaskInstance, 'id' | 'generatedAt' | 'updatedAt'>>
 
-type DayPlanItemCreateInput = Omit<DayPlanItem, 'id' | 'createdAt'> &
-  Partial<Pick<DayPlanItem, 'id' | 'createdAt'>>
+type DayPlanItemCreateInput = Omit<DayPlanItem, 'id' | 'createdAt' | 'updatedAt'> &
+  Partial<Pick<DayPlanItem, 'id' | 'createdAt' | 'updatedAt'>>
 
 type SceneTagUpdateInput = Partial<Omit<SceneTag, 'id'>> & Pick<SceneTag, 'id'>
 type ActivityTypeUpdateInput = Partial<Omit<ActivityType, 'id'>> & Pick<ActivityType, 'id'>
@@ -61,6 +65,23 @@ const resolveDayPlanItemOriginDate = (
   item: Pick<DayPlanItem, 'originDate' | 'targetDate' | 'date'>,
 ) => item.originDate ?? item.targetDate ?? item.date
 
+const resolveSceneTagUpdatedAt = (sceneTag: Pick<SceneTag, 'createdAt'> & Partial<Pick<SceneTag, 'updatedAt'>>) =>
+  sceneTag.updatedAt ?? sceneTag.createdAt
+
+const resolveActivityTypeUpdatedAt = (
+  activityType: Pick<ActivityType, 'createdAt'> & Partial<Pick<ActivityType, 'updatedAt'>>,
+) => activityType.updatedAt ?? activityType.createdAt
+
+const resolveRecurringTaskInstanceUpdatedAt = (
+  instance: Pick<RecurringTaskInstance, 'generatedAt'> &
+    Partial<Pick<RecurringTaskInstance, 'updatedAt' | 'completedAt'>>,
+) => instance.updatedAt ?? instance.completedAt ?? instance.generatedAt
+
+const resolveDayPlanItemUpdatedAt = (
+  item: Pick<DayPlanItem, 'createdAt'> &
+    Partial<Pick<DayPlanItem, 'updatedAt' | 'completedAt' | 'deletedAt'>>,
+) => item.updatedAt ?? item.deletedAt ?? item.completedAt ?? item.createdAt
+
 const resolveGrassStatus = (
   item: Pick<TaskTemplate, 'templateKind' | 'isArchived'> & Partial<Pick<TaskTemplate, 'grassStatus'>>,
 ): GrassStatus | undefined => {
@@ -85,6 +106,14 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
       appData.settings.completedAtRoundingMinutes,
     ),
   },
+  sceneTags: appData.sceneTags.map((sceneTag) => ({
+    ...sceneTag,
+    updatedAt: resolveSceneTagUpdatedAt(sceneTag),
+  })),
+  activityTypes: appData.activityTypes.map((activityType) => ({
+    ...activityType,
+    updatedAt: resolveActivityTypeUpdatedAt(activityType),
+  })),
   taskTemplates: appData.taskTemplates.map((template) => ({
     ...template,
     ...serializeRepeatRule(resolveRepeatRule(template)),
@@ -96,6 +125,7 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
   })),
   recurringTaskInstances: appData.recurringTaskInstances.map((instance) => ({
     ...instance,
+    updatedAt: resolveRecurringTaskInstanceUpdatedAt(instance),
     ...(() => {
       const repeatRule = resolveRepeatRule(instance)
       const serializedRepeatRule = serializeRepeatRule(repeatRule)
@@ -117,6 +147,7 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
   dayPlanItems: appData.dayPlanItems.map((item) => ({
     ...item,
     originDate: resolveDayPlanItemOriginDate(item),
+    updatedAt: resolveDayPlanItemUpdatedAt(item),
     deletedAt: item.deletedAt,
   })),
 })
@@ -216,6 +247,26 @@ async function importDesktopAppData(appData: AppData) {
   }
 
   return parseAppData(await desktopRepository.appData.importSnapshot(parseAppData(appData)))
+}
+
+async function getDesktopLocalSyncState() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.getState()
+}
+
+async function listDesktopSyncChanges() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.listChanges()
 }
 
 async function readAppDataRecord() {
@@ -342,19 +393,25 @@ function removeById<T extends { id: string }>(collection: T[], id: string) {
 }
 
 function normalizeSceneTag(input: SceneTagCreateInput): SceneTag {
+  const createdAt = input.createdAt ?? nowIso()
+
   return {
     id: input.id ?? createId('scene'),
     name: input.name,
-    createdAt: input.createdAt ?? nowIso(),
+    createdAt,
+    updatedAt: input.updatedAt ?? createdAt,
     isBuiltIn: input.isBuiltIn,
   }
 }
 
 function normalizeActivityType(input: ActivityTypeCreateInput): ActivityType {
+  const createdAt = input.createdAt ?? nowIso()
+
   return {
     id: input.id ?? createId('activity'),
     name: input.name,
-    createdAt: input.createdAt ?? nowIso(),
+    createdAt,
+    updatedAt: input.updatedAt ?? createdAt,
     isBuiltIn: input.isBuiltIn,
   }
 }
@@ -400,6 +457,8 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
 function normalizeRecurringTaskInstance(
   input: RecurringTaskInstanceCreateInput,
 ): RecurringTaskInstance {
+  const generatedAt = input.generatedAt ?? nowIso()
+
   return {
     id: input.id ?? createId('recurring-instance'),
     templateId: input.templateId,
@@ -413,12 +472,15 @@ function normalizeRecurringTaskInstance(
     progressState: input.progressState,
     progressPercent: input.progressPercent,
     progressNote: input.progressNote,
-    generatedAt: input.generatedAt ?? nowIso(),
+    generatedAt,
+    updatedAt: input.updatedAt ?? input.completedAt ?? generatedAt,
     completedAt: input.completedAt,
   }
 }
 
 function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
+  const createdAt = input.createdAt ?? nowIso()
+
   return {
     id: input.id ?? createId('day-plan-item'),
     date: input.date,
@@ -443,7 +505,8 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     progressState: input.progressState,
     progressPercent: input.progressPercent,
     status: input.status,
-    createdAt: input.createdAt ?? nowIso(),
+    createdAt,
+    updatedAt: input.updatedAt ?? input.deletedAt ?? input.completedAt ?? createdAt,
     completedAt: input.completedAt,
     deletedAt: input.deletedAt,
   }
@@ -621,7 +684,11 @@ async function updateSceneTag(input: SceneTagUpdateInput) {
   let entity: SceneTag | null = null
 
   await mutateAppData((current) => {
-    const result = updateById(current.sceneTags, input)
+    const result = updateById(current.sceneTags, input, (item, updates) => ({
+      ...item,
+      ...updates,
+      updatedAt: updates.updatedAt ?? nowIso(),
+    }))
     entity = result.entity
 
     return {
@@ -747,7 +814,11 @@ async function updateActivityType(input: ActivityTypeUpdateInput) {
   let entity: ActivityType | null = null
 
   await mutateAppData((current) => {
-    const result = updateById(current.activityTypes, input)
+    const result = updateById(current.activityTypes, input, (item, updates) => ({
+      ...item,
+      ...updates,
+      updatedAt: updates.updatedAt ?? nowIso(),
+    }))
     entity = result.entity
 
     return {
@@ -1004,7 +1075,11 @@ async function updateRecurringTaskInstance(input: RecurringTaskInstanceUpdateInp
   let entity: RecurringTaskInstance | null = null
 
   await mutateAppData((current) => {
-    const result = updateById(current.recurringTaskInstances, input)
+    const result = updateById(current.recurringTaskInstances, input, (item, updates) => ({
+      ...item,
+      ...updates,
+      updatedAt: updates.updatedAt ?? nowIso(),
+    }))
     entity = result.entity
 
     return {
@@ -1095,7 +1170,11 @@ async function updateDayPlanItem(input: DayPlanItemUpdateInput) {
   let entity: DayPlanItem | null = null
 
   await mutateAppData((current) => {
-    const result = updateById(current.dayPlanItems, input)
+    const result = updateById(current.dayPlanItems, input, (item, updates) => ({
+      ...item,
+      ...updates,
+      updatedAt: updates.updatedAt ?? nowIso(),
+    }))
     entity = result.entity
 
     return {
@@ -1131,6 +1210,22 @@ async function deleteDayPlanItem(id: string) {
   })
 
   return removed
+}
+
+async function getLocalSyncState(): Promise<LocalSyncState | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return getDesktopLocalSyncState()
+}
+
+async function listLocalSyncChanges(): Promise<SyncChange[]> {
+  if (!isDesktopStorageEnabled()) {
+    return []
+  }
+
+  return listDesktopSyncChanges()
 }
 
 export const appDataStorage = {
@@ -1189,6 +1284,10 @@ export const appDataRepository = {
     create: createDayPlanItem,
     update: updateDayPlanItem,
     delete: deleteDayPlanItem,
+  },
+  sync: {
+    getState: getLocalSyncState,
+    listChanges: listLocalSyncChanges,
   },
 }
 

@@ -49,6 +49,7 @@ const createDayPlanItem = (overrides: Partial<DayPlanItem> = {}): DayPlanItem =>
   progressPercent: 0,
   status: 'pending',
   createdAt: '2026-04-30T09:00:00.000Z',
+  updatedAt: '2026-04-30T09:00:00.000Z',
   ...overrides,
 })
 

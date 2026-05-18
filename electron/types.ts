@@ -21,11 +21,20 @@ export type ProgressState = 'not_started' | 'in_progress' | 'completed'
 export type TieBreakerOrder = 'asc' | 'desc'
 export type CompletedAtRoundingMinutes = 0 | 5 | 10 | 30
 export type LogbookCompletedKind = 'completed' | 'picked'
+export type SyncEntityType =
+  | 'settings'
+  | 'sceneTag'
+  | 'activityType'
+  | 'taskTemplate'
+  | 'recurringTaskInstance'
+  | 'dayPlanItem'
+export type SyncChangeType = 'upsert' | 'delete'
 
 export interface SceneTag {
   id: string
   name: string
   createdAt: string
+  updatedAt: string
   isBuiltIn: boolean
 }
 
@@ -33,6 +42,7 @@ export interface ActivityType {
   id: string
   name: string
   createdAt: string
+  updatedAt: string
   isBuiltIn: boolean
 }
 
@@ -72,6 +82,7 @@ export interface RecurringTaskInstance {
   progressPercent: number
   progressNote: string
   generatedAt: string
+  updatedAt: string
   completedAt?: string
 }
 
@@ -100,6 +111,7 @@ export interface DayPlanItem {
   progressPercent: number
   status: DayPlanItemStatus
   createdAt: string
+  updatedAt: string
   completedAt?: string
   deletedAt?: string
 }
@@ -161,6 +173,23 @@ export interface AppData {
   dayPlanItems: DayPlanItem[]
   logbookEntries: LogbookEntry[]
   segmentedProgressLogs: SegmentedProgressLog[]
+}
+
+export interface LocalSyncState {
+  deviceId: string
+  lastSyncedAt: string | null
+  lastSyncStatus: string | null
+  lastSyncError: string | null
+}
+
+export interface SyncChange {
+  id: string
+  entityType: SyncEntityType
+  entityId: string
+  changeType: SyncChangeType
+  changedAt: string
+  syncedAt: string | null
+  deviceId: string
 }
 
 export type SceneTagUpdateInput = Partial<Omit<SceneTag, 'id'>> & Pick<SceneTag, 'id'>

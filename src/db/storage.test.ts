@@ -180,4 +180,35 @@ describe('appDataRepository.taskTemplates.create', () => {
 
     expect(imported.segmentedProgressLogs).toEqual([])
   })
+
+  it('initializes missing updatedAt fields for legacy sync entities during import', async () => {
+    const { appDataRepository } = await import('@/db/storage')
+
+    const imported = await appDataRepository.importSnapshot({
+      ...mockSeedAppData,
+      sceneTags: mockSeedAppData.sceneTags.map(({ updatedAt: _updatedAt, ...sceneTag }) => sceneTag),
+      activityTypes: mockSeedAppData.activityTypes.map(
+        ({ updatedAt: _updatedAt, ...activityType }) => activityType,
+      ),
+      recurringTaskInstances: mockSeedAppData.recurringTaskInstances.map(
+        ({ updatedAt: _updatedAt, ...instance }) => instance,
+      ),
+      dayPlanItems: mockSeedAppData.dayPlanItems.map(({ updatedAt: _updatedAt, ...item }) => item),
+    } as unknown as typeof mockSeedAppData)
+
+    expect(imported.sceneTags.every((sceneTag) => sceneTag.updatedAt === sceneTag.createdAt)).toBe(true)
+    expect(
+      imported.activityTypes.every((activityType) => activityType.updatedAt === activityType.createdAt),
+    ).toBe(true)
+    expect(
+      imported.recurringTaskInstances.every(
+        (instance) => instance.updatedAt === (instance.completedAt ?? instance.generatedAt),
+      ),
+    ).toBe(true)
+    expect(
+      imported.dayPlanItems.every(
+        (item) => item.updatedAt === (item.deletedAt ?? item.completedAt ?? item.createdAt),
+      ),
+    ).toBe(true)
+  })
 })

@@ -6,13 +6,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   createSqliteDayPlanItem,
+  createSqliteSceneTag,
   createSqliteTaskTemplate,
   deleteSqliteActivityTypeIfUnused,
+  deleteSqliteSceneTag,
   deleteSqliteSceneTagAndDetachTemplates,
   getSqliteAppData,
+  getSqliteLocalSyncState,
   getSqliteTaskTemplateById,
+  listSqliteSyncChanges,
   listSqliteDayPlanItems,
   replaceSqliteSnapshot,
+  updateSqliteSceneTag,
   updateSqliteDayPlanItem,
 } from './sqlite'
 import { sqliteTestSeedAppData } from './test-fixtures'
@@ -215,5 +220,60 @@ describe('electron/sqlite', () => {
       removed: false,
       reason: 'in_use',
     })
+  })
+
+  it('generates a stable deviceId in local sync metadata', async () => {
+    const dataPath = await createTempDataPath()
+    replaceSqliteSnapshot(dataPath, sqliteTestSeedAppData)
+
+    const first = getSqliteLocalSyncState(dataPath)
+    const second = getSqliteLocalSyncState(dataPath)
+
+    expect(first.deviceId).toBeTruthy()
+    expect(second.deviceId).toBe(first.deviceId)
+    expect(first.lastSyncedAt).toBeNull()
+    expect(first.lastSyncStatus).toBeNull()
+    expect(first.lastSyncError).toBeNull()
+  })
+
+  it('records sync_changes for upsert and delete mutations', async () => {
+    const dataPath = await createTempDataPath()
+    replaceSqliteSnapshot(dataPath, sqliteTestSeedAppData)
+
+    createSqliteSceneTag(dataPath, {
+      id: 'scene-sync-test',
+      name: '同步标签',
+      createdAt: '2026-05-01T08:00:00.000Z',
+      updatedAt: '2026-05-01T08:00:00.000Z',
+      isBuiltIn: false,
+    })
+
+    updateSqliteSceneTag(dataPath, {
+      id: 'scene-sync-test',
+      name: '同步标签-已改',
+    })
+
+    const upsertChange = listSqliteSyncChanges(dataPath).find(
+      (item) => item.entityType === 'sceneTag' && item.entityId === 'scene-sync-test',
+    )
+
+    expect(upsertChange).toMatchObject({
+      entityType: 'sceneTag',
+      entityId: 'scene-sync-test',
+      changeType: 'upsert',
+    })
+
+    deleteSqliteSceneTag(dataPath, 'scene-sync-test')
+
+    const changes = listSqliteSyncChanges(dataPath)
+    const change = changes.find((item) => item.entityType === 'sceneTag' && item.entityId === 'scene-sync-test')
+
+    expect(change).toMatchObject({
+      entityType: 'sceneTag',
+      entityId: 'scene-sync-test',
+      changeType: 'delete',
+    })
+    expect(change?.deviceId).toBe(getSqliteLocalSyncState(dataPath).deviceId)
+    expect(change?.syncedAt).toBeNull()
   })
 })

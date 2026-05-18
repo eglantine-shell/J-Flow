@@ -18,6 +18,15 @@ const createDesktopApi = () => {
         get: vi.fn(),
         update: vi.fn(),
       },
+      sync: {
+        getState: vi.fn(async () => ({
+          deviceId: 'desktop-device-test',
+          lastSyncedAt: null,
+          lastSyncStatus: null,
+          lastSyncError: null,
+        })),
+        listChanges: vi.fn(async () => []),
+      },
       sceneTags: {
         list: vi.fn(async () => structuredClone(appData.sceneTags)),
         getById: vi.fn(),

@@ -10,6 +10,7 @@ type EditableOption = {
   id: string
   name: string
   createdAt: string
+  updatedAt: string
   isBuiltIn: boolean
 }
 
@@ -108,12 +109,17 @@ export function SetupPage() {
             ...current,
             sceneTags: [
               ...current.sceneTags,
-              {
-                id: createDraftId('scene'),
-                name,
-                createdAt: nowIso(),
-                isBuiltIn: false,
-              },
+              (() => {
+                const timestamp = nowIso()
+
+                return {
+                  id: createDraftId('scene'),
+                  name,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                  isBuiltIn: false,
+                }
+              })(),
             ],
           }
         : current,
@@ -136,12 +142,17 @@ export function SetupPage() {
             ...current,
             activityTypes: [
               ...current.activityTypes,
-              {
-                id: createDraftId('activity'),
-                name,
-                createdAt: nowIso(),
-                isBuiltIn: false,
-              },
+              (() => {
+                const timestamp = nowIso()
+
+                return {
+                  id: createDraftId('activity'),
+                  name,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                  isBuiltIn: false,
+                }
+              })(),
             ],
           }
         : current,

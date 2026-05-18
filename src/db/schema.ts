@@ -34,6 +34,7 @@ export const sceneTagSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema,
   isBuiltIn: z.boolean(),
 }) satisfies z.ZodType<SceneTag>
 
@@ -41,6 +42,7 @@ export const activityTypeSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema,
   isBuiltIn: z.boolean(),
 }) satisfies z.ZodType<ActivityType>
 
@@ -88,6 +90,7 @@ export const recurringTaskInstanceSchema = z.object({
   progressPercent: progressPercentSchema,
   progressNote: z.string(),
   generatedAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema,
   completedAt: isoDatetimeSchema.optional(),
 }) satisfies z.ZodType<RecurringTaskInstance>
 
@@ -121,6 +124,7 @@ export const dayPlanItemSchema = z.object({
   progressPercent: progressPercentSchema,
   status: z.enum(['pending', 'completed', 'deleted']),
   createdAt: isoDatetimeSchema,
+  updatedAt: isoDatetimeSchema,
   completedAt: isoDatetimeSchema.optional(),
   deletedAt: isoDatetimeSchema.optional(),
 }) satisfies z.ZodType<DayPlanItem>

@@ -5,8 +5,10 @@ import type {
   ActivityType,
   AppSettings,
   DayPlanItem,
+  LocalSyncState,
   RecurringTaskInstance,
   SceneTag,
+  SyncChange,
   TaskTemplate,
 } from '@/types'
 
@@ -94,6 +96,10 @@ type JFlowDesktopApi = {
     settings: {
       get: () => Promise<AppSettings | null>
       update: (payload: Partial<Omit<AppSettings, 'createdAt' | 'updatedAt'>>) => Promise<AppSettings>
+    }
+    sync: {
+      getState: () => Promise<LocalSyncState>
+      listChanges: () => Promise<SyncChange[]>
     }
     sceneTags: {
       list: () => Promise<SceneTag[]>

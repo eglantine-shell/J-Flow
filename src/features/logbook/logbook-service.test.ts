@@ -26,6 +26,7 @@ describe('buildLogbookEntryForDate', () => {
             progressPercent: 40,
             status: 'pending',
             createdAt: '2026-05-14T09:00:00.000Z',
+            updatedAt: '2026-05-14T09:00:00.000Z',
           },
         ],
         segmentedProgressLogs: [
