@@ -8,6 +8,7 @@ import {
   createAutoBackup,
   getAutoBackupInfo,
   maybeCreateStartupAutoBackup,
+  readLatestAutoBackup,
 } from './backup.js'
 import {
   clearSqliteSyncTargetPath,
@@ -241,6 +242,12 @@ const registerAppIpc = () => {
       path: backupInfo.directory,
       errorMessage: errorMessage || null,
     }
+  })
+
+  ipcMain.handle('app:read-latest-auto-backup', async () => {
+    const dataPath = await ensureDataDirectory()
+
+    return readLatestAutoBackup(dataPath)
   })
 
   ipcMain.handle('db:get-app-data-snapshot', async () => {

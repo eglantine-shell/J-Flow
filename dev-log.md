@@ -3818,3 +3818,45 @@
 - 当前仍未做 WebDAV / 账号系统
 - 当前仍未做冲突选择 UI
 - 当前仍未做复杂同步历史页
+
+## 2026-05-19 设置页数据与备份入口收口
+
+### 本轮目标
+- 收紧设置页里“数据导入 / 导出”和自动备份相关 UI
+- 不改现有导入 / 导出逻辑
+- 不改单独的自动备份逻辑
+- 只把 UI 调整成更简洁的入口
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - `Data` 区域现在只保留：
+    - `导入数据`
+    - `导出数据`
+    - `恢复备份`
+  - 不再显示：
+    - 数据目录
+    - SQLite 主库路径
+    - 自动备份目录
+    - 单独的自动备份卡片
+- 新增 `恢复备份` 行为：
+  - 点击后会读取最新一份自动备份
+  - 再沿用现有 `importSnapshot` 流程整体导入
+  - 导入前仍会弹确认
+- 更新 `electron/backup.ts`、`electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`
+  - 新增读取最新自动备份内容的 bridge：
+    - `readLatestAutoBackup()`
+
+### 关键决策
+- 自动备份逻辑本身不变，只收口 UI
+- “恢复备份”不新造恢复链路，直接复用现有导入数据语义
+- 当前仍不在设置页展示备份目录或备份列表
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前边界
+- 当前仍没有备份列表页
+- 当前仍只支持“恢复最新一份自动备份”
+- 当前仍未支持从设置页浏览多份自动备份

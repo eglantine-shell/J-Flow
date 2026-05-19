@@ -1,4 +1,4 @@
-import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { getSqliteAppData } from './sqlite.js'
@@ -95,6 +95,27 @@ export const getAutoBackupInfo = async (dataPath: string): Promise<AutoBackupInf
     directory,
     backupCount: filenames.length,
     latestBackupAt: latestFilename ? parseBackupTimestamp(latestFilename) : null,
+  }
+}
+
+export const readLatestAutoBackup = async (dataPath: string) => {
+  const directory = await ensureAutoBackupDirectory(dataPath)
+  const filenames = await getAutoBackupFilenames(directory)
+  const latestFilename = filenames[filenames.length - 1]
+
+  if (!latestFilename) {
+    return {
+      filePath: null,
+      content: null,
+    }
+  }
+
+  const filePath = toAutoBackupPath(directory, latestFilename)
+  const content = await readFile(filePath, 'utf8')
+
+  return {
+    filePath,
+    content,
   }
 }
 

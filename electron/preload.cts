@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('jflowDesktop', {
   saveJsonBackup: (payload: { suggestedFilename: string; content: string }) =>
     ipcRenderer.invoke('app:save-json-backup', payload),
   readJsonBackup: () => ipcRenderer.invoke('app:read-json-backup'),
+  readLatestAutoBackup: () => ipcRenderer.invoke('app:read-latest-auto-backup') as Promise<{
+    filePath: string | null
+    content: string | null
+  }>,
   openDataDirectory: () => ipcRenderer.invoke('app:open-data-directory'),
   getAutoBackupInfo: () => ipcRenderer.invoke('app:get-auto-backup-info') as Promise<{
     directory: string

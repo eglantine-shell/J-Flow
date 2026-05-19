@@ -50,6 +50,10 @@ type JFlowDesktopApi = {
     filePath: string | null
     content: string | null
   }>
+  readLatestAutoBackup: () => Promise<{
+    filePath: string | null
+    content: string | null
+  }>
   openDataDirectory: () => Promise<{
     success: boolean
     path: string

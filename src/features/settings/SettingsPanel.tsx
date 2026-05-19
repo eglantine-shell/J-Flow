@@ -26,9 +26,6 @@ type SettingsViewState = {
   lastSyncAttemptedAt: string | null
   lastSyncResult: LocalSyncResultSummary | null
   syncTargetPath: string | null
-  dataPath: string | null
-  databasePath: string | null
-  autoBackupDirectory: string | null
   autoBackupCount: number
   latestAutoBackupAt: string | null
 }
@@ -45,9 +42,6 @@ const initialViewState: SettingsViewState = {
   lastSyncAttemptedAt: null,
   lastSyncResult: null,
   syncTargetPath: null,
-  dataPath: null,
-  databasePath: null,
-  autoBackupDirectory: null,
   autoBackupCount: 0,
   latestAutoBackupAt: null,
 }
@@ -60,17 +54,6 @@ const buildBackupFilename = () => {
   const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
 
   return `j-flow-backup-${datePart}-${timePart}.json`
-}
-
-const formatBackupTime = (value: string | null) => {
-  if (!value) {
-    return '暂无自动备份'
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
 }
 
 const formatDateTime = (value: string | null) => {
@@ -126,9 +109,6 @@ export function SettingsPanel() {
           return
         }
 
-        const storageInfo = window.jflowDesktop
-          ? await window.jflowDesktop.getStorageInfo().catch(() => null)
-          : null
         const autoBackupInfo = window.jflowDesktop
           ? await window.jflowDesktop.getAutoBackupInfo().catch(() => null)
           : null
@@ -148,10 +128,6 @@ export function SettingsPanel() {
           lastSyncAttemptedAt: syncState?.lastSyncAttemptedAt ?? null,
           lastSyncResult: syncState?.lastSyncResult ?? null,
           syncTargetPath: syncState?.syncTargetPath ?? null,
-          dataPath: storageInfo?.dataPath ?? null,
-          databasePath: storageInfo?.databasePath ?? null,
-          autoBackupDirectory:
-            autoBackupInfo?.directory ?? storageInfo?.autoBackupDirectory ?? null,
           autoBackupCount: autoBackupInfo?.backupCount ?? 0,
           latestAutoBackupAt: autoBackupInfo?.latestBackupAt ?? null,
         })
@@ -204,7 +180,6 @@ export function SettingsPanel() {
 
     setViewState((current) => ({
       ...current,
-      autoBackupDirectory: autoBackupInfo.directory,
       autoBackupCount: autoBackupInfo.backupCount,
       latestAutoBackupAt: autoBackupInfo.latestBackupAt,
     }))
@@ -399,63 +374,39 @@ export function SettingsPanel() {
     })
   }
 
-  const openDesktopDataDirectory = async () => {
+  const restoreLatestAutoBackup = async () => {
     const desktopApi = window.jflowDesktop
 
     if (!desktopApi) {
       return
     }
 
-    await withSaving(async () => {
-      const result = await desktopApi.openDataDirectory()
+    const confirmed = window.confirm('确认恢复最新一份自动备份吗？恢复会覆盖当前本地数据。')
 
-      if (!result.success) {
-        throw new Error(result.errorMessage ?? '打开数据目录失败，请稍后重试。')
+    if (!confirmed) {
+      return
+    }
+
+    await withSaving(async () => {
+      const result = await desktopApi.readLatestAutoBackup()
+
+      if (!result.filePath || !result.content) {
+        throw new Error('当前还没有可恢复的自动备份。')
       }
 
-      setSuccessMessage(`已打开数据目录：${result.path}`)
-    })
-  }
-
-  const createDesktopAutoBackup = async () => {
-    const desktopApi = window.jflowDesktop
-
-    if (!desktopApi) {
-      return
-    }
-
-    await withSaving(async () => {
-      const result = await desktopApi.createAutoBackup()
+      const parsed = JSON.parse(result.content) as Parameters<
+        typeof appDataRepository.importSnapshot
+      >[0]
+      const imported = await appDataRepository.importSnapshot(parsed)
 
       setViewState((current) => ({
         ...current,
-        autoBackupDirectory: result.backupInfo.directory,
-        autoBackupCount: result.backupInfo.backupCount,
-        latestAutoBackupAt: result.backupInfo.latestBackupAt,
+        isLoading: false,
+        tieBreakerOrder: imported.settings.tieBreakerOrder,
+        completedAtRoundingMinutes: imported.settings.completedAtRoundingMinutes,
       }))
-      setSuccessMessage(
-        result.created && result.filePath
-          ? `已创建自动备份：${result.filePath}`
-          : '当前没有可备份的数据，或今日启动备份已存在。',
-      )
-    })
-  }
-
-  const openDesktopBackupDirectory = async () => {
-    const desktopApi = window.jflowDesktop
-
-    if (!desktopApi) {
-      return
-    }
-
-    await withSaving(async () => {
-      const result = await desktopApi.openBackupDirectory()
-
-      if (!result.success) {
-        throw new Error(result.errorMessage ?? '打开自动备份目录失败，请稍后重试。')
-      }
-
-      setSuccessMessage(`已打开自动备份目录：${result.path}`)
+      await refreshDesktopAutoBackupInfo()
+      setSuccessMessage('已恢复最新一份自动备份。')
     })
   }
 
@@ -747,39 +698,20 @@ export function SettingsPanel() {
               <h3>数据导入 / 导出</h3>
               <p>
                 {viewState.isDesktop
-                  ? '桌面环境下使用系统文件对话框导入 / 导出 JSON 备份；Web 环境仍保留浏览器下载 / 上传回退。'
+                  ? '导入与导出仍使用原来的 JSON 备份格式；“恢复备份”会直接导入最新一份自动备份。'
                   : '导出当前本地数据，或用备份文件整体覆盖当前本地数据。'}
               </p>
             </div>
 
-            {viewState.isDesktop ? (
-              <div className="settings-data-path-card">
-                <p className="settings-data-path-card__label">当前桌面数据目录</p>
-                <code className="settings-data-path-card__value">
-                  {viewState.dataPath ?? '读取中...'}
-                </code>
-                <p className="settings-data-path-card__label">当前 SQLite 主库文件</p>
-                <code className="settings-data-path-card__value">
-                  {viewState.databasePath ?? '读取中...'}
-                </code>
-                <p className="settings-data-path-card__hint">
-                  当前桌面运行时主库由 Electron main 持有，主库文件固定保存在这个数据目录里。
-                </p>
-                <p className="settings-data-path-card__hint">
-                  自动备份目录位于 `backups/`；手动导入 / 导出默认从这个目录起步，但导出的 JSON 会保存到你在系统对话框里选择的位置。
-                </p>
-              </div>
-            ) : (
-              <input
-                ref={importInputRef}
-                className="settings-file-input"
-                type="file"
-                accept="application/json,.json"
-                onChange={(event) => {
-                  void handleImportInputChange(event)
-                }}
-              />
-            )}
+            <input
+              ref={importInputRef}
+              className="settings-file-input"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                void handleImportInputChange(event)
+              }}
+            />
 
             <div className="settings-choice-row settings-choice-row--tools">
               <button
@@ -789,8 +721,8 @@ export function SettingsPanel() {
                 onClick={() => {
                   void exportBackup()
                 }}
-              >
-                导出当前数据
+                >
+                导出数据
               </button>
               <button
                 className="check-tile"
@@ -805,71 +737,22 @@ export function SettingsPanel() {
                   importInputRef.current?.click()
                 }}
               >
-                导入备份文件
+                导入数据
               </button>
               {viewState.isDesktop ? (
                 <button
                   className="check-tile"
                   type="button"
-                  disabled={isSaving || !viewState.dataPath}
+                  disabled={isSaving || viewState.autoBackupCount === 0}
                   onClick={() => {
-                    void openDesktopDataDirectory()
+                    void restoreLatestAutoBackup()
                   }}
                 >
-                  打开数据目录
+                  恢复备份
                 </button>
               ) : null}
             </div>
           </section>
-
-          {viewState.isDesktop ? (
-            <section className="settings-panel__section settings-panel__section--backup">
-              <div className="settings-panel__section-header">
-                <p className="eyebrow">Backup</p>
-                <h3>自动备份</h3>
-                <p>
-                  桌面版默认启用自动备份，备份文件保存在数据目录下的
-                  `backups/` 中，当前最多保留最近 20 份自动备份。
-                </p>
-              </div>
-
-              <div className="settings-data-path-card">
-                <p className="settings-data-path-card__label">自动备份目录</p>
-                <code className="settings-data-path-card__value">
-                  {viewState.autoBackupDirectory ?? '读取中...'}
-                </code>
-                <p className="settings-data-path-card__hint">
-                  最近一次自动备份：{formatBackupTime(viewState.latestAutoBackupAt)}
-                </p>
-                <p className="settings-data-path-card__hint">
-                  当前自动备份数量：{viewState.autoBackupCount}
-                </p>
-              </div>
-
-              <div className="settings-choice-row settings-choice-row--tools">
-                <button
-                  className="check-tile"
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => {
-                    void createDesktopAutoBackup()
-                  }}
-                >
-                  立即创建备份
-                </button>
-                <button
-                  className="check-tile"
-                  type="button"
-                  disabled={isSaving || !viewState.autoBackupDirectory}
-                  onClick={() => {
-                    void openDesktopBackupDirectory()
-                  }}
-                >
-                  打开备份目录
-                </button>
-              </div>
-            </section>
-          ) : null}
 
           {viewState.isDesktop ? (
             <section className="settings-panel__section settings-panel__section--data">
