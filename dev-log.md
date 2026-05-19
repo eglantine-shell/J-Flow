@@ -3466,3 +3466,355 @@
 - 仍未写入 `items/`
 - 仍未写入 `tombstones/`
 - 仍未实现“立即同步”
+
+## 2026-05-18 Sync 2 同步文件夹准备层
+
+### 本轮目标
+- 只做 `Sync 2`
+- 落地同步文件夹路径保存、目录可读写检查与同步目录初始化
+- 不开始真正同步业务数据
+
+### 本轮修改
+- 更新 `electron/sqlite.ts`
+  - `sync_meta` 新增本机 key：
+    - `syncTargetPath`
+  - 新增：
+    - `setSqliteSyncTargetPath`
+    - `clearSqliteSyncTargetPath`
+  - `getSqliteLocalSyncState` 已扩展返回：
+    - `syncTargetPath`
+- 新增 `electron/sync-folder.ts`
+  - 负责同步目录准备层能力：
+    - 检查目录存在且为目录
+    - 检查读写权限
+    - 执行临时 JSON 写入 / 读回 / 删除测试
+    - 初始化 `J-Flow Sync` 目录骨架
+    - 读写并校验 `sync-info.json`
+    - 写入 `devices/<deviceId>.json`
+    - 通过 `.tmp + rename` 做 metadata 原子写入
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`
+  - `repository.sync` 新增：
+    - `chooseTargetPath()`
+    - `setTargetPath(path)`
+    - `clearTargetPath()`
+    - `testTargetPath(path?)`
+- 更新 `src/db/storage.ts`
+  - `appDataRepository.sync` 已对齐新增 bridge 方法
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 新增一个轻量“数据与同步”入口
+  - 当前支持：
+    - 查看当前设备 ID
+    - 查看当前同步文件夹
+    - 选择同步文件夹
+    - 测试同步文件夹
+    - 清除同步文件夹
+  - 当前不包含：
+    - 立即同步
+    - items / tombstones 状态展示
+- 新增测试：
+  - `electron/sync-folder.test.ts`
+
+### 关键决策
+- `syncTargetPath` 继续存放在本机 SQLite `sync_meta`，不参与跨设备同步。
+- 第一版若用户选择的路径不存在，直接返回错误，不擅自创建父级路径。
+- `sync-info.json` 若已存在且合法，则保留原 `createdAt`，仅刷新 `updatedAt`。
+- `devices/<deviceId>.json` 当前只记录设备存在和最近可用状态，不当作业务同步结果。
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sync-folder.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 仍未实现 `items/` 导出
+- 仍未实现 `tombstones/` 导出
+- 仍未实现“立即同步”
+- 仍未开始远端 item / tombstone 读取
+- 仍未开始任何合并策略或 `last-write-wins`
+
+## 2026-05-18 Sync 3 本地待同步变化导出
+
+### 本轮目标
+- 只做 `Sync 3`
+- 将本地 `sync_changes` 中待同步变化导出到 sync folder
+- 不开始远端读取、合并或冲突处理
+
+### 本轮修改
+- 新增 `electron/sync-export.ts`
+  - 新增：
+    - `exportLocalChangesToSyncFolder`
+    - `exportPendingSyncChanges`
+  - 当前导出规则：
+    - `sync_changes upsert` -> `items/<entityDir>/<id>.json`
+    - `sync_changes delete` -> `tombstones/<entityDir>/<id>.json`
+  - 单条文件写入成功后，才更新对应 `sync_changes.syncedAt`
+  - 部分失败时返回：
+    - 成功数
+    - 失败数
+    - 失败项列表
+- 更新 `electron/sqlite.ts`
+  - 新增：
+    - `listPendingSqliteSyncChanges`
+    - `markSqliteSyncChangeSyncedAt`
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`、`src/db/storage.ts`
+  - `repository.sync` 新增：
+    - `exportLocalChanges()`
+- 新增 `electron/sync-export.test.ts`
+  - 覆盖：
+    - `dayPlanItem` upsert 导出 item
+    - `dayPlanItem` delete 导出 tombstone
+    - 成功写入后回写 `syncedAt`
+    - upsert 实体缺失时报错且保持未同步
+    - 部分成功时成功项写 `syncedAt`，失败项保持待同步
+
+### 关键决策
+- 本轮没有把“同步前自动备份”硬塞进导出主流程。
+  - 若后续完整“立即同步”闭环需要自动备份，再在 Sync 5 串入。
+- 本轮严格不更新本机 `lastSyncedAt`。
+  - 当前只更新：
+    - `sync_changes.syncedAt`
+    - Sync 目录中的 metadata 文件时间
+- 若 `upsert` 对应实体本地已不存在：
+  - 当前直接返回失败
+  - 不自动转成 tombstone
+  - 以便暴露本地 change log / 删除链路异常
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sync-export.test.ts electron/sync-folder.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 仍未读取远端 `items/`
+- 仍未读取远端 `tombstones/`
+- 仍未做本地 / 远端合并
+- 仍未做 `last-write-wins`
+- 仍未实现“立即同步”按钮
+- 仍未做自动同步
+
+## 2026-05-18 Sync 4 远端变化导入与本地合并
+
+### 本轮目标
+- 只做 `Sync 4`
+- 读取 sync folder 中的远端 `items/` 与 `tombstones/`
+- 按第一版 `last-write-wins` 规则合并到本地 SQLite
+- 远端导入不制造新的待上送 `sync_changes`
+
+### 本轮修改
+- 新增 `electron/sync-import.ts`
+  - 新增：
+    - `importRemoteChangesFromSyncFolder`
+    - `applyRemoteSyncChanges`
+  - 当前能力：
+    - 扫描远端 `items/` / `tombstones/`
+    - 校验远端 JSON
+    - 按目录推断 `entityType`
+    - 按时间排序后逐条应用
+    - 返回 `applied / skipped / failed` 统计
+- 更新 `electron/sqlite.ts`
+  - 新增：
+    - `getSqliteSyncChangeByEntity`
+    - `applyRemoteSqliteSyncChangeState`
+    - `applyRemoteSqliteSettings`
+    - `applyRemoteSqliteSceneTag`
+    - `applyRemoteSqliteActivityType`
+    - `applyRemoteSqliteTaskTemplate`
+    - `applyRemoteSqliteRecurringTaskInstance`
+    - `applyRemoteSqliteDayPlanItem`
+    - `applyRemoteSqliteDelete`
+  - 这些方法用于“静默导入”：
+    - 会更新本地 SQLite
+    - 但不会制造新的待上送变化
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`、`src/db/storage.ts`
+  - `repository.sync` 新增：
+    - `importRemoteChanges()`
+- 新增 `electron/sync-import.test.ts`
+  - 覆盖：
+    - 远端 item 更新本地
+    - 远端旧 item 跳过
+    - 远端 tombstone 删除本地
+    - 远端旧 tombstone 跳过
+    - 本地已删除 + 远端旧 item 不复活
+    - 本地已删除 + 远端新 item 可复活
+    - 损坏 JSON / 目录与 `entityType` 不匹配 / 缺少 `deletedAt` 作为 failure
+    - 不更新 `lastSyncedAt`
+    - 不污染待上送 `sync_changes`
+
+### 关键决策
+- 当前不做“读到远端记录后直接跳过本机自己导出的 deviceId 特判”。
+  - 允许照常读取
+  - 再用 `last-write-wins` 判断自然跳过
+- 远端导入写入本地时，不走普通本地变更路径。
+  - 改为走“静默导入”路径
+  - 并把对应 `sync_changes` 状态更新为已同步状态，而不是新的待上送变化
+- 当前不更新本机 `lastSyncedAt`
+  - 因为还不是完整同步闭环
+- 当前也不把“同步前自动备份”硬塞进导入主流程
+  - 等完整“立即同步”流程再统一串联
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sync-import.test.ts electron/sync-export.test.ts electron/sync-folder.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 仍未实现完整“立即同步”按钮
+- 仍未实现自动同步
+- 仍未实现人工冲突选择
+- 仍未更新 `lastSyncedAt`
+- 仍未把备份串入同步主流程
+
+## 2026-05-18 Sync 5 最小手动同步闭环
+
+### 本轮目标
+- 只做 `Sync 5`
+- 串起最小手动同步闭环：
+  - 检查同步路径
+  - 准备同步目录
+  - 获取最小锁
+  - 创建本地自动备份
+  - 导入远端变化
+  - 导出本地变化
+  - 汇总结果
+  - 仅在全链路完全成功时写 `lastSyncedAt`
+- 本轮不接设置页 UI
+
+### 本轮修改
+- 新增 `electron/sync-now.ts`
+  - 新增：
+    - `runManualSync`
+  - 当前能力：
+    - 编排 `prepare -> lock -> backup -> import -> export`
+    - 返回 `SyncNowResult`
+    - `partial / failed` 时不写 `lastSyncedAt`
+    - `finally` 中释放自己的锁
+- 更新 `electron/sync-folder.ts`
+  - 新增：
+    - `acquireSyncLock`
+    - `releaseSyncLock`
+    - `updateSyncDeviceInfo`
+  - 当前锁策略：
+    - 使用 `locks/sync_<deviceId>.json`
+    - 若发现其他设备未过期锁，直接返回失败
+    - 过期或损坏锁文件可清理
+    - 不删除其他设备未过期锁
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`、`src/db/storage.ts`
+  - `repository.sync` 新增：
+    - `syncNow()`
+- 新增 `electron/sync-now.test.ts`
+  - 覆盖：
+    - 完全成功
+    - 无变化但成功
+    - import failure -> partial
+    - export failure -> partial
+    - 备份失败 -> failed
+    - 路径缺失 -> failed
+    - 锁冲突 -> failed
+    - 异常时释放自己的锁
+    - 成功闭环不制造额外待上送 `sync_changes`
+- 顺手修正 `electron/sync-import.ts`
+  - `settings` 类型的 sync item 不再强制要求 `data.id`
+  - 避免 settings 导入在无变化闭环里被误判为 failure
+
+### 关键决策
+- `lastSyncedAt` 只在完整闭环完全成功时写入
+  - 写入时间使用 `completedAt`
+  - 即使没有任何变化，只要整轮成功，也会写入
+- 若 `import` 或 `export` 任一步存在 failure：
+  - 本轮返回 `partial`
+  - 保留已成功应用 / 导出的部分
+  - 不写本机 `lastSyncedAt`
+  - 不写远端 `devices/<deviceId>.json.lastSyncedAt`
+- 自动备份只在 `syncNow` 主流程开头做一次
+  - 备份失败直接中止
+  - 不在 `import / export` 内部重复备份
+- 锁释放固定放在 `finally`
+  - 即使失败或抛异常，也尽量释放自己的锁
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sync-now.test.ts electron/sync-import.test.ts electron/sync-export.test.ts electron/sync-folder.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 当前仍未接设置页“立即同步”按钮
+- 当前仍未做自动同步
+- 当前仍未做 WebDAV / 账号系统
+- 当前仍未做人工冲突选择
+- 当前仍未做字段级合并
+
+## 2026-05-19 Sync 5 UI 薄接入
+
+### 本轮目标
+- 只在设置页“数据与同步”区域接入一张最小同步卡片
+- 复用已有：
+  - `repository.sync.getState()`
+  - `repository.sync.chooseTargetPath()`
+  - `repository.sync.openTargetPath()`
+  - `repository.sync.setTargetPath(path)`
+  - `repository.sync.clearTargetPath()`
+  - `repository.sync.testTargetPath(path?)`
+  - `repository.sync.syncNow()`
+- 不改同步核心流程，不做复杂同步中心
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`
+  - 将原来的同步按钮区重构为同步卡片
+  - 新增：
+    - 状态区
+    - 同步文件夹区
+    - 最近结果区
+    - 主操作区
+    - 详情折叠区
+  - 当前支持：
+    - 未设置时选择同步文件夹
+    - 已设置时立即同步
+    - 打开 / 更改同步文件夹
+    - 查看最近一次同步结果摘要
+    - 在详情区查看：
+      - `deviceId`
+      - `syncVersion`
+      - import / export 统计
+      - 最近一次备份路径
+      - 完整错误
+- 更新 `src/styles/globals.css`
+  - 新增同步卡片相关样式
+  - 为 `not configured / syncing / success / partial / failed` 提供轻量状态视觉
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`、`src/db/storage.ts`
+  - `repository.sync` 新增：
+    - `openTargetPath()`
+- 更新 `electron/sqlite.ts` 与 `electron/sync-now.ts`
+  - 新增本机同步结果元数据持久化：
+    - `lastSyncAttemptedAt`
+    - `lastSyncResult`
+  - 当前同步卡片刷新后仍可读取最近一次同步摘要，而不是只靠页面内临时 state
+
+### 关键决策
+- 同步卡片保持“桌面偏好设置”风格，不扩展成同步中心
+- `deviceId`、`syncVersion`、完整错误、备份路径全部放进折叠详情
+- 同步主区只保留：
+  - 状态
+  - 文件夹
+  - 最近结果
+  - 一个主按钮
+- 当前为兼容“已设置文件夹但尚未第一次同步”的情况，UI 内部增加了一个轻量 `ready` 展示状态：
+  - 文案：`同步已就绪`
+  - 视觉保持中性
+  - 不改变同步核心状态机
+
+### 验证结果
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/sync-now.test.ts electron/sync-import.test.ts electron/sync-export.test.ts electron/sync-folder.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/db/storage.desktop.test.ts`：通过
+
+### 当前边界
+- 当前仍只支持手动同步
+- 当前仍未做自动同步 / 定时同步 / 后台同步
+- 当前仍未做 WebDAV / 账号系统
+- 当前仍未做冲突选择 UI
+- 当前仍未做复杂同步历史页

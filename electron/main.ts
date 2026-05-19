@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,6 +10,7 @@ import {
   maybeCreateStartupAutoBackup,
 } from './backup.js'
 import {
+  clearSqliteSyncTargetPath,
   createSqliteActivityType,
   createSqliteDayPlanItem,
   createSqliteRecurringTaskInstance,
@@ -38,6 +40,7 @@ import {
   listSqliteSceneTags,
   listSqliteTaskTemplates,
   replaceSqliteSnapshot,
+  setSqliteSyncTargetPath,
   updateSqliteActivityType,
   updateSqliteDayPlanItem,
   updateSqliteRecurringTaskInstance,
@@ -45,6 +48,10 @@ import {
   updateSqliteSettings,
   updateSqliteTaskTemplate,
 } from './sqlite.js'
+import { exportLocalChangesToSyncFolder } from './sync-export.js'
+import { importRemoteChangesFromSyncFolder } from './sync-import.js'
+import { runManualSync } from './sync-now.js'
+import { testSyncTargetDirectory } from './sync-folder.js'
 import type {
   ActivityType,
   ActivityTypeUpdateInput,
@@ -52,10 +59,15 @@ import type {
   AppSettingsUpdateInput,
   DayPlanItem,
   DayPlanItemUpdateInput,
+  LocalSyncState,
   RecurringTaskInstance,
   RecurringTaskInstanceUpdateInput,
   SceneTag,
   SceneTagUpdateInput,
+  SyncExportResult,
+  SyncImportResult,
+  SyncNowResult,
+  SyncTargetTestResult,
   TaskTemplate,
   TaskTemplateUpdateInput,
 } from './types.js'
@@ -326,10 +338,115 @@ const registerAppIpc = () => {
     return getSqliteLocalSyncState(dataPath)
   })
 
+  ipcMain.handle('db:sync:choose-target-path', async () => {
+    const dataPath = await ensureDataDirectory()
+    const syncState = getSqliteLocalSyncState(dataPath)
+    const result = await dialog.showOpenDialog({
+      title: '选择 J-Flow 同步文件夹',
+      defaultPath: syncState.syncTargetPath ?? app.getPath('home'),
+      properties: ['openDirectory'],
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('db:sync:open-target-path', async () => {
+    const dataPath = await ensureDataDirectory()
+    const syncState = getSqliteLocalSyncState(dataPath)
+
+    if (!syncState.syncTargetPath) {
+      return {
+        success: false,
+        path: null,
+        errorMessage: '当前还没有设置同步文件夹路径。',
+      }
+    }
+
+    const errorMessage = await shell.openPath(syncState.syncTargetPath)
+
+    return {
+      success: errorMessage.length === 0,
+      path: syncState.syncTargetPath,
+      errorMessage: errorMessage || null,
+    }
+  })
+
+  ipcMain.handle('db:sync:set-target-path', async (_event, targetPath: string): Promise<LocalSyncState> => {
+    const dataPath = await ensureDataDirectory()
+
+    return setSqliteSyncTargetPath(dataPath, targetPath)
+  })
+
+  ipcMain.handle('db:sync:clear-target-path', async (): Promise<LocalSyncState> => {
+    const dataPath = await ensureDataDirectory()
+
+    return clearSqliteSyncTargetPath(dataPath)
+  })
+
+  ipcMain.handle(
+    'db:sync:test-target-path',
+    async (_event, targetPath?: string): Promise<SyncTargetTestResult> => {
+      const dataPath = await ensureDataDirectory()
+      const syncState = getSqliteLocalSyncState(dataPath)
+      const nextTargetPath = targetPath?.trim() || syncState.syncTargetPath
+
+      if (!nextTargetPath) {
+        return {
+          success: false,
+          targetPath: '',
+          syncVersion: null,
+          deviceId: syncState.deviceId,
+          message: '同步文件夹测试失败。',
+          error: '当前还没有设置同步文件夹路径。',
+        }
+      }
+
+      return testSyncTargetDirectory({
+        targetPath: nextTargetPath,
+        deviceId: syncState.deviceId,
+        deviceName: hostname(),
+        platform: process.platform,
+        appVersion: app.getVersion(),
+        lastSyncedAt: syncState.lastSyncedAt,
+      })
+    },
+  )
+
   ipcMain.handle('db:sync:list-changes', async () => {
     const dataPath = await ensureDataDirectory()
 
     return listSqliteSyncChanges(dataPath)
+  })
+
+  ipcMain.handle('db:sync:export-local-changes', async (): Promise<SyncExportResult> => {
+    const dataPath = await ensureDataDirectory()
+
+    return exportLocalChangesToSyncFolder({
+      dataPath,
+      appVersion: app.getVersion(),
+    })
+  })
+
+  ipcMain.handle('db:sync:import-remote-changes', async (): Promise<SyncImportResult> => {
+    const dataPath = await ensureDataDirectory()
+
+    return importRemoteChangesFromSyncFolder({
+      dataPath,
+      appVersion: app.getVersion(),
+    })
+  })
+
+  ipcMain.handle('db:sync:sync-now', async (): Promise<SyncNowResult> => {
+    const dataPath = await ensureDataDirectory()
+
+    return runManualSync({
+      dataPath,
+      appVersion: app.getVersion(),
+    })
   })
 
   ipcMain.handle('db:settings:update', async (_event, payload: AppSettingsUpdateInput) => {

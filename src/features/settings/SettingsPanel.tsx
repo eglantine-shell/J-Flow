@@ -6,13 +6,26 @@ import {
   COMPLETED_AT_ROUNDING_OPTIONS,
   DEFAULT_COMPLETED_AT_ROUNDING_MINUTES,
 } from '@/features/todo/completed-at-rounding'
-import type { CompletedAtRoundingMinutes, TieBreakerOrder } from '@/types'
+import type {
+  CompletedAtRoundingMinutes,
+  LocalSyncResultSummary,
+  LocalSyncState,
+  SyncNowResult,
+  TieBreakerOrder,
+} from '@/types'
 
 type SettingsViewState = {
   isLoading: boolean
   tieBreakerOrder: TieBreakerOrder
   completedAtRoundingMinutes: CompletedAtRoundingMinutes
   isDesktop: boolean
+  deviceId: string | null
+  lastSyncedAt: string | null
+  lastSyncStatus: string | null
+  lastSyncError: string | null
+  lastSyncAttemptedAt: string | null
+  lastSyncResult: LocalSyncResultSummary | null
+  syncTargetPath: string | null
   dataPath: string | null
   databasePath: string | null
   autoBackupDirectory: string | null
@@ -25,6 +38,13 @@ const initialViewState: SettingsViewState = {
   tieBreakerOrder: 'desc',
   completedAtRoundingMinutes: DEFAULT_COMPLETED_AT_ROUNDING_MINUTES,
   isDesktop: false,
+  deviceId: null,
+  lastSyncedAt: null,
+  lastSyncStatus: null,
+  lastSyncError: null,
+  lastSyncAttemptedAt: null,
+  lastSyncResult: null,
+  syncTargetPath: null,
   dataPath: null,
   databasePath: null,
   autoBackupDirectory: null,
@@ -53,12 +73,47 @@ const formatBackupTime = (value: string | null) => {
   }).format(new Date(value))
 }
 
+const formatDateTime = (value: string | null) => {
+  if (!value) {
+    return '暂无记录'
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+const getSyncFolderName = (value: string | null) => {
+  if (!value) {
+    return '尚未选择'
+  }
+
+  const parts = value.split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] ?? value
+}
+
+const applySyncStateToViewState = (
+  current: SettingsViewState,
+  syncState: LocalSyncState | null,
+): SettingsViewState => ({
+  ...current,
+  deviceId: syncState?.deviceId ?? current.deviceId,
+  lastSyncedAt: syncState?.lastSyncedAt ?? null,
+  lastSyncStatus: syncState?.lastSyncStatus ?? null,
+  lastSyncError: syncState?.lastSyncError ?? null,
+  lastSyncAttemptedAt: syncState?.lastSyncAttemptedAt ?? null,
+  lastSyncResult: syncState?.lastSyncResult ?? null,
+  syncTargetPath: syncState?.syncTargetPath ?? null,
+})
+
 export function SettingsPanel() {
   const navigate = useNavigate()
   const [viewState, setViewState] = useState<SettingsViewState>(initialViewState)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -77,12 +132,22 @@ export function SettingsPanel() {
         const autoBackupInfo = window.jflowDesktop
           ? await window.jflowDesktop.getAutoBackupInfo().catch(() => null)
           : null
+        const syncState = window.jflowDesktop
+          ? await window.jflowDesktop.repository.sync.getState().catch(() => null)
+          : null
 
         setViewState({
           isLoading: false,
           tieBreakerOrder: appData.settings.tieBreakerOrder,
           completedAtRoundingMinutes: appData.settings.completedAtRoundingMinutes,
           isDesktop: Boolean(window.jflowDesktop),
+          deviceId: syncState?.deviceId ?? null,
+          lastSyncedAt: syncState?.lastSyncedAt ?? null,
+          lastSyncStatus: syncState?.lastSyncStatus ?? null,
+          lastSyncError: syncState?.lastSyncError ?? null,
+          lastSyncAttemptedAt: syncState?.lastSyncAttemptedAt ?? null,
+          lastSyncResult: syncState?.lastSyncResult ?? null,
+          syncTargetPath: syncState?.syncTargetPath ?? null,
           dataPath: storageInfo?.dataPath ?? null,
           databasePath: storageInfo?.databasePath ?? null,
           autoBackupDirectory:
@@ -143,6 +208,20 @@ export function SettingsPanel() {
       autoBackupCount: autoBackupInfo.backupCount,
       latestAutoBackupAt: autoBackupInfo.latestBackupAt,
     }))
+  }
+
+  const refreshDesktopSyncState = async () => {
+    if (!window.jflowDesktop) {
+      return
+    }
+
+    const syncState = await window.jflowDesktop.repository.sync.getState().catch(() => null)
+
+    if (!syncState) {
+      return
+    }
+
+    setViewState((current) => applySyncStateToViewState(current, syncState))
   }
 
   const updateTieBreakerOrder = async (tieBreakerOrder: TieBreakerOrder) => {
@@ -380,6 +459,191 @@ export function SettingsPanel() {
     })
   }
 
+  const chooseDesktopSyncDirectory = async () => {
+    const desktopApi = window.jflowDesktop
+
+    if (!desktopApi) {
+      return
+    }
+
+    await withSaving(async () => {
+      const selectedPath = await desktopApi.repository.sync.chooseTargetPath()
+
+      if (!selectedPath) {
+        return
+      }
+
+      const testResult = await desktopApi.repository.sync.testTargetPath(selectedPath)
+
+      if (!testResult.success) {
+        throw new Error(testResult.error ?? testResult.message)
+      }
+
+      const nextState = await desktopApi.repository.sync.setTargetPath(selectedPath)
+
+      setViewState((current) => applySyncStateToViewState(current, nextState))
+      setSuccessMessage(`已连接同步文件夹：${getSyncFolderName(selectedPath)}`)
+    })
+  }
+
+  const testDesktopSyncDirectory = async () => {
+    const desktopApi = window.jflowDesktop
+
+    if (!desktopApi) {
+      return
+    }
+
+    await withSaving(async () => {
+      const result = await desktopApi.repository.sync.testTargetPath()
+
+      if (!result.success) {
+        throw new Error(result.error ?? result.message)
+      }
+
+      setSuccessMessage(result.message)
+    })
+  }
+
+  const clearDesktopSyncDirectory = async () => {
+    const desktopApi = window.jflowDesktop
+
+    if (!desktopApi) {
+      return
+    }
+
+    const shouldClear = window.confirm('确认清除当前同步文件夹吗？这不会删除文件夹内容，只会移除本机的同步入口。')
+
+    if (!shouldClear) {
+      return
+    }
+
+    await withSaving(async () => {
+      const nextState = await desktopApi.repository.sync.clearTargetPath()
+
+      setViewState((current) => applySyncStateToViewState(current, nextState))
+      setSuccessMessage('已清除同步文件夹路径。')
+    })
+  }
+
+  const openDesktopSyncDirectory = async () => {
+    const desktopApi = window.jflowDesktop
+
+    if (!desktopApi) {
+      return
+    }
+
+    await withSaving(async () => {
+      const result = await desktopApi.repository.sync.openTargetPath()
+
+      if (!result.success) {
+        throw new Error(result.errorMessage ?? '打开同步文件夹失败，请稍后重试。')
+      }
+
+      setSuccessMessage(`已打开同步文件夹：${result.path}`)
+    })
+  }
+
+  const runDesktopManualSync = async () => {
+    const desktopApi = window.jflowDesktop
+
+    if (!desktopApi) {
+      return
+    }
+
+    setIsSyncing(true)
+    setErrorMessage(null)
+    setSuccessMessage(null)
+
+    try {
+      const result = (await desktopApi.repository.sync.syncNow()) as SyncNowResult
+      await refreshDesktopSyncState()
+      await refreshDesktopAutoBackupInfo()
+
+      if (result.status === 'success') {
+        setSuccessMessage('同步已完成。')
+      } else if (result.status === 'partial') {
+        setErrorMessage('同步已完成部分内容，请查看详情。')
+      } else {
+        throw new Error(result.errors[0] ?? '同步失败，请稍后重试。')
+      }
+    } catch (error: unknown) {
+      await refreshDesktopSyncState()
+      setErrorMessage(error instanceof Error ? error.message : '同步失败，请稍后重试。')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const syncCardStatus = (() => {
+    if (!viewState.syncTargetPath) {
+      return 'not_configured' as const
+    }
+
+    if (isSyncing) {
+      return 'syncing' as const
+    }
+
+    if (viewState.lastSyncStatus === 'success') {
+      return 'success' as const
+    }
+
+    if (viewState.lastSyncStatus === 'partial') {
+      return 'partial' as const
+    }
+
+    if (viewState.lastSyncStatus === 'failed') {
+      return 'failed' as const
+    }
+
+    return 'ready' as const
+  })()
+
+  const syncStatusTitle =
+    syncCardStatus === 'not_configured'
+      ? '未设置同步文件夹'
+      : syncCardStatus === 'syncing'
+        ? '正在同步'
+        : syncCardStatus === 'success'
+          ? '同步成功'
+          : syncCardStatus === 'partial'
+            ? '部分完成'
+            : syncCardStatus === 'failed'
+              ? '同步失败'
+              : '同步已就绪'
+
+  const syncStatusDescription =
+    syncCardStatus === 'not_configured'
+      ? '选择一个同步文件夹后，即可在多台桌面设备之间手动同步。'
+      : syncCardStatus === 'syncing'
+        ? '正在导入与导出变化…'
+        : syncCardStatus === 'success'
+          ? `上次同步：${formatDateTime(viewState.lastSyncedAt)}`
+          : syncCardStatus === 'partial'
+            ? `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
+            : syncCardStatus === 'failed'
+              ? `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
+              : '同步文件夹已连接，可以随时手动同步。'
+
+  const syncResultSummary =
+    syncCardStatus === 'syncing'
+      ? '正在导入与导出变化…'
+      : syncCardStatus === 'success'
+        ? `应用 ${viewState.lastSyncResult?.importResult?.appliedCount ?? 0} 条远端变化，导出 ${viewState.lastSyncResult?.exportResult?.exportedCount ?? 0} 条本地变化`
+        : syncCardStatus === 'partial'
+          ? `已完成部分同步，${(viewState.lastSyncResult?.importResult?.failedCount ?? 0) + (viewState.lastSyncResult?.exportResult?.failedCount ?? 0)} 条失败`
+          : syncCardStatus === 'failed'
+            ? '本次同步未完成'
+            : syncCardStatus === 'ready'
+              ? '尚未开始同步'
+              : '尚未同步'
+
+  const syncPrimaryActionLabel =
+    syncCardStatus === 'not_configured'
+      ? '选择同步文件夹'
+      : syncCardStatus === 'syncing'
+        ? '同步中…'
+        : '立即同步'
+
   if (viewState.isLoading) {
     return (
       <div className="page-stack">
@@ -603,6 +867,176 @@ export function SettingsPanel() {
                 >
                   打开备份目录
                 </button>
+              </div>
+            </section>
+          ) : null}
+
+          {viewState.isDesktop ? (
+            <section className="settings-panel__section settings-panel__section--data">
+              <div className="settings-panel__section-header">
+                <p className="eyebrow">Sync</p>
+                <h3>同步</h3>
+                <p>通过同步文件夹，在多台桌面设备之间手动同步数据。</p>
+              </div>
+
+              <div
+                className={`settings-sync-card settings-sync-card--${syncCardStatus.replace('_', '-')}`}
+              >
+                <div className="settings-sync-card__status">
+                  <span
+                    className={`settings-sync-card__status-icon settings-sync-card__status-icon--${syncCardStatus.replace('_', '-')}`}
+                    aria-hidden="true"
+                  />
+                  <div className="settings-sync-card__status-copy">
+                    <p className="settings-sync-card__status-title">{syncStatusTitle}</p>
+                    <p className="settings-sync-card__status-description">
+                      {syncStatusDescription}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="settings-sync-card__row">
+                  <div className="settings-sync-card__meta">
+                    <p className="settings-sync-card__label">同步文件夹</p>
+                    <p className="settings-sync-card__value">
+                      {getSyncFolderName(viewState.syncTargetPath)}
+                    </p>
+                    {viewState.syncTargetPath ? (
+                      <p
+                        className="settings-sync-card__path"
+                        title={viewState.syncTargetPath}
+                      >
+                        {viewState.syncTargetPath}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="settings-sync-card__inline-actions">
+                    <button
+                      className="ghost-button ghost-button--compact"
+                      type="button"
+                      disabled={isSaving || isSyncing || !viewState.syncTargetPath}
+                      onClick={() => {
+                        void openDesktopSyncDirectory()
+                      }}
+                    >
+                      打开
+                    </button>
+                    <button
+                      className="ghost-button ghost-button--compact"
+                      type="button"
+                      disabled={isSaving || isSyncing}
+                      onClick={() => {
+                        void chooseDesktopSyncDirectory()
+                      }}
+                    >
+                      更改
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-sync-card__row settings-sync-card__row--result">
+                  <div className="settings-sync-card__meta">
+                    <p className="settings-sync-card__label">最近结果</p>
+                    <p className="settings-sync-card__result">{syncResultSummary}</p>
+                  </div>
+                </div>
+
+                <div className="settings-sync-card__actions">
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={isSaving || isSyncing}
+                    onClick={() => {
+                      if (!viewState.syncTargetPath) {
+                        void chooseDesktopSyncDirectory()
+                        return
+                      }
+
+                      void runDesktopManualSync()
+                    }}
+                  >
+                    {syncPrimaryActionLabel}
+                  </button>
+                </div>
+
+                <details className="settings-sync-card__details">
+                  <summary className="settings-sync-card__details-summary">查看详情</summary>
+                  <div className="settings-sync-card__details-body">
+                    <div className="settings-sync-card__details-grid">
+                      <div>
+                        <p className="settings-sync-card__label">上次同步时间</p>
+                        <p className="settings-sync-card__detail-value">
+                          {formatDateTime(viewState.lastSyncedAt)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="settings-sync-card__label">deviceId</p>
+                        <p className="settings-sync-card__detail-value settings-sync-card__detail-value--mono">
+                          {viewState.deviceId ?? '暂无记录'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="settings-sync-card__label">syncVersion</p>
+                        <p className="settings-sync-card__detail-value">1</p>
+                      </div>
+                      <div>
+                        <p className="settings-sync-card__label">远端导入</p>
+                        <p className="settings-sync-card__detail-value">
+                          应用 {viewState.lastSyncResult?.importResult?.appliedCount ?? 0}，跳过{' '}
+                          {viewState.lastSyncResult?.importResult?.skippedCount ?? 0}，失败{' '}
+                          {viewState.lastSyncResult?.importResult?.failedCount ?? 0}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="settings-sync-card__label">本地导出</p>
+                        <p className="settings-sync-card__detail-value">
+                          导出 {viewState.lastSyncResult?.exportResult?.exportedCount ?? 0}，失败{' '}
+                          {viewState.lastSyncResult?.exportResult?.failedCount ?? 0}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="settings-sync-card__label">最近一次备份</p>
+                        <p
+                          className="settings-sync-card__detail-value settings-sync-card__detail-value--mono"
+                          title={viewState.lastSyncResult?.backupFilePath ?? '暂无记录'}
+                        >
+                          {viewState.lastSyncResult?.backupFilePath ?? '暂无记录'}
+                        </p>
+                      </div>
+                      <div className="settings-sync-card__details-grid-item--wide">
+                        <p className="settings-sync-card__label">完整错误信息</p>
+                        <p className="settings-sync-card__detail-value settings-sync-card__detail-value--multiline">
+                          {viewState.lastSyncResult?.errors.length
+                            ? viewState.lastSyncResult.errors.join('\n')
+                            : '暂无错误'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="settings-sync-card__detail-actions">
+                      <button
+                        className="ghost-button ghost-button--compact"
+                        type="button"
+                        disabled={isSaving || isSyncing || !viewState.syncTargetPath}
+                        onClick={() => {
+                          void testDesktopSyncDirectory()
+                        }}
+                      >
+                        测试同步文件夹
+                      </button>
+                      <button
+                        className="ghost-button ghost-button--compact ghost-button--danger"
+                        type="button"
+                        disabled={isSaving || isSyncing || !viewState.syncTargetPath}
+                        onClick={() => {
+                          void clearDesktopSyncDirectory()
+                        }}
+                      >
+                        清除同步文件夹
+                      </button>
+                    </div>
+                  </div>
+                </details>
               </div>
             </section>
           ) : null}

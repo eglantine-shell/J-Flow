@@ -9,6 +9,10 @@ import type {
   RecurringTaskInstance,
   SceneTag,
   SyncChange,
+  SyncExportResult,
+  SyncImportResult,
+  SyncNowResult,
+  SyncTargetTestResult,
   TaskTemplate,
 } from '@/types'
 
@@ -99,6 +103,18 @@ type JFlowDesktopApi = {
     }
     sync: {
       getState: () => Promise<LocalSyncState>
+      chooseTargetPath: () => Promise<string | null>
+      openTargetPath: () => Promise<{
+        success: boolean
+        path: string | null
+        errorMessage: string | null
+      }>
+      setTargetPath: (targetPath: string) => Promise<LocalSyncState>
+      clearTargetPath: () => Promise<LocalSyncState>
+      testTargetPath: (targetPath?: string) => Promise<SyncTargetTestResult>
+      exportLocalChanges: () => Promise<SyncExportResult>
+      importRemoteChanges: () => Promise<SyncImportResult>
+      syncNow: () => Promise<SyncNowResult>
       listChanges: () => Promise<SyncChange[]>
     }
     sceneTags: {

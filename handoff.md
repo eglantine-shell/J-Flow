@@ -1038,3 +1038,169 @@
 ## Sync 1 接手提醒
 - 后续如果进入 `Sync 2`，应在现有 `sync_meta / sync_changes` 基础上继续，不要重做本地元数据结构。
 - 后续如果扩展同步范围到 `logbookEntries / segmentedProgressLogs`，请先确认产品规则，不要为了同步先扩表。
+
+## 2026-05-18 Sync 2 当前有效状态
+
+- 本地文件夹同步的“准备层”已完成。
+- 当前已支持：
+  - 保存同步文件夹路径
+  - 读取当前同步文件夹路径
+  - 清除同步文件夹路径
+  - 测试同步文件夹可读写
+  - 初始化 `J-Flow Sync` 目录结构
+  - 读取 / 校验 `sync-info.json`
+  - 写入 / 更新 `devices/<deviceId>.json`
+- `syncTargetPath` 当前存放位置：
+  - SQLite `sync_meta`
+- 当前同步目录结构已能初始化为：
+  - `sync-info.json`
+  - `devices/`
+  - `items/<entityType>/`
+  - `tombstones/<entityType>/`
+  - `locks/`
+- 当前设置页已新增轻量入口：
+  - 选择同步文件夹
+  - 测试同步文件夹
+  - 清除同步文件夹
+- 当前仍未实现：
+  - `items/` 导出
+  - `tombstones/` 实际写入
+  - 立即同步
+  - 远端读取
+  - 合并策略
+
+## Sync 2 接手提醒
+- 下一轮进入 `Sync 3` 时，应直接复用：
+  - `sync_meta.deviceId`
+  - `sync_meta.lastSyncedAt`
+  - `sync_meta.syncTargetPath`
+  - `sync_changes`
+- `sync-info.json` 当前已固定：
+  - `syncVersion = 1`
+  - `appName = J-Flow`
+- 如果需要支持“不兼容 sync 目录”的更细提示，可以继续在 `electron/sync-folder.ts` 内细化错误分类，不要把校验逻辑散到 renderer。
+
+## 2026-05-18 Sync 3 当前有效状态
+
+- 本地文件夹同步的“本地变化导出层”已完成。
+- 当前已支持：
+  - 读取本地 `sync_changes` 中 `syncedAt IS NULL` 的变化
+  - `upsert` 导出到 `items/<entityDir>/<id>.json`
+  - `delete` 导出到 `tombstones/<entityDir>/<id>.json`
+  - 单条导出成功后更新对应 `sync_changes.syncedAt`
+  - 返回成功 / 失败统计与失败项列表
+- 当前 bridge 已新增：
+  - `repository.sync.exportLocalChanges()`
+- 当前保持的边界：
+  - 不读远端 `items`
+  - 不读远端 `tombstones`
+  - 不合并本地 / 远端数据
+  - 不做冲突处理
+  - 不更新本机 `lastSyncedAt`
+  - 不把“同步前自动备份”硬塞进本轮主流程
+
+## Sync 3 接手提醒
+- 下一轮进入 `Sync 4` 时，应开始做：
+  - 远端 `items/` 读取
+  - 远端 `tombstones/` 读取
+  - 本地合并准备
+- 进入完整“立即同步”闭环前，不要把当前 `exportLocalChanges()` 误包装成 `syncNow()`。
+
+## 2026-05-18 Sync 4 当前有效状态
+
+- 远端变化读取与本地静默合并已完成。
+- 当前已支持：
+  - 读取远端 `items/`
+  - 读取远端 `tombstones/`
+  - 校验远端 JSON
+  - 按第一版 `last-write-wins` 规则应用远端变化
+  - 本地已删除 + 远端旧 item 不复活
+  - 本地已删除 + 远端新 item 可复活
+  - 远端导入后不会制造新的待上送 `sync_changes`
+- 当前 bridge 已新增：
+  - `repository.sync.importRemoteChanges()`
+- 当前仍保持的边界：
+  - 不做完整“立即同步”按钮
+  - 不做自动同步
+  - 不做人工冲突选择
+  - 不更新本机 `lastSyncedAt`
+  - 不把同步前自动备份塞进本轮主流程
+
+## Sync 4 接手提醒
+- 下一轮如果进入完整“立即同步”闭环，应把这些阶段按顺序串起来：
+  - 本地备份
+  - 远端导入
+  - 本地导出
+  - 结果提示
+  - 最后再决定是否写 `lastSyncedAt`
+- 进入 Sync 5 之前，不要把当前 `exportLocalChanges()` 和 `importRemoteChanges()` 误命名或包装成完整 `syncNow()`。
+
+## 2026-05-18 Sync 5 当前有效状态
+
+- 最小手动同步闭环已完成。
+- 当前已支持：
+  - `repository.sync.syncNow()`
+  - 检查 `syncTargetPath`
+  - 准备同步目录
+  - 获取最小锁
+  - 同步前创建一次本地自动备份
+  - 导入远端变化
+  - 导出本地变化
+  - 汇总 `success / partial / failed`
+  - 仅在全链路完全成功时写本机 `lastSyncedAt`
+  - 仅在全链路完全成功时更新 `devices/<deviceId>.json.lastSyncedAt`
+- 当前锁规则：
+  - 使用 `locks/sync_<deviceId>.json`
+  - 发现其他设备未过期锁时直接失败
+  - 过期锁可忽略或清理
+  - `finally` 中只释放自己的锁
+- 当前仍保持的边界：
+  - 不接设置页“立即同步”按钮 UI
+  - 不做自动同步
+  - 不做人工冲突选择
+  - 不做字段级合并
+
+## Sync 5 接手提醒
+- 下一轮如果要继续做 Sync UI，只接一个最小设置页入口：
+  - 立即同步按钮
+  - 最近一次同步结果
+  - 上次同步时间
+  - 最近一次错误
+- 若后续进入更完整的同步治理，再考虑：
+  - 锁过期提示
+  - 错误详情展示
+  - 同步结果历史
+
+## 2026-05-19 Sync 5 UI 当前有效状态
+
+- 设置页“数据与同步”区域已接入最小同步卡片。
+- 当前卡片已支持：
+  - 同步状态展示
+  - 当前同步文件夹展示
+  - 最近一次同步结果摘要
+  - `立即同步`
+  - `打开 / 更改` 同步文件夹
+  - 详情折叠区中的技术信息
+- 当前详情区已包含：
+  - 上次同步时间
+  - `deviceId`
+  - `syncVersion`
+  - import 统计
+  - export 统计
+  - 最近一次备份路径
+  - 完整错误信息
+- 当前本机同步元数据已补充：
+  - `lastSyncAttemptedAt`
+  - `lastSyncResult`
+- 当前仍保持的边界：
+  - 不做自动同步
+  - 不做后台同步
+  - 不做 WebDAV / 账号系统
+  - 不做复杂同步中心
+
+## Sync 5 UI 接手提醒
+- 下一轮优先做人工点检与文案微调，不要急着扩展功能。
+- 如果后续要继续增强，建议顺序是：
+  - 微调卡片文案与状态颜色
+  - 增加最近一次同步结果的人类可读摘要
+  - 最后才考虑同步历史或更复杂的错误查看

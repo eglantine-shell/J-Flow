@@ -20,6 +20,10 @@ type RecurringTaskInstanceUpdateInput = unknown
 type SceneTag = unknown
 type SceneTagUpdateInput = unknown
 type SyncChange = unknown
+type SyncExportResult = unknown
+type SyncImportResult = unknown
+type SyncNowResult = unknown
+type SyncTargetTestResult = unknown
 type TaskTemplate = unknown
 type TaskTemplateUpdateInput = unknown
 
@@ -73,6 +77,24 @@ contextBridge.exposeInMainWorld('jflowDesktop', {
     },
     sync: {
       getState: () => ipcRenderer.invoke('db:sync:get-state') as Promise<LocalSyncState>,
+      chooseTargetPath: () => ipcRenderer.invoke('db:sync:choose-target-path') as Promise<string | null>,
+      openTargetPath: () =>
+        ipcRenderer.invoke('db:sync:open-target-path') as Promise<{
+          success: boolean
+          path: string | null
+          errorMessage: string | null
+        }>,
+      setTargetPath: (targetPath: string) =>
+        ipcRenderer.invoke('db:sync:set-target-path', targetPath) as Promise<LocalSyncState>,
+      clearTargetPath: () =>
+        ipcRenderer.invoke('db:sync:clear-target-path') as Promise<LocalSyncState>,
+      testTargetPath: (targetPath?: string) =>
+        ipcRenderer.invoke('db:sync:test-target-path', targetPath) as Promise<SyncTargetTestResult>,
+      exportLocalChanges: () =>
+        ipcRenderer.invoke('db:sync:export-local-changes') as Promise<SyncExportResult>,
+      importRemoteChanges: () =>
+        ipcRenderer.invoke('db:sync:import-remote-changes') as Promise<SyncImportResult>,
+      syncNow: () => ipcRenderer.invoke('db:sync:sync-now') as Promise<SyncNowResult>,
       listChanges: () => ipcRenderer.invoke('db:sync:list-changes') as Promise<SyncChange[]>,
     },
     sceneTags: {

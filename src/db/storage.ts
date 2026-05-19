@@ -18,6 +18,10 @@ import type {
   RecurringTaskInstance,
   SceneTag,
   SyncChange,
+  SyncExportResult,
+  SyncImportResult,
+  SyncNowResult,
+  SyncTargetTestResult,
   TaskTemplate,
 } from '@/types'
 
@@ -267,6 +271,86 @@ async function listDesktopSyncChanges() {
   }
 
   return desktopRepository.sync.listChanges()
+}
+
+async function chooseDesktopSyncTargetPath() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.chooseTargetPath()
+}
+
+async function openDesktopSyncTargetPath() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.openTargetPath()
+}
+
+async function setDesktopSyncTargetPath(targetPath: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.setTargetPath(targetPath)
+}
+
+async function clearDesktopSyncTargetPath() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.clearTargetPath()
+}
+
+async function testDesktopSyncTargetPath(targetPath?: string) {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.testTargetPath(targetPath)
+}
+
+async function exportDesktopLocalSyncChanges() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.exportLocalChanges()
+}
+
+async function importDesktopRemoteSyncChanges() {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.importRemoteChanges()
+}
+
+async function runDesktopManualSync(): Promise<SyncNowResult> {
+  const desktopRepository = getDesktopRepositoryApi()
+
+  if (!desktopRepository?.sync) {
+    throw new Error('Desktop sync bridge unavailable')
+  }
+
+  return desktopRepository.sync.syncNow()
 }
 
 async function readAppDataRecord() {
@@ -1228,6 +1312,54 @@ async function listLocalSyncChanges(): Promise<SyncChange[]> {
   return listDesktopSyncChanges()
 }
 
+async function chooseLocalSyncTargetPath(): Promise<string | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return chooseDesktopSyncTargetPath()
+}
+
+async function setLocalSyncTargetPath(targetPath: string): Promise<LocalSyncState | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return setDesktopSyncTargetPath(targetPath)
+}
+
+async function clearLocalSyncTargetPath(): Promise<LocalSyncState | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return clearDesktopSyncTargetPath()
+}
+
+async function testLocalSyncTargetPath(targetPath?: string): Promise<SyncTargetTestResult | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return testDesktopSyncTargetPath(targetPath)
+}
+
+async function exportLocalSyncChanges(): Promise<SyncExportResult | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return exportDesktopLocalSyncChanges()
+}
+
+async function importRemoteSyncChanges(): Promise<SyncImportResult | null> {
+  if (!isDesktopStorageEnabled()) {
+    return null
+  }
+
+  return importDesktopRemoteSyncChanges()
+}
+
 export const appDataStorage = {
   initialize: initializeAppData,
   get: getAppData,
@@ -1287,6 +1419,14 @@ export const appDataRepository = {
   },
   sync: {
     getState: getLocalSyncState,
+    chooseTargetPath: chooseLocalSyncTargetPath,
+    openTargetPath: openDesktopSyncTargetPath,
+    setTargetPath: setLocalSyncTargetPath,
+    clearTargetPath: clearLocalSyncTargetPath,
+    testTargetPath: testLocalSyncTargetPath,
+    exportLocalChanges: exportLocalSyncChanges,
+    importRemoteChanges: importRemoteSyncChanges,
+    syncNow: runDesktopManualSync,
     listChanges: listLocalSyncChanges,
   },
 }

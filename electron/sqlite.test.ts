@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  clearSqliteSyncTargetPath,
   createSqliteDayPlanItem,
   createSqliteSceneTag,
   createSqliteTaskTemplate,
@@ -17,6 +18,7 @@ import {
   listSqliteSyncChanges,
   listSqliteDayPlanItems,
   replaceSqliteSnapshot,
+  setSqliteSyncTargetPath,
   updateSqliteSceneTag,
   updateSqliteDayPlanItem,
 } from './sqlite'
@@ -234,6 +236,8 @@ describe('electron/sqlite', () => {
     expect(first.lastSyncedAt).toBeNull()
     expect(first.lastSyncStatus).toBeNull()
     expect(first.lastSyncError).toBeNull()
+    expect(first.lastSyncAttemptedAt).toBeNull()
+    expect(first.lastSyncResult).toBeNull()
   })
 
   it('records sync_changes for upsert and delete mutations', async () => {
@@ -275,5 +279,18 @@ describe('electron/sqlite', () => {
     })
     expect(change?.deviceId).toBe(getSqliteLocalSyncState(dataPath).deviceId)
     expect(change?.syncedAt).toBeNull()
+  })
+
+  it('persists and clears syncTargetPath in local sync metadata', async () => {
+    const dataPath = await createTempDataPath()
+    replaceSqliteSnapshot(dataPath, sqliteTestSeedAppData)
+
+    const saved = setSqliteSyncTargetPath(dataPath, '/tmp/j-flow-sync')
+    expect(saved.syncTargetPath).toBe('/tmp/j-flow-sync')
+    expect(getSqliteLocalSyncState(dataPath).syncTargetPath).toBe('/tmp/j-flow-sync')
+
+    const cleared = clearSqliteSyncTargetPath(dataPath)
+    expect(cleared.syncTargetPath).toBeNull()
+    expect(getSqliteLocalSyncState(dataPath).syncTargetPath).toBeNull()
   })
 })

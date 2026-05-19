@@ -87,6 +87,89 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 - 仅用于读取本机同步元数据与本地待同步变化
 - 当前不包含同步文件夹选择、同步目录初始化或立即同步能力
 
+当前 `Sync 2` 已补入的 bridge 基础：
+- `repository.sync.chooseTargetPath()`
+- `repository.sync.setTargetPath(path)`
+- `repository.sync.clearTargetPath()`
+- `repository.sync.testTargetPath(path?)`
+- 当前已支持：
+  - 保存同步文件夹路径
+  - 读取本机同步状态
+  - 测试目录可读写
+  - 初始化 `J-Flow Sync` 目录骨架
+  - 读写 `sync-info.json`
+  - 写入 `devices/<deviceId>.json`
+- 当前仍未支持：
+  - `items/` 导出
+  - `tombstones/` 导出
+  - 立即同步
+  - 远端合并
+
+当前 `Sync 3` 已补入的 bridge 基础：
+- `repository.sync.exportLocalChanges()`
+- 当前仅负责：
+  - 读取本地 `sync_changes` 中 `syncedAt IS NULL` 的记录
+  - `upsert -> items/<entityDir>/<id>.json`
+  - `delete -> tombstones/<entityDir>/<id>.json`
+  - 单条写入成功后回写对应 `sync_changes.syncedAt`
+- 当前仍不负责：
+  - 读取远端 `items/`
+  - 读取远端 `tombstones/`
+  - 冲突处理
+  - 完整“立即同步”闭环
+
+当前 `Sync 4` 已补入的 bridge 基础：
+- `repository.sync.importRemoteChanges()`
+- 当前仅负责：
+  - 读取远端 `items/`
+  - 读取远端 `tombstones/`
+  - 校验远端 JSON
+  - 按第一版 `last-write-wins` 合并到本地 SQLite
+  - 通过静默写入路径避免污染本地待上送 `sync_changes`
+- 当前仍不负责：
+  - 完整“立即同步”按钮
+  - 自动同步
+  - 人工冲突选择
+  - `lastSyncedAt` 更新
+
+当前 `Sync 5` 已补入的 bridge 基础：
+- `repository.sync.syncNow()`
+- 当前会按顺序编排：
+  - 检查同步文件夹路径
+  - 准备同步目录
+  - 获取最小锁
+  - 创建本地自动备份
+  - 导入远端变化
+  - 导出本地变化
+  - 汇总结果
+  - 仅在全链路完全成功时写本机 `lastSyncedAt`
+  - 仅在全链路完全成功时更新 `devices/<deviceId>.json.lastSyncedAt`
+- 当前仍不负责：
+  - 设置页“立即同步”按钮 UI
+  - 自动同步
+  - 人工冲突选择
+  - 字段级合并
+
+当前 `Sync 5 UI` 已补入的设置页薄接入：
+- 设置页 `数据与同步` 区域已收口为一张同步卡片
+- 当前卡片包含：
+  - 标题区
+  - 状态区
+  - 同步文件夹区
+  - 最近结果区
+  - 主操作区
+  - 详情折叠区
+- 当前设置页仅承担：
+  - 选择同步文件夹
+  - 打开同步文件夹
+  - 更改同步文件夹
+  - 手动触发 `syncNow()`
+  - 查看最近一次同步摘要与技术详情
+- 当前仍不承担：
+  - 自动同步
+  - 后台同步
+  - 复杂同步中心
+
 建议暴露能力示例：
 - `getAppInfo`
 - `getDataDirectory`
@@ -191,6 +274,10 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 - 打开数据文件夹
 - 自动备份设置
 - 分类 / 场景管理
+- 本地文件夹同步入口
+  - 选择同步文件夹
+  - 测试同步文件夹
+  - 清除同步文件夹路径
 
 ---
 

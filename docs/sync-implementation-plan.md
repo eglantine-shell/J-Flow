@@ -746,6 +746,25 @@ J-Flow Sync/
 - 校验目录可读写
 - 初始化同步目录结构
 
+当前实现状态：
+
+- 已完成 `syncTargetPath` 的本机保存、读取与清除
+- 已完成同步文件夹路径选择 bridge
+- 已完成同步目录结构初始化：
+  - `sync-info.json`
+  - `devices/`
+  - `items/<entityType>/`
+  - `tombstones/<entityType>/`
+  - `locks/`
+- 已完成 `sync-info.json` 校验与原子写入
+- 已完成 `devices/<deviceId>.json` 写入
+- 已完成底层“测试同步文件夹”能力
+- 当前仍未实现：
+  - `items/` 实体导出
+  - `tombstones/` 实际删除导出
+  - 立即同步
+  - 远端读取与合并
+
 ### Sync 3：本地实体导出为 sync items
 
 目标：
@@ -754,12 +773,48 @@ J-Flow Sync/
 - 写入 `items/`
 - 支持 tombstone 写入
 
+当前实现状态：
+
+- 已完成从本地 `sync_changes` 读取 `syncedAt IS NULL` 的 pending changes
+- 已完成 `entityType -> entityDir` 映射与本地实体读取
+- 已完成：
+  - `upsert -> items/<entityDir>/<id>.json`
+  - `delete -> tombstones/<entityDir>/<id>.json`
+- 已完成单条写入成功后回写对应 `sync_changes.syncedAt`
+- 已完成部分成功 / 部分失败统计返回
+- 当前明确未做：
+  - 读取远端 `items/`
+  - 读取远端 `tombstones/`
+  - 冲突处理
+  - `lastSyncedAt` 更新
+  - 同步前自动备份串联
+
 ### Sync 4：远端 sync items 导入与合并
 
 目标：
 
 - 读取同步目录中的 item 与 tombstone
 - 按 `last-write-wins` 合并进本地 SQLite
+
+当前实现状态：
+
+- 已完成读取远端 `items/` 与 `tombstones/`
+- 已完成远端 JSON 校验：
+  - `sync item`
+  - `tombstone`
+  - `entityType` 与目录匹配
+- 已完成第一版 `last-write-wins` 规则：
+  - 远端 `updatedAt > 本地 updatedAt` 时应用远端 upsert
+  - 远端 `deletedAt > 本地 updatedAt` 时应用远端 tombstone
+- 已完成“本地已删除 + 远端旧 item 不复活 / 远端新 item 可复活”口径
+- 已完成静默导入路径：
+  - 远端导入不会新增待上送 `sync_changes`
+- 已完成部分成功 / 部分失败统计返回
+- 当前仍明确未做：
+  - 完整“立即同步”按钮
+  - `lastSyncedAt` 更新
+  - 自动同步
+  - 人工冲突选择
 
 ### Sync 5：立即同步按钮与结果提示
 
@@ -768,13 +823,44 @@ J-Flow Sync/
 - 串起一次完整“立即同步”
 - 给用户可理解的结果提示
 
+当前实现状态：
+
+- 已完成最小手动同步闭环 service：
+  - `runManualSync()`
+  - `repository.sync.syncNow()`
+- 当前执行顺序为：
+  - 检查 `syncTargetPath`
+  - 准备同步目录
+  - 获取最小锁
+  - 创建一次本地自动备份
+  - `importRemoteChanges()`
+  - `exportLocalChanges()`
+  - 汇总结果
+  - 仅在完全成功时写本机 `lastSyncedAt`
+  - 仅在完全成功时更新 `devices/<deviceId>.json.lastSyncedAt`
+  - `finally` 中释放自己的锁
+- 当前成功规则：
+  - `import` 与 `export` 都没有 failure
+  - 即使没有变化，只要整轮闭环成功，仍写 `lastSyncedAt`
+- 当前部分成功规则：
+  - `import` 或 `export` 任一存在 failure
+  - 已成功处理部分保留
+  - 不写 `lastSyncedAt`
+- 当前失败规则：
+  - 路径缺失
+  - 目录校验失败
+  - 锁冲突
+  - 自动备份失败
+  - 或关键步骤抛出异常
+  - 不写 `lastSyncedAt`
+
 ### Sync 6：锁、错误处理与自动备份收口
 
 目标：
 
-- 在同步前自动备份
-- 补最小锁文件机制
-- 明确失败后的恢复与提示
+- 在现有最小锁与自动备份基础上继续细化恢复与提示
+- 视需要补充锁过期清理与更细的错误提示
+- 若后续 UI 接入，再把同步结果展示收口到设置页
 
 ### Sync 7：后续自动同步预留
 

@@ -180,6 +180,27 @@ export interface LocalSyncState {
   lastSyncedAt: string | null
   lastSyncStatus: string | null
   lastSyncError: string | null
+  lastSyncAttemptedAt: string | null
+  lastSyncResult: LocalSyncResultSummary | null
+  syncTargetPath: string | null
+}
+
+export interface LocalSyncResultSummary {
+  status: 'success' | 'partial' | 'failed'
+  attemptedAt: string
+  backupCreated: boolean
+  backupFilePath: string | null
+  importResult?: {
+    appliedCount: number
+    skippedCount: number
+    failedCount: number
+  }
+  exportResult?: {
+    exportedCount: number
+    failedCount: number
+  }
+  errors: string[]
+  warnings: string[]
 }
 
 export interface SyncChange {
@@ -190,6 +211,108 @@ export interface SyncChange {
   changedAt: string
   syncedAt: string | null
   deviceId: string
+}
+
+export interface SyncInfoFile {
+  syncVersion: number
+  createdAt: string
+  updatedAt: string
+  appName: 'J-Flow'
+  minSupportedAppVersion: string
+}
+
+export interface SyncDeviceInfoFile {
+  syncVersion: number
+  deviceId: string
+  deviceName: string
+  platform: string
+  appVersion: string
+  lastSeenAt: string
+  lastSyncedAt: string | null
+}
+
+export interface SyncTargetTestResult {
+  success: boolean
+  targetPath: string
+  syncVersion: number | null
+  deviceId: string
+  message: string
+  error?: string
+}
+
+export interface SyncItemFile<Entity = unknown> {
+  syncVersion: number
+  entityType: SyncEntityType
+  id: string
+  updatedAt: string
+  deletedAt: null
+  deviceId: string
+  data: Entity
+}
+
+export interface SyncTombstoneFile {
+  syncVersion: number
+  entityType: SyncEntityType
+  id: string
+  deletedAt: string
+  deviceId: string
+}
+
+export interface SyncExportFailure {
+  changeId: string
+  entityType: SyncEntityType
+  entityId: string
+  changeType: SyncChangeType
+  message: string
+}
+
+export interface SyncExportResult {
+  success: boolean
+  targetPath: string
+  deviceId: string
+  exportedCount: number
+  failedCount: number
+  failures: SyncExportFailure[]
+}
+
+export interface SyncImportFailure {
+  filePath: string
+  entityType?: SyncEntityType
+  entityId?: string
+  message: string
+}
+
+export interface SyncImportResult {
+  success: boolean
+  targetPath: string
+  deviceId: string
+  appliedCount: number
+  skippedCount: number
+  failedCount: number
+  failures: SyncImportFailure[]
+}
+
+export interface SyncNowResult {
+  success: boolean
+  status: 'success' | 'partial' | 'failed'
+  startedAt: string
+  completedAt?: string
+  targetPath: string | null
+  deviceId: string
+  backupCreated: boolean
+  backupFilePath?: string | null
+  importResult?: {
+    appliedCount: number
+    skippedCount: number
+    failedCount: number
+  }
+  exportResult?: {
+    exportedCount: number
+    failedCount: number
+  }
+  lastSyncedAtWritten: boolean
+  errors: string[]
+  warnings: string[]
 }
 
 export type SceneTagUpdateInput = Partial<Omit<SceneTag, 'id'>> & Pick<SceneTag, 'id'>

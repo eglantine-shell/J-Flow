@@ -75,6 +75,7 @@
   - `lastSyncedAt`
   - `lastSyncStatus`
   - `lastSyncError`
+  - `syncTargetPath`
 - `sync_changes` 当前用于记录本机业务变化：
   - `entityType`
   - `entityId`

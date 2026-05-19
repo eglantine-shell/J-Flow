@@ -11,6 +11,7 @@ import type {
   DayPlanItem,
   DayPlanItemUpdateInput,
   LocalSyncState,
+  LocalSyncResultSummary,
   LogbookEntry,
   RecurringTaskInstance,
   RecurringTaskInstanceUpdateInput,
@@ -33,6 +34,9 @@ const SYNC_META_DEVICE_ID = 'deviceId'
 const SYNC_META_LAST_SYNCED_AT = 'lastSyncedAt'
 const SYNC_META_LAST_SYNC_STATUS = 'lastSyncStatus'
 const SYNC_META_LAST_SYNC_ERROR = 'lastSyncError'
+const SYNC_META_LAST_SYNC_ATTEMPTED_AT = 'lastSyncAttemptedAt'
+const SYNC_META_LAST_SYNC_RESULT = 'lastSyncResult'
+const SYNC_META_TARGET_PATH = 'syncTargetPath'
 
 type SnapshotResult =
   | {
@@ -404,6 +408,20 @@ const readSyncMeta = (database: DatabaseSync, key: string) => {
   return row?.value ?? null
 }
 
+const readSyncMetaJson = <Value>(database: DatabaseSync, key: string): Value | null => {
+  const value = readSyncMeta(database, key)
+
+  if (!value) {
+    return null
+  }
+
+  try {
+    return JSON.parse(value) as Value
+  } catch {
+    return null
+  }
+}
+
 const writeSyncMeta = (database: DatabaseSync, key: string, value: string | null) => {
   database
     .prepare(`
@@ -430,6 +448,18 @@ const ensureSyncMetaDefaults = (database: DatabaseSync) => {
   if (readSyncMeta(database, SYNC_META_LAST_SYNC_ERROR) === null) {
     writeSyncMeta(database, SYNC_META_LAST_SYNC_ERROR, null)
   }
+
+  if (readSyncMeta(database, SYNC_META_LAST_SYNC_ATTEMPTED_AT) === null) {
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_ATTEMPTED_AT, null)
+  }
+
+  if (readSyncMeta(database, SYNC_META_LAST_SYNC_RESULT) === null) {
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_RESULT, null)
+  }
+
+  if (readSyncMeta(database, SYNC_META_TARGET_PATH) === null) {
+    writeSyncMeta(database, SYNC_META_TARGET_PATH, null)
+  }
 }
 
 const getDeviceId = (database: DatabaseSync) => {
@@ -445,8 +475,52 @@ const getDeviceId = (database: DatabaseSync) => {
   return nextDeviceId
 }
 
+const buildLocalSyncState = (database: DatabaseSync): LocalSyncState => ({
+  deviceId: getDeviceId(database),
+  lastSyncedAt: readSyncMeta(database, SYNC_META_LAST_SYNCED_AT),
+  lastSyncStatus: readSyncMeta(database, SYNC_META_LAST_SYNC_STATUS),
+  lastSyncError: readSyncMeta(database, SYNC_META_LAST_SYNC_ERROR),
+  lastSyncAttemptedAt: readSyncMeta(database, SYNC_META_LAST_SYNC_ATTEMPTED_AT),
+  lastSyncResult: readSyncMetaJson<LocalSyncResultSummary>(database, SYNC_META_LAST_SYNC_RESULT),
+  syncTargetPath: readSyncMeta(database, SYNC_META_TARGET_PATH),
+})
+
 const buildSyncChangeId = (entityType: SyncEntityType, entityId: string) =>
   `${entityType}:${entityId}`
+
+const writeSyncChangeState = (
+  database: DatabaseSync,
+  input: {
+    entityType: SyncEntityType
+    entityId: string
+    changeType: SyncChangeType
+    changedAt: string
+    syncedAt: string | null
+  },
+) => {
+  const deviceId = getDeviceId(database)
+
+  database
+    .prepare(`
+      INSERT INTO sync_changes (
+        id, entity_type, entity_id, change_type, changed_at, synced_at, device_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        change_type = excluded.change_type,
+        changed_at = excluded.changed_at,
+        synced_at = excluded.synced_at,
+        device_id = excluded.device_id
+    `)
+    .run(
+      buildSyncChangeId(input.entityType, input.entityId),
+      input.entityType,
+      input.entityId,
+      input.changeType,
+      input.changedAt,
+      input.syncedAt,
+      deviceId,
+    )
+}
 
 const queueSnapshotSyncChanges = (database: DatabaseSync, appData: AppData) => {
   resetSyncChanges(database)
@@ -513,28 +587,10 @@ const recordSyncChange = (
     changedAt: string
   },
 ) => {
-  const deviceId = getDeviceId(database)
-
-  database
-    .prepare(`
-      INSERT INTO sync_changes (
-        id, entity_type, entity_id, change_type, changed_at, synced_at, device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        change_type = excluded.change_type,
-        changed_at = excluded.changed_at,
-        synced_at = NULL,
-        device_id = excluded.device_id
-    `)
-    .run(
-      buildSyncChangeId(input.entityType, input.entityId),
-      input.entityType,
-      input.entityId,
-      input.changeType,
-      input.changedAt,
-      null,
-      deviceId,
-    )
+  writeSyncChangeState(database, {
+    ...input,
+    syncedAt: null,
+  })
 }
 
 const resetSyncChanges = (database: DatabaseSync) => {
@@ -571,6 +627,19 @@ const runMutation = <Result>(
     writeMeta(database, META_SQLITE_SCHEMA_VERSION, String(SQLITE_SCHEMA_VERSION))
     database.exec('COMMIT')
 
+    return result
+  } catch (error) {
+    database.exec('ROLLBACK')
+    throw error
+  }
+}
+
+const runSyncMetaMutation = <Result>(database: DatabaseSync, mutate: () => Result) => {
+  database.exec('BEGIN IMMEDIATE')
+
+  try {
+    const result = mutate()
+    database.exec('COMMIT')
     return result
   } catch (error) {
     database.exec('ROLLBACK')
@@ -1473,12 +1542,59 @@ export const getSqliteSettings = (dataPath: string) => {
 export const getSqliteLocalSyncState = (dataPath: string): LocalSyncState => {
   const database = getDatabase(dataPath)
 
-  return {
-    deviceId: getDeviceId(database),
-    lastSyncedAt: readSyncMeta(database, SYNC_META_LAST_SYNCED_AT),
-    lastSyncStatus: readSyncMeta(database, SYNC_META_LAST_SYNC_STATUS),
-    lastSyncError: readSyncMeta(database, SYNC_META_LAST_SYNC_ERROR),
+  return buildLocalSyncState(database)
+}
+
+export const setSqliteSyncTargetPath = (dataPath: string, targetPath: string): LocalSyncState => {
+  const database = getDatabase(dataPath)
+  const normalizedPath = targetPath.trim()
+
+  if (!normalizedPath) {
+    throw new Error('同步文件夹路径不能为空。')
   }
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_TARGET_PATH, normalizedPath)
+    return buildLocalSyncState(database)
+  })
+}
+
+export const clearSqliteSyncTargetPath = (dataPath: string): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_TARGET_PATH, null)
+    return buildLocalSyncState(database)
+  })
+}
+
+export const setSqliteLastSyncedAt = (dataPath: string, lastSyncedAt: string): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_LAST_SYNCED_AT, lastSyncedAt)
+    return buildLocalSyncState(database)
+  })
+}
+
+export const setSqliteLastSyncResult = (
+  dataPath: string,
+  result: LocalSyncResultSummary | null,
+): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_STATUS, result?.status ?? null)
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_ERROR, result?.errors[0] ?? null)
+    writeSyncMeta(database, SYNC_META_LAST_SYNC_ATTEMPTED_AT, result?.attemptedAt ?? null)
+    writeSyncMeta(
+      database,
+      SYNC_META_LAST_SYNC_RESULT,
+      result ? JSON.stringify(result) : null,
+    )
+
+    return buildLocalSyncState(database)
+  })
 }
 
 export const listSqliteSyncChanges = (dataPath: string): SyncChange[] => {
@@ -1489,6 +1605,244 @@ export const listSqliteSyncChanges = (dataPath: string): SyncChange[] => {
       .prepare('SELECT * FROM sync_changes ORDER BY changed_at ASC, id ASC')
       .all() as Array<Record<string, unknown>>
   ).map(mapSyncChangeRow)
+}
+
+export const listPendingSqliteSyncChanges = (dataPath: string): SyncChange[] => {
+  const database = getDatabase(dataPath)
+
+  return (
+    database
+      .prepare(
+        'SELECT * FROM sync_changes WHERE synced_at IS NULL ORDER BY changed_at ASC, id ASC',
+      )
+      .all() as Array<Record<string, unknown>>
+  ).map(mapSyncChangeRow)
+}
+
+export const markSqliteSyncChangeSyncedAt = (
+  dataPath: string,
+  changeId: string,
+  syncedAt: string,
+): boolean => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    const result = database
+      .prepare('UPDATE sync_changes SET synced_at = ? WHERE id = ?')
+      .run(syncedAt, changeId) as { changes?: number }
+
+    return Number(result.changes ?? 0) > 0
+  })
+}
+
+export const getSqliteSyncChangeByEntity = (
+  dataPath: string,
+  entityType: SyncEntityType,
+  entityId: string,
+): SyncChange | null => {
+  const database = getDatabase(dataPath)
+  const row = database
+    .prepare('SELECT * FROM sync_changes WHERE entity_type = ? AND entity_id = ? LIMIT 1')
+    .get(entityType, entityId) as Record<string, unknown> | undefined
+
+  return row ? mapSyncChangeRow(row) : null
+}
+
+export const applyRemoteSqliteSyncChangeState = (
+  dataPath: string,
+  input: {
+    entityType: SyncEntityType
+    entityId: string
+    changeType: SyncChangeType
+    changedAt: string
+    syncedAt: string
+  },
+) => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncChangeState(database, input)
+    return true
+  })
+}
+
+export const applyRemoteSqliteSettings = (dataPath: string, settings: AppSettings) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    upsertSettings(database, settings)
+    writeSyncChangeState(database, {
+      entityType: 'settings',
+      entityId: 'app-settings',
+      changeType: 'upsert',
+      changedAt: settings.updatedAt,
+      syncedAt: settings.updatedAt,
+    })
+
+    return settings
+  })
+}
+
+export const applyRemoteSqliteSceneTag = (dataPath: string, sceneTag: SceneTag) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getSceneTagById(database, sceneTag.id)
+
+    if (current) {
+      replaceSceneTag(database, sceneTag)
+    } else {
+      insertSceneTag(database, sceneTag)
+    }
+
+    writeSyncChangeState(database, {
+      entityType: 'sceneTag',
+      entityId: sceneTag.id,
+      changeType: 'upsert',
+      changedAt: sceneTag.updatedAt,
+      syncedAt: sceneTag.updatedAt,
+    })
+
+    return sceneTag
+  })
+}
+
+export const applyRemoteSqliteActivityType = (dataPath: string, activityType: ActivityType) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getActivityTypeById(database, activityType.id)
+
+    if (current) {
+      replaceActivityType(database, activityType)
+    } else {
+      insertActivityType(database, activityType)
+    }
+
+    writeSyncChangeState(database, {
+      entityType: 'activityType',
+      entityId: activityType.id,
+      changeType: 'upsert',
+      changedAt: activityType.updatedAt,
+      syncedAt: activityType.updatedAt,
+    })
+
+    return activityType
+  })
+}
+
+export const applyRemoteSqliteTaskTemplate = (dataPath: string, template: TaskTemplate) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getTaskTemplateById(database, template.id)
+
+    if (current) {
+      replaceTaskTemplateRow(database, template)
+    } else {
+      insertTaskTemplateRow(database, template)
+    }
+
+    writeSyncChangeState(database, {
+      entityType: 'taskTemplate',
+      entityId: template.id,
+      changeType: 'upsert',
+      changedAt: template.updatedAt,
+      syncedAt: template.updatedAt,
+    })
+
+    return template
+  })
+}
+
+export const applyRemoteSqliteRecurringTaskInstance = (
+  dataPath: string,
+  instance: RecurringTaskInstance,
+) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getRecurringTaskInstanceById(database, instance.id)
+
+    if (current) {
+      replaceRecurringTaskInstanceRow(database, instance)
+    } else {
+      insertRecurringTaskInstanceRow(database, instance)
+    }
+
+    writeSyncChangeState(database, {
+      entityType: 'recurringTaskInstance',
+      entityId: instance.id,
+      changeType: 'upsert',
+      changedAt: instance.updatedAt,
+      syncedAt: instance.updatedAt,
+    })
+
+    return instance
+  })
+}
+
+export const applyRemoteSqliteDayPlanItem = (dataPath: string, item: DayPlanItem) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    const current = getDayPlanItemById(database, item.id)
+
+    if (current) {
+      replaceDayPlanItemRow(database, item)
+    } else {
+      insertDayPlanItemRow(database, item)
+    }
+
+    writeSyncChangeState(database, {
+      entityType: 'dayPlanItem',
+      entityId: item.id,
+      changeType: 'upsert',
+      changedAt: item.updatedAt,
+      syncedAt: item.updatedAt,
+    })
+
+    return item
+  })
+}
+
+export const applyRemoteSqliteDelete = (
+  dataPath: string,
+  entityType: Exclude<SyncEntityType, 'settings'>,
+  entityId: string,
+  deletedAt: string,
+) => {
+  const database = getDatabase(dataPath)
+
+  return runMutation(database, () => {
+    switch (entityType) {
+      case 'sceneTag':
+        database.prepare('DELETE FROM scene_tags WHERE id = ?').run(entityId)
+        break
+      case 'activityType':
+        database.prepare('DELETE FROM activity_types WHERE id = ?').run(entityId)
+        break
+      case 'taskTemplate':
+        database.prepare('DELETE FROM task_templates WHERE id = ?').run(entityId)
+        break
+      case 'recurringTaskInstance':
+        database.prepare('DELETE FROM recurring_task_instances WHERE id = ?').run(entityId)
+        break
+      case 'dayPlanItem':
+        database.prepare('DELETE FROM day_plan_items WHERE id = ?').run(entityId)
+        break
+    }
+
+    writeSyncChangeState(database, {
+      entityType,
+      entityId,
+      changeType: 'delete',
+      changedAt: deletedAt,
+      syncedAt: deletedAt,
+    })
+
+    return true
+  })
 }
 
 export const updateSqliteSettings = (dataPath: string, input: AppSettingsUpdateInput) => {
