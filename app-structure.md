@@ -168,7 +168,6 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
   - 手动触发 `syncNow()`
   - 查看最近一次同步摘要与技术详情
 - 当前仍不承担：
-  - 自动同步
   - 后台同步
   - 复杂同步中心
 
@@ -185,6 +184,13 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
   - `exportLocalChangesToSyncTarget(...)`
   - `updateDeviceInfo(driver, ...)`
   - `releaseSyncLock(driver, ...)`
+- 当前主进程已接入最小自动同步：
+  - app ready 后延迟一次
+  - window focus 时一次
+  - 30s 去抖
+  - 若当前已有同步进行中则跳过
+  - 若未配置同步目标则跳过
+  - 自动同步与手动同步共用同一条执行中的 promise，避免并发重入
 - 当前仍未接入：
   - 自动同步设置
   - `OneDrive`

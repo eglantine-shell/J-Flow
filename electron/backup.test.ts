@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -89,5 +89,41 @@ describe('electron/backup', () => {
     expect(filenames[0]).toContain('20260501-080002')
     expect(filenames.at(-1)).toContain('20260501-080021')
     expect(backupInfo.backupCount).toBe(20)
+  })
+
+  it('ignores ENOENT when an obsolete backup disappears during rotation', async () => {
+    const dataPath = await createTempDataPath()
+    const backupsDirectory = path.join(dataPath, 'backups')
+    const backupDates = Array.from({ length: 20 }, (_, index) => new Date(2026, 4, 2, 8, 0, index))
+
+    for (const backupDate of backupDates) {
+      replaceSqliteSnapshot(dataPath, {
+        ...sqliteTestSeedAppData,
+        settings: {
+          ...sqliteTestSeedAppData.settings,
+          updatedAt: backupDate.toISOString(),
+        },
+      })
+      await createAutoBackup(dataPath, {
+        clock: {
+          now: () => backupDate,
+        },
+      })
+    }
+
+    await unlink(path.join(backupsDirectory, 'j-flow-auto-backup-20260502-080000.json'))
+
+    const result = await createAutoBackup(dataPath, {
+      clock: {
+        now: () => new Date(2026, 4, 2, 8, 0, 20),
+      },
+    })
+
+    const filenames = (await readdir(backupsDirectory)).filter((filename) =>
+      filename.startsWith('j-flow-auto-backup-'),
+    )
+
+    expect(result.created).toBe(true)
+    expect(filenames).toHaveLength(20)
   })
 })

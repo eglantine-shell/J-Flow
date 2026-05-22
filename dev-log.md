@@ -1,5 +1,49 @@
 # Dev Log
 
+## 2026-05-22（最小自动同步落地）
+
+### 本轮目标
+- 在不改同步协议的前提下，为桌面端补最小自动同步
+- 当前只允许：
+  - 本地文件夹
+  - app ready 后延迟一次
+  - window focus 时一次
+- 不做后台常驻、watcher、托盘与复杂策略
+
+### 本轮修改
+- 新增：
+  - `electron/auto-sync.ts`
+  - `electron/auto-sync.test.ts`
+- 更新：
+  - `electron/backup.ts`
+  - `electron/backup.test.ts`
+  - `electron/main.ts`
+  - `app-structure.md`
+  - `constraints.md`
+  - `task-list.md`
+  - `handoff.md`
+- 当前实现方式：
+  - 新增主进程内 `syncCoordinator`
+  - 手动同步与自动同步共用同一协调层
+  - 若已有同步执行中：
+    - 自动同步跳过
+    - 手动同步复用当前执行中的同步 promise
+  - 自动同步当前触发点只有：
+    - app ready 后延迟一次
+    - window focus
+  - 自动同步当前去抖：
+    - `30s`
+
+### 验证结果
+- `corepack pnpm exec vitest run electron/auto-sync.test.ts electron/sync-now.test.ts electron/sqlite.test.ts src/db/storage.desktop.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前风险
+- 当前 renderer 没有额外订阅自动同步完成事件
+- 如果设置页已经打开，自动同步完成后的状态通常要等下一次手动刷新 / 重新进入页面才会反映
+- 这是当前“最小方案”刻意接受的范围，先不引入新的跨进程状态推送复杂度
+- 启动阶段自动备份轮转已补 `ENOENT` 容错，避免旧备份文件在删除时瞬间缺失导致日志噪音
+
 ## 2026-05-22（文档收口：确认仅保留本地文件夹同步，并补自动同步最小方案）
 
 ### 本轮目标

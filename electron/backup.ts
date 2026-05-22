@@ -83,7 +83,19 @@ const rotateAutoBackups = async (directory: string) => {
   const filenames = await getAutoBackupFilenames(directory)
   const obsoleteFilenames = filenames.slice(0, Math.max(0, filenames.length - AUTO_BACKUP_LIMIT))
 
-  await Promise.all(obsoleteFilenames.map((filename) => unlink(toAutoBackupPath(directory, filename))))
+  await Promise.all(
+    obsoleteFilenames.map(async (filename) => {
+      try {
+        await unlink(toAutoBackupPath(directory, filename))
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+          return
+        }
+
+        throw error
+      }
+    }),
+  )
 }
 
 export const getAutoBackupInfo = async (dataPath: string): Promise<AutoBackupInfo> => {

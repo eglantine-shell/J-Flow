@@ -291,9 +291,13 @@
 ### 当前已完成
 - `docs/sync-design.md`
 - `docs/sync-implementation-plan.md`
+- 最小自动同步：
+  - 启动后延迟一次自动同步
+  - 窗口重新聚焦自动同步
+  - `30s` 去抖
+  - 自动同步与手动同步的进程内并发保护
 
 ### 当前未开始
-- 自动同步
 - 后台同步
 - `OneDrive`
 

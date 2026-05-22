@@ -4,6 +4,7 @@ import { hostname } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { createSyncCoordinator, registerAutoSyncTriggers } from './auto-sync.js'
 import {
   createAutoBackup,
   getAutoBackupInfo,
@@ -51,7 +52,6 @@ import {
 } from './sqlite.js'
 import { exportLocalChangesToSyncFolder } from './sync-export.js'
 import { importRemoteChangesFromSyncFolder } from './sync-import.js'
-import { runManualSync } from './sync-now.js'
 import { testSyncTargetDirectory } from './sync-folder.js'
 import type {
   ActivityType,
@@ -78,6 +78,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const preloadPath = path.join(currentDir, 'preload.cjs')
 const rendererDistPath = path.join(currentDir, '../dist-desktop/renderer/index.html')
 const devServerUrl = process.env.VITE_DEV_SERVER_URL
+const syncCoordinator = createSyncCoordinator()
 
 const ensureDataDirectory = async () => {
   const dataPath = app.getPath('userData')
@@ -87,7 +88,7 @@ const ensureDataDirectory = async () => {
   return dataPath
 }
 
-const createMainWindow = async () => {
+const createMainWindow = async (dataPath: string) => {
   const window = new BrowserWindow({
     width: 980,
     height: 730,
@@ -114,10 +115,44 @@ const createMainWindow = async () => {
     }
 
     window.webContents.openDevTools({ mode: 'detach' })
+    registerAutoSyncTriggers(
+      window,
+      {
+        dataPath,
+        appVersion: app.getVersion(),
+      },
+      {
+        invokeAutoSync: (reason) =>
+          syncCoordinator.maybeAutoSync({
+            dataPath,
+            appVersion: app.getVersion(),
+            reason,
+          }),
+        log: (message, payload) => console.info(message, payload),
+        setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+      },
+    )
     return window
   }
 
   await window.loadFile(rendererDistPath)
+  registerAutoSyncTriggers(
+    window,
+    {
+      dataPath,
+      appVersion: app.getVersion(),
+    },
+    {
+      invokeAutoSync: (reason) =>
+        syncCoordinator.maybeAutoSync({
+          dataPath,
+          appVersion: app.getVersion(),
+          reason,
+        }),
+      log: (message, payload) => console.info(message, payload),
+      setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+    },
+  )
   return window
 }
 
@@ -451,7 +486,7 @@ const registerAppIpc = () => {
   ipcMain.handle('db:sync:sync-now', async (): Promise<SyncNowResult> => {
     const dataPath = await ensureDataDirectory()
 
-    return runManualSync({
+    return syncCoordinator.runManualSync({
       dataPath,
       appVersion: app.getVersion(),
     })
@@ -648,11 +683,11 @@ app.whenReady().then(async () => {
     console.error('[J-Flow Desktop] Startup auto backup failed', error)
   }
 
-  await createMainWindow()
+  await createMainWindow(dataPath)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createMainWindow()
+      void createMainWindow(dataPath)
     }
   })
 })
