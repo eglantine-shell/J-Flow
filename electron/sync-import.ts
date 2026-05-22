@@ -1,6 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
 import os from 'node:os'
-import path from 'node:path'
 
 import {
   applyRemoteSqliteActivityType,
@@ -19,11 +17,9 @@ import {
   getSqliteSyncChangeByEntity,
   getSqliteTaskTemplateById,
 } from './sqlite.js'
-import {
-  getSyncItemDirectoryPath,
-  getSyncTombstoneDirectoryPath,
-  prepareSyncTargetDirectory,
-} from './sync-folder.js'
+import { prepareSyncTarget } from './sync-target/metadata.js'
+import type { SyncTargetDriver } from './sync-target/index.js'
+import { LocalFolderDriver } from './sync-target/index.js'
 import type {
   ActivityType,
   AppSettings,
@@ -52,6 +48,10 @@ const ENTITY_DIRECTORY_MAP: Record<
   recurringTaskInstance: 'recurringTaskInstances',
   dayPlanItem: 'dayPlanItems',
 }
+
+const buildItemLogicalPrefix = (entityType: SyncEntityType) => `items/${ENTITY_DIRECTORY_MAP[entityType]}`
+const buildTombstoneLogicalPrefix = (entityType: Exclude<SyncEntityType, 'settings'>) =>
+  `tombstones/${ENTITY_DIRECTORY_MAP[entityType]}`
 
 type SupportedSyncEntity =
   | AppSettings
@@ -195,8 +195,8 @@ const validateSyncTombstoneFile = (
   return candidate as unknown as SyncTombstoneFile
 }
 
-const scanRemoteRecords = async (
-  targetPath: string,
+export const scanRemoteRecordsFromTarget = async (
+  driver: SyncTargetDriver,
 ): Promise<{
   records: RemoteRecord[]
   failures: SyncImportFailure[]
@@ -207,18 +207,25 @@ const scanRemoteRecords = async (
   for (const [entityType, directoryName] of Object.entries(ENTITY_DIRECTORY_MAP) as Array<
     [SyncEntityType, (typeof ENTITY_DIRECTORY_MAP)[SyncEntityType]]
   >) {
-    const itemDirectoryPath = getSyncItemDirectoryPath(targetPath, directoryName)
-    const tombstoneDirectoryPath = getSyncTombstoneDirectoryPath(targetPath, directoryName)
-    const itemNames = await readdir(itemDirectoryPath).catch(() => [])
-    const tombstoneNames =
-      entityType === 'settings' ? [] : await readdir(tombstoneDirectoryPath).catch(() => [])
+    const itemDirectoryLogicalPath = buildItemLogicalPrefix(entityType)
+    const tombstoneDirectoryLogicalPath =
+      entityType === 'settings'
+        ? null
+        : buildTombstoneLogicalPrefix(entityType as Exclude<SyncEntityType, 'settings'>)
+    const itemEntries = await driver.list(itemDirectoryLogicalPath).catch(() => [])
+    const tombstoneEntries =
+      entityType === 'settings' || !tombstoneDirectoryLogicalPath
+        ? []
+        : await driver.list(tombstoneDirectoryLogicalPath).catch(() => [])
 
-    for (const fileName of itemNames.filter((name) => name.endsWith('.json'))) {
-      const filePath = path.join(itemDirectoryPath, fileName)
+    for (const itemEntry of itemEntries.filter(
+      (entry) => entry.kind === 'file' && entry.logicalPath.endsWith('.json'),
+    )) {
+      const filePath = itemEntry.logicalPath
 
       try {
         const parsed = validateSyncItemFile(
-          JSON.parse(await readFile(filePath, 'utf8')) as unknown,
+          JSON.parse(await driver.readText(itemEntry.logicalPath)) as unknown,
           entityType,
           filePath,
         )
@@ -244,12 +251,14 @@ const scanRemoteRecords = async (
       }
     }
 
-    for (const fileName of tombstoneNames.filter((name) => name.endsWith('.json'))) {
-      const filePath = path.join(tombstoneDirectoryPath, fileName)
+    for (const tombstoneEntry of tombstoneEntries.filter(
+      (entry) => entry.kind === 'file' && entry.logicalPath.endsWith('.json'),
+    )) {
+      const filePath = tombstoneEntry.logicalPath
 
       try {
         const parsed = validateSyncTombstoneFile(
-          JSON.parse(await readFile(filePath, 'utf8')) as unknown,
+          JSON.parse(await driver.readText(tombstoneEntry.logicalPath)) as unknown,
           entityType as Exclude<SyncEntityType, 'settings'>,
           filePath,
         )
@@ -288,6 +297,11 @@ const scanRemoteRecords = async (
     records,
     failures,
   }
+}
+
+const scanRemoteRecords = async (targetPath: string) => {
+  const driver = new LocalFolderDriver(targetPath)
+  return scanRemoteRecordsFromTarget(driver)
 }
 
 const resolveLocalDeleteTime = (dataPath: string, entityType: SyncEntityType, entityId: string) => {
@@ -403,16 +417,45 @@ export const importRemoteChangesFromSyncFolder = async (input: {
     }
   }
 
-  await prepareSyncTargetDirectory({
-    targetPath: syncState.syncTargetPath,
+  const importResult = await importRemoteChangesFromSyncTarget({
+    dataPath: input.dataPath,
+    appVersion: input.appVersion,
     deviceId: syncState.deviceId,
     deviceName: os.hostname(),
     platform: process.platform,
-    appVersion: input.appVersion,
     lastSyncedAt: syncState.lastSyncedAt,
+    driver: new LocalFolderDriver(syncState.syncTargetPath),
   })
 
-  const scanResult = await scanRemoteRecords(syncState.syncTargetPath)
+  return {
+    success: importResult.success,
+    targetPath: syncState.syncTargetPath,
+    deviceId: syncState.deviceId,
+    appliedCount: importResult.appliedCount,
+    skippedCount: importResult.skippedCount,
+    failedCount: importResult.failedCount,
+    failures: importResult.failures,
+  }
+}
+
+export const importRemoteChangesFromSyncTarget = async (input: {
+  dataPath: string
+  appVersion: string
+  deviceId: string
+  deviceName: string
+  platform: string
+  lastSyncedAt: string | null
+  driver: SyncTargetDriver
+}): Promise<Pick<SyncImportResult, 'success' | 'appliedCount' | 'skippedCount' | 'failedCount' | 'failures'>> => {
+  await prepareSyncTarget(input.driver, {
+    deviceId: input.deviceId,
+    deviceName: input.deviceName,
+    platform: input.platform,
+    appVersion: input.appVersion,
+    lastSyncedAt: input.lastSyncedAt,
+  })
+
+  const scanResult = await scanRemoteRecordsFromTarget(input.driver)
   const applyResult = await applyRemoteSyncChanges({
     dataPath: input.dataPath,
     records: scanResult.records,
@@ -420,20 +463,17 @@ export const importRemoteChangesFromSyncFolder = async (input: {
   const failures = [...scanResult.failures, ...applyResult.failures]
 
   if (scanResult.records.length > 0) {
-    await prepareSyncTargetDirectory({
-      targetPath: syncState.syncTargetPath,
-      deviceId: syncState.deviceId,
-      deviceName: os.hostname(),
-      platform: process.platform,
+    await prepareSyncTarget(input.driver, {
+      deviceId: input.deviceId,
+      deviceName: input.deviceName,
+      platform: input.platform,
       appVersion: input.appVersion,
-      lastSyncedAt: syncState.lastSyncedAt,
+      lastSyncedAt: input.lastSyncedAt,
     })
   }
 
   return {
     success: failures.length === 0,
-    targetPath: syncState.syncTargetPath,
-    deviceId: syncState.deviceId,
     appliedCount: applyResult.appliedCount,
     skippedCount: applyResult.skippedCount,
     failedCount: failures.length,

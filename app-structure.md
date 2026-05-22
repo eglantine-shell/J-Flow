@@ -135,7 +135,9 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 当前 `Sync 5` 已补入的 bridge 基础：
 - `repository.sync.syncNow()`
 - 当前会按顺序编排：
-  - 检查同步文件夹路径
+  - 读取本机同步状态
+  - resolve 同步目标配置
+  - 创建对应 `SyncTargetDriver`
   - 准备同步目录
   - 获取最小锁
   - 创建本地自动备份
@@ -150,25 +152,206 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
   - 人工冲突选择
   - 字段级合并
 
-当前 `Sync 5 UI` 已补入的设置页薄接入：
-- 设置页 `数据与同步` 区域已收口为一张同步卡片
+当前 `Sync UI` 已升级为“同步目标”卡片：
+- 设置页 `数据与同步` 区域当前包含一张同步目标卡片
 - 当前卡片包含：
   - 标题区
   - 状态区
-  - 同步文件夹区
+  - 同步目标信息区
   - 最近结果区
   - 主操作区
   - 详情折叠区
-- 当前设置页仅承担：
-  - 选择同步文件夹
-  - 打开同步文件夹
-  - 更改同步文件夹
+- 当前设置页支持：
+  - 本地文件夹同步目标
+  - 本地文件夹选择 / 更改 / 打开
+  - 清除当前同步文件夹
   - 手动触发 `syncNow()`
   - 查看最近一次同步摘要与技术详情
 - 当前仍不承担：
   - 自动同步
   - 后台同步
   - 复杂同步中心
+
+当前 `syncNow` 已完成的编排升级：
+- `syncNow` 当前已支持：
+  - `localFolder`
+- 当前 resolve 规则：
+  - 优先使用 `syncTargetConfig`
+  - 若缺失则兼容旧 `syncTargetPath`
+- 当前 `syncNow` 已统一走：
+  - `prepareSyncTarget(driver, ...)`
+  - `acquireSyncLock(driver, ...)`
+  - `importRemoteChangesFromSyncTarget(...)`
+  - `exportLocalChangesToSyncTarget(...)`
+  - `updateDeviceInfo(driver, ...)`
+  - `releaseSyncLock(driver, ...)`
+- 当前仍未接入：
+  - 自动同步设置
+  - `OneDrive`
+  - 复杂同步目标管理
+
+当前 `Sync Target Driver Step 1` 已补入的底层目录准备：
+- 新增：
+  - `electron/sync-target/types.ts`
+  - `electron/sync-target/local-folder-driver.ts`
+  - `electron/sync-target/index.ts`
+- 当前仅新增：
+  - `SyncTargetDriver` 类型草案
+  - `LocalFolderDriver` 的本地文件能力
+- 当前仍未切换：
+  - `sync-folder.ts`
+  - `sync-export.ts`
+  - `sync-import.ts`
+  - `sync-now.ts`
+  到 driver 注入模式
+- 当前这一层只负责：
+  - `logicalPath -> 本地真实路径` 映射
+  - 本地文本读写
+  - 本地目录确保
+  - 本地 JSON 安全写入
+  - 本地目录列表读取
+  - 路径穿越防护
+
+当前 `Sync Target Driver Step 2` 已开始接入的本地 metadata 层：
+- 新增：
+  - `electron/sync-target/metadata.ts`
+- 当前已抽出可复用的协议层 helper：
+  - `prepareSyncTarget(driver, ...)`
+  - `readSyncInfo(driver)`
+  - `writeSyncInfo(driver, ...)`
+  - `touchSyncInfo(driver, ...)`
+  - `updateDeviceInfo(driver, ...)`
+  - `acquireSyncLock(driver, ...)`
+  - `releaseSyncLock(driver, ...)`
+- `electron/sync-folder.ts` 当前已开始在内部创建 `LocalFolderDriver`
+- 当前已通过 driver 承接：
+  - 同步目录结构 ensure
+  - `sync-info.json` 读写
+  - `devices/<deviceId>.json` 写入
+  - `locks/` 读写
+  - 本地目录读写测试中的临时文件往返
+- 当前 `sync-folder.ts` 的定位已经进一步收口为：
+  - local folder 路径校验
+  - 旧 API 兼容包装层
+  - 本地真实路径 helper
+- 当前仍未切换：
+  - `sync-export.ts`
+  - `sync-import.ts`
+  - `sync-now.ts`
+  到直接依赖 driver
+
+当前 `Sync Target Driver Step 3` 已开始接入的本地导出层：
+- `electron/sync-export.ts` 当前已开始使用 `SyncTargetDriver`
+- 当前已保持：
+  - 读取本地 pending `sync_changes`
+  - `upsert -> items/<entityDir>/<id>.json`
+  - `delete -> tombstones/<entityDir>/<id>.json`
+  - 单条成功后写 `syncedAt`
+  - partial failure 行为不变
+- 当前变化仅在底层写入方式：
+  - 不再在 export 层直接拼真实磁盘路径写文件
+  - 改为生成 `logicalPath` 并调用 `driver.safeWriteJson(...)`
+
+当前 `Sync Target Driver Step 4` 已开始接入的本地导入层：
+- `electron/sync-import.ts` 当前已开始使用 `SyncTargetDriver`
+- 当前已保持：
+  - 远端 `items/` 扫描范围不变
+  - 远端 `tombstones/` 扫描范围不变
+  - JSON 校验规则不变
+  - LWW 行为不变
+  - 静默导入不污染本地待上送 `sync_changes`
+- 当前变化仅在底层读取方式：
+  - 不再在 import 层直接扫描本地目录和读取真实文件路径
+  - 改为使用 `driver.list(logicalPrefix)` 和 `driver.readText(logicalPath)`
+
+当前 `Sync Target Driver Step 5` 已开始接入的同步编排层：
+- `electron/sync-now.ts` 当前已开始采用：
+  - `sync target config`
+  - `SyncTargetDriver`
+  的心智
+- 当前仍只支持：
+  - `localFolder`
+- 当前 `syncNow` 会：
+  - 继续从本机 sync state 读取 `syncTargetPath`
+  - 将其包装为 `{ type: 'localFolder', path }`
+  - resolve 为 `LocalFolderDriver`
+  - 再桥接回当前 local folder 的 prepare / lock / import / export 编排
+- 当前保持不变：
+  - `syncNow` 执行顺序
+  - success / partial / failed 判定
+  - `lastSyncedAt` 写入规则
+  - local folder sync 用户行为
+
+当前 `WebDAV POC 01` 已补入的远端低层能力：
+- 新增：
+  - `electron/webdav/types.ts`
+  - `electron/webdav/credentials.ts`
+  - `electron/webdav/client.ts`
+  - `electron/webdav/poc.ts`
+- 当前仅负责：
+  - WebDAV 基础类型
+  - 本机凭据隔离存储
+  - `GET / PUT / DELETE / MKCOL / PROPFIND`
+  - `runWebdavPocTest(...)`
+- 当前仍不负责：
+  - `SyncTargetDriver` 正式 `webdav` driver
+  - `sync-info.json / devices` 正式 metadata 接入
+  - `syncNow` 编排
+  - 设置页 UI
+  - `items / tombstones` 同步
+
+当前 `WebDAV POC 02` 已补入的受控入口与 metadata 级验证：
+- 新增：
+  - `electron/webdav/service.ts`
+- 当前 main/preload / storage bridge 已增加：
+  - `repository.sync.testWebdavTarget(config, password)`
+  - `repository.sync.clearWebdavTarget()`
+- 当前会在测试成功后：
+  - 将 `webdav` target config 保存到本机 `SQLite sync_meta`
+  - 将应用密码保存到 `Electron safeStorage + 本机隔离文件`
+- 当前 metadata 级验证会复用现有同步文件结构规则：
+  - `sync-info.json`
+  - `devices/<deviceId>.json`
+- 当前仍不负责：
+  - `syncNow` 正式接入
+  - `items / tombstones`
+  - `LWW`
+  - 设置页最终 UI
+
+当前 `WebDAV POC 03` 已补入正式 driver：
+- 新增：
+  - `electron/sync-target/webdav-driver.ts`
+- 当前 `WebDAV SyncTargetDriver` 已实现：
+  - `readText`
+  - `writeText`
+  - `delete`
+  - `list`
+  - `exists`
+  - `ensureDir`
+  - `safeWriteJson`
+- 当前 driver 行为特点：
+  - 继续使用 POSIX `logicalPath`
+  - 继续拒绝反斜杠、绝对路径、`../` 路径穿越
+  - 通过本机 credential store 读取 password 后，包装现有 low-level `WebDAV client`
+- 当前仍不负责：
+  - 接入 `syncNow`
+  - 接入 `sync-export / sync-import`
+  - 跑完整同步
+
+当前 `WebDAV metadata POC` 已开始跑通通用 metadata helper：
+- 当前 `repository.sync.testWebdavTarget(...)` 已改为：
+  - 通过 `WebDAV SyncTargetDriver`
+  - 调用通用 metadata helper
+  - 验证：
+    - `prepareSyncTarget(driver, ...)`
+    - `sync-info.json`
+    - `devices/<deviceId>.json`
+    - `locks/`
+- 当前保持不变：
+  - metadata 文件格式
+  - lock 语义
+  - 不接 `syncNow`
+  - 不接 `items / tombstones`
 
 建议暴露能力示例：
 - `getAppInfo`
@@ -420,3 +603,43 @@ Windows 数据安全要求：
   - `http://localhost:4173/J-Flow/`
 - `wait-on` 等待真实页面可访问后再启动 Electron。
 - `loadURL` 已增加基础错误处理。
+## WebDAV POC 分层（当前状态）
+
+- `electron/webdav/client.ts`
+  - WebDAV 低层 HTTP 能力
+  - 负责 `GET / PUT / DELETE / MKCOL / PROPFIND`
+- `electron/webdav/credentials.ts`
+  - WebDAV 凭据本机保存与删除
+- `electron/webdav/metadata-poc.ts`
+  - 只验证 WebDAV target 上的 metadata 结构：
+    - `sync-info.json`
+    - `devices/<deviceId>.json`
+    - `locks/`
+- `electron/webdav/import-export-poc.ts`
+  - 只验证 WebDAV target 上的 `items/` 与 `tombstones/` 读写
+  - 复用现有 target 版：
+    - `exportLocalChangesToSyncTarget(...)`
+    - `importRemoteChangesFromSyncTarget(...)`
+- `electron/sync-target/webdav-driver.ts`
+  - `SyncTargetDriver` 的 WebDAV 实现
+
+### 当前边界
+
+- WebDAV target 已能跑：
+  - metadata helper
+  - target 版 import/export
+  - `syncNow`
+- 仍未接：
+  - 设置页最终 WebDAV 同步 UI
+  - 自动同步 / 后台同步
+
+### WebDAV dev-only 手动测试入口
+
+- 当前已新增：
+  - `scripts/test-webdav-sync.mjs`
+- 当前命令：
+  - `corepack pnpm run test:webdav:manual`
+- 当前定位：
+  - 仅用于本机真实坚果云验证
+  - 不属于正式产品 UI
+  - 不替代设置页同步目标配置流程

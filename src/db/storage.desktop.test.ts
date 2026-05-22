@@ -27,6 +27,7 @@ const createDesktopApi = () => {
           lastSyncAttemptedAt: null,
           lastSyncResult: null,
           syncTargetPath: null,
+          syncTargetConfig: null,
         })),
         chooseTargetPath: vi.fn(async () => '/tmp/j-flow-sync'),
         openTargetPath: vi.fn(async () => ({
@@ -42,6 +43,7 @@ const createDesktopApi = () => {
           lastSyncAttemptedAt: null,
           lastSyncResult: null,
           syncTargetPath: '/tmp/j-flow-sync',
+          syncTargetConfig: null,
         })),
         clearTargetPath: vi.fn(async () => ({
           deviceId: 'desktop-device-test',
@@ -51,6 +53,7 @@ const createDesktopApi = () => {
           lastSyncAttemptedAt: null,
           lastSyncResult: null,
           syncTargetPath: null,
+          syncTargetConfig: null,
         })),
         testTargetPath: vi.fn(async () => ({
           success: true,

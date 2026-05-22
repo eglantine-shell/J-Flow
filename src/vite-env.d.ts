@@ -12,8 +12,10 @@ import type {
   SyncExportResult,
   SyncImportResult,
   SyncNowResult,
+  SyncTargetConfig,
   SyncTargetTestResult,
   TaskTemplate,
+  WebdavTargetTestResult,
 } from '@/types'
 
 type DesktopAppInfo = {

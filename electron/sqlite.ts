@@ -22,6 +22,7 @@ import type {
   SyncEntityType,
   TaskTemplate,
   TaskTemplateUpdateInput,
+  SyncTargetConfig,
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
@@ -37,6 +38,7 @@ const SYNC_META_LAST_SYNC_ERROR = 'lastSyncError'
 const SYNC_META_LAST_SYNC_ATTEMPTED_AT = 'lastSyncAttemptedAt'
 const SYNC_META_LAST_SYNC_RESULT = 'lastSyncResult'
 const SYNC_META_TARGET_PATH = 'syncTargetPath'
+const SYNC_META_TARGET_CONFIG = 'syncTargetConfig'
 
 type SnapshotResult =
   | {
@@ -460,6 +462,10 @@ const ensureSyncMetaDefaults = (database: DatabaseSync) => {
   if (readSyncMeta(database, SYNC_META_TARGET_PATH) === null) {
     writeSyncMeta(database, SYNC_META_TARGET_PATH, null)
   }
+
+  if (readSyncMeta(database, SYNC_META_TARGET_CONFIG) === null) {
+    writeSyncMeta(database, SYNC_META_TARGET_CONFIG, null)
+  }
 }
 
 const getDeviceId = (database: DatabaseSync) => {
@@ -475,6 +481,18 @@ const getDeviceId = (database: DatabaseSync) => {
   return nextDeviceId
 }
 
+const normalizeSyncTargetConfig = (value: SyncTargetConfig | null): SyncTargetConfig | null => {
+  if (!value) {
+    return null
+  }
+
+  if (value.type === 'localFolder') {
+    return value
+  }
+
+  return null
+}
+
 const buildLocalSyncState = (database: DatabaseSync): LocalSyncState => ({
   deviceId: getDeviceId(database),
   lastSyncedAt: readSyncMeta(database, SYNC_META_LAST_SYNCED_AT),
@@ -483,6 +501,9 @@ const buildLocalSyncState = (database: DatabaseSync): LocalSyncState => ({
   lastSyncAttemptedAt: readSyncMeta(database, SYNC_META_LAST_SYNC_ATTEMPTED_AT),
   lastSyncResult: readSyncMetaJson<LocalSyncResultSummary>(database, SYNC_META_LAST_SYNC_RESULT),
   syncTargetPath: readSyncMeta(database, SYNC_META_TARGET_PATH),
+  syncTargetConfig: normalizeSyncTargetConfig(
+    readSyncMetaJson<SyncTargetConfig>(database, SYNC_META_TARGET_CONFIG),
+  ),
 })
 
 const buildSyncChangeId = (entityType: SyncEntityType, entityId: string) =>
@@ -1555,6 +1576,19 @@ export const setSqliteSyncTargetPath = (dataPath: string, targetPath: string): L
 
   return runSyncMetaMutation(database, () => {
     writeSyncMeta(database, SYNC_META_TARGET_PATH, normalizedPath)
+    writeSyncMeta(database, SYNC_META_TARGET_CONFIG, null)
+    return buildLocalSyncState(database)
+  })
+}
+
+export const setSqliteSyncTargetConfig = (
+  dataPath: string,
+  config: SyncTargetConfig,
+): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_TARGET_CONFIG, JSON.stringify(config))
     return buildLocalSyncState(database)
   })
 }
@@ -1564,6 +1598,15 @@ export const clearSqliteSyncTargetPath = (dataPath: string): LocalSyncState => {
 
   return runSyncMetaMutation(database, () => {
     writeSyncMeta(database, SYNC_META_TARGET_PATH, null)
+    return buildLocalSyncState(database)
+  })
+}
+
+export const clearSqliteSyncTargetConfig = (dataPath: string): LocalSyncState => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => {
+    writeSyncMeta(database, SYNC_META_TARGET_CONFIG, null)
     return buildLocalSyncState(database)
   })
 }

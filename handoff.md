@@ -1,5 +1,315 @@
 # 项目交接摘要
 
+## 最新状态（2026-05-22，WebDAV 已移除，仅保留本地文件夹同步，优先参考）
+- 当前产品决策已确认：
+  - 不再继续维护坚果云 `WebDAV`
+- 当前已完成：
+  - 设置页移除 WebDAV UI
+  - preload / main process 移除 WebDAV IPC
+  - `sync-now` 移除 WebDAV driver 分支
+  - 删除 `electron/webdav/*`
+  - 删除 WebDAV 手动测试脚本
+- 当前同步只保留：
+  - 本地文件夹
+- 当前兼容处理：
+  - 若本机 `sync_meta` 里仍残留旧的 `webdav` 配置
+  - 现在会被自动忽略
+  - 不再影响设置页与同步主链
+- 当前建议：
+  - 后续同步相关工作只围绕本地文件夹同步继续优化
+  - 不要再基于旧的 WebDAV 文档继续实现
+
+## 最新状态（2026-05-22，自动同步下一步建议：最小方案，优先参考）
+- 当前手动同步主链已经可用：
+  - 本地文件夹选择
+  - `syncNow()`
+  - 自动备份
+  - 结果展示
+- 下一步若开始自动同步，建议只做最小方案：
+  - 只在桌面端
+  - 只针对本地文件夹同步
+  - 只在应用启动后与窗口重新获得焦点时尝试自动同步
+  - 增加最小去抖：
+    - 距离上次尝试不足 `30s` 不再自动触发
+  - 若当前已有同步进行中，则跳过
+  - 若未配置同步文件夹，则跳过
+  - 自动同步失败时：
+    - 只写入最近结果
+    - 不弹打断式错误
+  - 当前先不做：
+    - 文件系统 watcher
+    - 后台定时器常驻轮询
+    - 菜单栏 / 托盘后台同步
+    - 用户自定义自动同步策略
+- 当前建议实施顺序：
+  - 先新增 main / renderer 可调用的 `maybeAutoSync(reason)` 薄入口
+  - 先接两个触发点：
+    - app ready 后延迟一次
+    - window focus 时一次
+  - 等这条最小链路稳定后，再决定是否扩到定时器
+
+## 最新状态（2026-05-22，WebDAV 测试并保存链路已补可观测性，优先参考）
+- 用户反馈：
+  - 清除配置后重新输入
+  - 点击：
+    - `测试并保存`
+  看起来“没有反应”
+- 当前判断：
+  - 暂时不能直接认定是 WebDAV 超时或协议失败
+  - 需要先确认点击链路是否真正进入 main process，以及在哪一步 pending
+- 当前已补：
+  - 设置页测试状态：
+    - `测试并保存中…`
+    - `正在测试 WebDAV`
+  - main process 日志：
+    - `test-webdav-target:start`
+    - `test-webdav-target:done`
+    - `test-webdav-target:failed`
+- 当前建议：
+  - 重启 Electron 后重新测试：
+    - `清除配置 -> 重新输入 -> 测试并保存`
+  - 先根据页面状态与终端日志判断：
+    - 是否已发出 IPC
+    - 是否进入 handler
+    - 是否成功返回 / 失败返回 / 长时间 pending
+
+## 最新状态（2026-05-22，坚果云 collection URL 尾斜杠已兼容，优先参考）
+- electron 设置页点击：
+  - `立即同步`
+  仍出现：
+  - `WebDAV 创建目录失败：503 operation=MKCOL logicalPath=. status=503`
+  的根因已确认不是同步编排缺失，而是 WebDAV collection URL 形态兼容问题
+- 当前已修复：
+  - `electron/webdav/client.ts`
+  - 目录类请求现在统一使用带尾斜杠的 collection URL
+- 当前已覆盖：
+  - 根目录 `PROPFIND`
+  - 嵌套目录 `PROPFIND`
+  - `ensureDir(...)` 里的 collection URL 断言
+- 这主要是为了兼容坚果云对：
+  - `/dav/J-Flow/`
+  - `/dav/J-Flow/devices/`
+  这类 collection URL 的更稳定处理
+- 当前建议：
+  - 在 electron 设置页重新点击一次：
+    - `立即同步`
+  - 重点确认：
+    - 不再出现 `MKCOL logicalPath=.` 的 `503`
+
+## 最新状态（2026-05-21，坚果云 MKCOL 503 已兼容，优先参考）
+- 真实坚果云 manual test 又暴露出一个新兼容点：
+  - `prepare-target`
+  - `WebDAV 创建目录失败：503 operation=MKCOL logicalPath=. status=503`
+- 当前已修复：
+  - `WebDAV client.ensureDir(...)`
+  - 现在只要 `MKCOL` 失败后能证明目录其实已经存在，就会继续
+  - 不再只把 `405` 视为“已存在可接受”
+- 这主要是为了兼容坚果云对已存在目录偶发返回 `503` 的情况
+- 当前建议：
+  - 重新运行 `corepack pnpm run test:webdav:manual`
+  - 看是否不再卡在 `prepare-target`
+
+## 最新状态（2026-05-21，坚果云目录初始化已改为先 exists，优先参考）
+- `WebDAV client.ensureDir(...)` 当前已进一步收口为：
+  - 先 `exists`
+  - 已存在则跳过 `MKCOL`
+- 这样在坚果云根目录 `J-Flow-Test` 已存在时：
+  - 不会再先发不稳定的 `MKCOL`
+  - 能更稳地避开 `503`
+- 当前建议：
+  - 再次运行 `corepack pnpm run test:webdav:manual`
+  - 重点确认：
+    - 不再在 `prepare-target` 失败
+
+## 最新状态（2026-05-21，WebDAV manual test 已收紧为固定 2 条变更，优先参考）
+- `corepack pnpm run test:webdav:manual` 当前已收紧为更稳定的回归入口。
+- 当前脚本在写入测试 seed 数据后，会先把 seed 自动产生的 `sync_changes` 标记为已同步。
+- 然后只再创建本轮测试的两条待同步变更：
+  - 一个 `dayPlanItem upsert`
+  - 一个 `dayPlanItem delete / tombstone`
+- 当前预期输出应为：
+  - `beforeSyncChangesCount = 2`
+  - `syncResult.status = "success"`
+  - `syncResult.exportResult.exportedCount = 2`
+  - `remote.itemExists = true`
+  - `remote.tombstoneExists = true`
+- 当前仍建议：
+  - 使用测试目录，例如 `J-Flow-Test`
+  - 不要使用正式 `J-Flow`
+  - 不要使用正式主数据目录
+
+## 最新状态（2026-05-21，WebDAV manual test：远端附加校验已加 503 容错，优先参考）
+- 真实坚果云 manual test 已确认：
+  - `metadata`
+  - `syncNow`
+  - `items / tombstones`
+  主链可用
+- 当前又补了一层脚本稳定性：
+  - 远端附加校验中的 `PROPFIND` 若偶发 `503`
+  - 脚本会做有限重试
+  - 若个别 listing 仍失败，会进入：
+    - `remote.warnings`
+  - 不再直接把已成功的 `syncNow` 误判成整轮脚本失败
+- 当前 item / tombstone 是否存在，已额外通过：
+  - `driver.exists(...)`
+  直接校验
+- 当前建议：
+  - 重新运行 `corepack pnpm run test:webdav:manual`
+  - 若 `syncResult.status = "success"` 且：
+    - `remote.itemExists = true`
+    - `remote.tombstoneExists = true`
+    则可视为本轮真实 WebDAV 回归通过
+
+## 最新状态（2026-05-21，WebDAV manual test bugfix：优先参考）
+- 已修复真实坚果云 manual test 中的首次初始化问题：
+  - 当远端目录结构已存在
+  - 但 `sync-info.json` 缺失时
+  - 现在会被识别为首次初始化 / 半初始化修复场景
+  - 系统会自动创建并补齐 `sync-info.json`
+- 根因是：
+  - 通用 metadata helper 之前只把本地 `ENOENT` 识别为“文件不存在”
+  - 没有把 WebDAV 的：
+    - `code = not_found`
+    - `status = 404`
+    视为同类情况
+- 当前已经补齐：
+  - `touchSyncInfo(...)` 的 WebDAV `404` 识别
+  - WebDAV 错误信息中的：
+    - `operation`
+    - `logicalPath`
+    - `status`
+- 当前建议：
+  - 重新运行：
+    - `corepack pnpm run test:webdav:manual`
+  - 重点确认远端会补齐：
+    - `J-Flow-Test/sync-info.json`
+  - 并继续验证：
+    - `devices/`
+    - `items/`
+    - `tombstones/`
+    - `locks/`
+
+## 最新状态（2026-05-21，WebDAV syncNow 人工验证准备，优先参考）
+- 当前已新增 dev-only 手动测试入口：
+  - `corepack pnpm run test:webdav:manual`
+- 当前脚本位置：
+  - `scripts/test-webdav-sync.mjs`
+- 当前脚本会：
+  - 读取仓库根目录 `.env.local`
+  - 使用真实坚果云参数保存 `webdav target config + credential`
+  - 自动创建临时 SQLite 数据目录
+  - 自动构造：
+    - 一个 `dayPlanItem upsert`
+    - 一个 `dayPlanItem delete`
+  - 运行一次真实 `syncNow`
+  - 输出远端 `sync-info / devices / items / tombstones / locks` 验证结果
+- 当前脚本不会：
+  - 使用正式主数据目录
+  - 返回 password
+  - 把 password 写入日志
+- 当前建议：
+  - 手动验证时使用：
+    - `baseUrl = https://dav.jianguoyun.com/dav/`
+    - `rootPath = J-Flow-Test`
+  - 不要使用正式 `J-Flow`
+
+## 最新状态（2026-05-21，WebDAV 已接入 syncNow，优先参考）
+- 当前 `syncNow` 已可根据 `syncTargetConfig.type` 创建对应 driver。
+- 当前已支持：
+  - `localFolder`
+  - `webdav`
+- 当前目标 resolve 规则：
+  - 优先使用本机 `syncTargetConfig`
+  - 若 `syncTargetConfig` 缺失，则继续兼容旧的 `syncTargetPath -> localFolder`
+- 当前 `webdav` driver 的创建方式：
+  - 从 `syncTargetConfig` 读取：
+    - `baseUrl`
+    - `rootPath`
+    - `username`
+    - `provider`
+  - 从本机 credential store 读取 password
+  - 若 credential 缺失，则当前 `syncNow` 直接 `failed`
+- 当前 `syncNow` 已统一复用：
+  - `prepareSyncTarget(driver, ...)`
+  - `acquireSyncLock(driver, ...)`
+  - `importRemoteChangesFromSyncTarget(...)`
+  - `exportLocalChangesToSyncTarget(...)`
+  - `updateDeviceInfo(driver, ...)`
+  - `releaseSyncLock(driver, ...)`
+- 当前保持不变：
+  - 先 `import`，后 `export`
+  - `partial / failed` 不写 `lastSyncedAt`
+  - `success` 才写本机与远端 `lastSyncedAt`
+  - 无变化但成功仍写 `lastSyncedAt`
+  - 导入仍不会制造新的待同步 `sync_changes`
+- 当前仍未开始：
+  - 设置页最终 `webdav` 同步目标 UI
+  - 自动同步
+  - OneDrive
+- 当前下一步建议：
+  - 先用测试数据与测试坚果云目录做一轮小规模人工验证
+  - 再决定是否进入“设置页同步目标 UI”阶段
+
+## 最新状态（2026-05-21，WebDAV metadata POC，优先参考）
+- 当前 `WebDAV SyncTargetDriver` 已能跑通通用 metadata helper。
+- 当前 `repository.sync.testWebdavTarget(...)` 继续保留原受控入口，但内部已改为：
+  - 创建 `WebDAV SyncTargetDriver`
+  - 调用通用 metadata helper
+  - 验证：
+    - `prepareSyncTarget(driver, ...)`
+    - `sync-info.json`
+    - `devices/<deviceId>.json`
+    - `locks/`
+- 当前 WebDAV target 上已验证：
+  - `sync-info.json` 格式与 localFolder 一致
+  - `devices/<deviceId>.json` 格式与 localFolder 一致
+  - `locks/sync_<deviceId>.json` 语义与 localFolder 一致
+- 当前测试连接成功后仍会：
+  - 保存 `webdav target config`
+  - 保存 credential
+- 当前测试连接失败时仍不会：
+  - 保存 password
+  - 覆盖旧可用配置
+- 当前仍未开始：
+  - `syncNow` 接入 `webdav`
+  - `items / tombstones`
+  - `import / export`
+  - 完整同步闭环
+- 当前下一步建议：
+  - 开始让 `webdav` 进入 `sync core` 的下一小步
+  - 优先接 `sync-export / sync-import` 的 target 版函数，而不是直接改 `syncNow`
+
+## 最新状态（2026-05-20，WebDAV 接入 Sync Core Step 1，优先参考）
+- 当前已新增通用 sync metadata helper：
+  - `electron/sync-target/metadata.ts`
+- 当前已把下面这些协议逻辑从 `localFolder` 专属实现中抽出：
+  - `sync-info.json`
+  - `devices/<deviceId>.json`
+  - `locks/`
+- 当前 helper 已支持：
+  - `prepareSyncTarget(driver, ...)`
+  - `readSyncInfo(driver)`
+  - `writeSyncInfo(driver, ...)`
+  - `touchSyncInfo(driver, ...)`
+  - `updateDeviceInfo(driver, ...)`
+  - `acquireSyncLock(driver, ...)`
+  - `releaseSyncLock(driver, ...)`
+- 当前 `electron/sync-folder.ts` 仍保留旧对外 API，但已改为：
+  - local folder 路径校验
+  - 旧 API 兼容包装层
+  - 内部创建 `LocalFolderDriver` 后调用通用 helper
+- 当前保持不变：
+  - metadata 格式
+  - lock 语义
+  - local folder 行为
+- 当前仍未开始：
+  - 让 `webdav` 接入 `syncNow`
+  - 让 `webdav` 接入完整 `import / export`
+  - 完整同步闭环
+- 当前下一步建议：
+  - 先用 `WebDAV SyncTargetDriver` 跑同一套 metadata helper
+  - 再进入 `webdav` 的 `import / export` target 版接线
+
 ## 最新状态（2026-05-18，同步方案文档，优先参考）
 - 本轮没有开始实现同步。
 - 本轮未改：
@@ -68,6 +378,160 @@
   - 最小 lock 文件格式建议
   - `sync-info.json` 最小字段建议
 - 当前同步仍处于“可开始实现前的规格补完”阶段，尚未进入任何代码落地。
+
+## 最新状态（2026-05-19，OneDrive 前置决策收口，优先参考）
+- 当前 `localFolder` 同步主链已经可用，并已完成 `SyncTargetDriver` 迁移。
+- 本轮继续只改文档，不写 OneDrive 代码。
+- 本轮已完成：
+  - 更新 `constraints.md`
+    - 不再使用“当前完全不做云同步”的旧表述
+    - 明确：
+      - 不做 `J-Flow` 自有账号系统
+      - 不做 `J-Flow` 自有云数据库
+      - 允许第三方云同步目标授权接入
+      - 第一目标为 `OneDrive`
+      - 仍不做自动同步 / WebDAV / Dropbox / Google Drive
+  - 新增：
+    - `docs/sync-onedrive-oauth-poc.md`
+    - `docs/sync-onedrive-token-storage-options.md`
+- 当前已明确：
+  - OneDrive 方向进入“实现前决策阶段”
+  - 尚未写 OAuth 代码
+  - 尚未接 Graph API
+  - 尚未改设置页 UI
+- 当前建议的前置决策收口：
+  - OneDrive OAuth POC 使用系统浏览器
+  - 使用 `Authorization Code + PKCE`
+  - 使用 `localhost / 127.0.0.1` loopback callback
+  - token 不进入同步目录、JSON 备份或跨设备同步数据
+  - POC 阶段优先考虑：
+    - `Electron safeStorage + 本机隔离文件`
+  - 正式阶段优先评估：
+    - `keytar` / 系统凭据存储
+- 当前下一步建议：
+  - 若确认以上边界与参数方向无误，可进入 OneDrive OAuth POC 代码阶段
+  - 但仍应避免一开始就接完整 Graph 同步链路，建议先验证：
+    - 授权
+    - 账号信息
+    - App Folder metadata 读写
+
+## 最新状态（2026-05-20，WebDAV / 坚果云方向切换，优先参考）
+- 当前决定暂时停止 `OneDrive OAuth` 方向，改为优先支持 `坚果云 WebDAV` 同步目标。
+- 这次方向切换的原因：
+  - `OneDrive App Registration / Azure tenant` 获取受阻
+  - 坚果云官方支持 `WebDAV`
+  - `WebDAV` 不需要 `OAuth client id`
+  - 更适合当前 `SyncTargetDriver` 架构
+- 本轮继续只改文档，不写代码。
+- 本轮已新增：
+  - `docs/sync-webdav-jianguoyun-design.md`
+- 当前已明确：
+  - 第一阶段云目标改为 `WebDAV / 坚果云`
+  - `OneDrive` 保留为未来目标，但暂缓
+  - 继续复用现有：
+    - `sync-info.json`
+    - `devices/`
+    - `items/`
+    - `tombstones/`
+    - `locks/`
+    - `LWW`
+    - `syncNow`
+    - `SyncTargetDriver`
+- 当前已建议的后续顺序：
+  - 先更新 `constraints.md` 边界，把第一云目标从 `OneDrive` 调整为 `WebDAV / 坚果云`
+  - 再扩展 `SyncTargetConfig` 增加 `webdav`
+  - 再做 WebDAV 凭据存储与 metadata POC
+- 当前仍未做：
+  - `WebDAV driver` 代码
+  - 坚果云账号密码 UI
+  - `syncNow` 改造
+  - 自动同步
+
+## 最新状态（2026-05-20，WebDAV / 坚果云实施计划，优先参考）
+- 本轮继续只改文档，不写代码。
+- 本轮已完成：
+  - 更新 `constraints.md`
+    - 第一阶段云同步目标正式调整为 `WebDAV / 坚果云`
+    - `OneDrive` 保留为未来目标，但暂缓
+    - 继续不做自动同步 / 实时同步 / 后台定时同步
+    - 明确 `JSON` 备份不是同步包
+  - 新增：
+    - `docs/sync-webdav-implementation-plan.md`
+- 当前已明确：
+  - `webdav` target config 的推荐结构
+  - 坚果云默认连接参数
+  - credential store 原则
+  - `WebDAV driver` 的方法映射
+  - POC 只做 metadata 验证，不接完整同步
+- 当前下一步建议：
+  - 若边界与实施计划确认无误，可进入：
+    - `SyncTargetConfig` 增加 `webdav`
+    - WebDAV credential store 设计与实现
+    - `WebDAV driver` metadata POC
+
+## 最新状态（2026-05-20，WebDAV POC 前最后决策，优先参考）
+- 本轮继续只改文档，不写代码。
+- 本轮已新增：
+  - `docs/sync-webdav-poc-decisions.md`
+- 当前已拍板的实现前决策：
+  - `webdav target config`
+    - 后续统一保存在本机 `SQLite sync_meta`
+    - 从单独的 `syncTargetPath` 逐步升级到 `syncTargetConfig`
+  - `password / app password`
+    - 不进入 `SyncTargetConfig`
+    - 由本机 credential store 保存
+  - credential store
+    - POC 阶段采用：
+      - `Electron safeStorage + 本机隔离文件`
+    - 测试连接失败时默认不持久化凭据
+    - 测试成功后再保存
+  - WebDAV POC 技术路线
+    - 采用：
+      - `fetch + XML parser`
+    - 当前不引入完整 WebDAV client 库
+- 当前下一步建议：
+  - 可开始进入 WebDAV POC 第一轮代码实现
+  - 范围建议先限制为：
+    - WebDAV types
+    - credential store
+    - low-level client
+    - `GET / PUT / DELETE / MKCOL / PROPFIND`
+    - 写读删一个测试 JSON
+
+## 最新状态（2026-05-20，WebDAV POC 01，优先参考）
+- 本轮已开始 `WebDAV / 坚果云` 的第一轮代码 POC。
+- 本轮只做：
+  - WebDAV low-level client
+  - credential store
+  - 基础远端方法验证
+- 本轮未做：
+  - `syncNow` 接入
+  - `SyncTargetDriver` 正式 `webdav` driver
+  - `items / tombstones`
+  - 设置页 UI
+- 本轮已新增：
+  - `electron/webdav/types.ts`
+  - `electron/webdav/credentials.ts`
+  - `electron/webdav/client.ts`
+  - `electron/webdav/poc.ts`
+  - `electron/webdav/credentials.test.ts`
+  - `electron/webdav/client.test.ts`
+- 本轮已新增依赖：
+  - `fast-xml-parser`
+  - 仅用于 Electron main 侧解析 `PROPFIND` XML
+  - 没有引入完整 WebDAV client 库
+- 当前已实现：
+  - WebDAV 凭据按 `provider + baseUrl + username` 维度索引
+  - `Electron safeStorage + 本机隔离文件`
+  - `GET / PUT / DELETE / MKCOL / PROPFIND`
+  - `runWebdavPocTest(config, password)`
+- 当前已明确：
+  - password 不进入 target config
+  - password 不进入同步目录、`items / tombstones`、JSON 备份
+  - 测试连接失败时默认不持久化凭据
+- 当前下一步建议：
+  - 下一轮先把 `webdav` target config 和 `credential store` 接到受控 main 层入口
+  - 再做 `sync-info.json / devices` metadata POC
 
 ## 最新状态（2026-05-17，Windows 真机打包与启动修复，优先参考）
 - 本轮目标：
@@ -1225,3 +1689,472 @@
   - 启动时按既有规则自动备份
   - `syncNow` 前自动备份
   - 导入 / 重置 / 替换快照后仍按原逻辑创建备份
+
+## 2026-05-19 OneDrive 同步目标文档当前有效状态
+
+- 当前已新增：
+  - `docs/sync-onedrive-design.md`
+- 这份文档当前不是实现说明，而是方向分析。
+- 当前文档已经明确：
+  - J-Flow 若要像 Joplin 一样接 OneDrive，不应推翻现有 Sync 1-5
+  - 更合理的方向是：
+    - 保留现有同步格式
+    - 新增 `OneDrive` 同步目标 driver
+    - 用 OAuth + Microsoft Graph App Folder 读写同步文件
+- 当前也明确记录了一个前置问题：
+  - `constraints.md` 仍然写着“当前不做云同步”
+  - 如果要正式开始 OneDrive，需要先确认是否放开这条边界
+
+## OneDrive 文档接手提醒
+- 下一轮如果继续 OneDrive 方向，建议先不要写代码。
+- 优先补：
+  - `docs/sync-onedrive-implementation-plan.md`
+- 先把这些点定清楚：
+  - target driver 接口
+  - 授权流程
+  - token 存储位置
+  - 设置页如何从“同步文件夹”升级到“同步目标”
+
+## 2026-05-19 Sync Target Driver 文档当前有效状态
+
+- 当前已新增：
+  - `docs/sync-target-driver-design.md`
+- 这份文档当前明确了一个重要优先级：
+  - 在开始 OneDrive 之前，先抽 `SyncTargetDriver`
+- 当前建议的未来方向是：
+  - `localFolder` driver 先承接现有实现
+  - `oneDriveAppFolder` driver 后续再接
+- 当前文档也明确了：
+  - `sync-export`、`sync-import`、`sync-now` 都不应继续直接依赖本地文件系统
+  - 同步核心未来应只依赖 driver
+
+## Sync Target Driver 接手提醒
+- 下一轮如果继续推进，优先补一份更偏工程拆分的文档：
+  - `docs/sync-target-driver-implementation-plan.md`
+- 建议先拆清：
+  - `sync-folder.ts` 哪些函数迁到 `LocalFolderDriver`
+  - 哪些 service 改成依赖注入 `driver`
+  - 哪些测试先要围绕 driver 重构
+
+## 2026-05-19 Sync Target Driver 实施计划当前有效状态
+
+- 当前已新增：
+  - `docs/sync-target-driver-implementation-plan.md`
+- 这份文档当前不是实现结果，而是代码迁移顺序说明。
+- 当前文档已经明确：
+  - 建议新增：
+    - `electron/sync-target/types.ts`
+    - `electron/sync-target/local-folder-driver.ts`
+    - `electron/sync-target/index.ts`
+  - `LocalFolderDriver` 第一版应先承接当前 local folder 的底层 `fs` 行为
+  - `sync-folder.ts` 第一阶段不建议直接改名，而应先保留并逐步剥离
+  - `sync-export`、`sync-import`、`sync-now` 应逐步从“直接依赖本地目录”改为“依赖 driver”
+  - 现有 Sync 2-5 行为和测试应保持不变
+
+## Sync Target Driver 实施计划接手提醒
+- 下一轮如果开始代码迁移，建议优先从：
+  - `LocalFolderDriver`
+  开始，不要先碰 OneDrive 或 UI。
+- 第一阶段最重要的目标不是扩功能，而是：
+  - driver 抽象完成
+  - local folder sync 行为保持不变
+  - 现有同步测试继续通过
+
+## 2026-05-19 Sync Target Driver Step 1 当前有效状态
+
+- 当前已新增：
+  - `electron/sync-target/types.ts`
+  - `electron/sync-target/local-folder-driver.ts`
+  - `electron/sync-target/index.ts`
+  - `electron/sync-target/local-folder-driver.test.ts`
+- 当前 `LocalFolderDriver` 已提供：
+  - `readText`
+  - `writeText`
+  - `delete`
+  - `list`
+  - `exists`
+  - `ensureDir`
+  - `safeWriteJson`
+- 当前已明确：
+  - `logicalPath` 使用 POSIX 风格
+  - driver 内部负责映射到本地真实路径
+  - 拒绝反斜杠、绝对路径和 `..` 路径穿越
+  - `safeWriteJson` 继续沿用本地 `.tmp -> rename`
+
+## Sync Target Driver Step 1 接手提醒
+- 下一轮建议先改：
+  - `sync-folder.ts`
+  让 `sync-info`、`devices`、`locks` 相关本地目录操作开始由 `LocalFolderDriver` 承接。
+- 当前仍不要同时改：
+  - `sync-export.ts`
+  - `sync-import.ts`
+  - `sync-now.ts`
+  以避免一步跨太大。
+
+## 2026-05-19 Sync Target Driver Step 2 当前有效状态
+
+- 当前 `electron/sync-folder.ts` 已开始在内部使用 `LocalFolderDriver`
+- 当前已迁移到 driver 的本地 metadata 层包括：
+  - 同步目录结构 ensure
+  - `sync-info.json` 读取 / 写入
+  - `devices/<deviceId>.json` 写入
+  - `locks/` 读写
+  - 本地目录读写测试时的临时 JSON 往返
+- 当前保持不变：
+  - `sync-folder.ts` 对外函数名
+  - sync folder 文件结构
+  - 锁语义
+  - `sync-info` / `devices` 字段规则
+
+## Sync Target Driver Step 2 接手提醒
+- 下一轮建议改：
+  - `sync-export.ts`
+  让本地 item / tombstone 导出开始通过 driver 写入。
+- 当前仍先不要同时去改：
+  - `sync-import.ts`
+  - `sync-now.ts`
+  这样更容易把“导出行为是否不变”单独验证清楚。
+
+## 2026-05-19 Sync Target Driver Step 3 当前有效状态
+
+- 当前 `electron/sync-export.ts` 已开始使用 `SyncTargetDriver`
+- 当前仍保留旧对外入口：
+  - `exportLocalChangesToSyncFolder(...)`
+  - `exportPendingSyncChanges(...)`
+- 当前旧入口内部会创建：
+  - `new LocalFolderDriver(targetPath)`
+- 当前 export 层已改为：
+  - 只生成 logicalPath
+  - 用 `driver.safeWriteJson(...)` 写 `items/` 和 `tombstones/`
+- 当前保持不变：
+  - `upsert` / `delete` 导出规则
+  - item / tombstone JSON 格式
+  - `syncedAt` 逐条写入
+  - partial failure 行为
+  - 不更新 `lastSyncedAt`
+
+## Sync Target Driver Step 3 接手提醒
+- 下一轮建议改：
+  - `sync-import.ts`
+  让远端 `items/` / `tombstones/` 的读取开始通过 driver。
+- 当前仍先不要同时去改：
+  - `sync-now.ts`
+  这样可以把“导入行为是否不变”单独锁住。
+
+## 2026-05-19 Sync Target Driver Step 4 当前有效状态
+
+- 当前 `electron/sync-import.ts` 已开始使用 `SyncTargetDriver`
+- 当前仍保留旧对外入口：
+  - `importRemoteChangesFromSyncFolder(...)`
+  - `applyRemoteSyncChanges(...)`
+- 当前 import 层已改为：
+  - 用 `driver.list(logicalPrefix)` 扫描远端 `items/` / `tombstones/`
+  - 用 `driver.readText(logicalPath)` 读取远端 JSON
+- 当前保持不变：
+  - 远端 item / tombstone 扫描范围
+  - JSON 校验
+  - LWW 判断
+  - 静默导入
+  - partial failure 行为
+  - 不更新 `lastSyncedAt`
+
+## Sync Target Driver Step 4 接手提醒
+- 下一轮建议改：
+  - `sync-now.ts`
+  让 `syncNow` 自身开始 resolve driver，而不是默认依赖 local folder helper。
+- 当前仍先不要同时去扩：
+  - OneDrive
+  - 设置页“同步目标”UI
+  先把 driver 迁移闭环做完更稳。
+
+## 2026-05-19 Sync Target Driver Step 5 当前有效状态
+
+- 当前 `electron/sync-now.ts` 已开始采用：
+  - `target config`
+  - `driver`
+  的编排心智
+- 当前仍只支持：
+  - `localFolder`
+- 当前 `syncNow` 现在会：
+  - 从本机 sync state 读取 `syncTargetPath`
+  - 包装成 `{ type: 'localFolder', path }`
+  - resolve 出 `LocalFolderDriver`
+  - 再继续走现有 local folder 的 prepare / lock / import / export 流程
+- 当前也已补：
+  - unsupported target type 返回明确 failed
+
+## Sync Target Driver Step 5 接手提醒
+- 下一轮如果继续推进，有两个方向可选：
+  - 先补一轮更明确的 target-resolver / target-config 存储整理
+  - 或开始进入 OneDrive 前的实现前文档和最小 target factory 收口
+- 当前不建议立刻去碰：
+  - LWW
+  - 设置页“同步目标”UI
+  - 自动同步
+
+## 2026-05-19 OneDrive 实现前规格当前有效状态
+
+- 当前已新增：
+  - `docs/sync-onedrive-implementation-plan.md`
+- 这份文档当前不是实现代码，而是工程规格拆解。
+- 当前文档已经明确：
+  - 不做 `J-Flow` 自有账号系统
+  - 允许后续做第三方同步目标授权接入
+  - 第一目标只做 `OneDrive`
+  - 继续复用：
+    - `items / tombstones / sync-info / locks / LWW / syncNow`
+  - 需要后续更新：
+    - `constraints.md`
+    - target config schema
+    - target resolver / driver factory
+    - 设置页“同步目标”心智
+
+## OneDrive 实现前规格接手提醒
+- 下一轮如果继续 OneDrive，建议先做决策确认：
+  - 是否正式放开 `constraints.md` 中“当前不做云同步”的表述
+  - 是否接受第一目标只做 `OneDrive`
+  - token 存储优先走系统安全存储还是先做开发期临时方案
+- 在这些边界确认前，不建议直接开始写 OAuth 或 Graph API 代码。
+
+## 2026-05-20 WebDAV POC 02 当前有效状态
+
+- 当前 `webdav` 已正式进入本机同步目标类型体系：
+  - `SyncTargetConfig` 已支持 `webdav`
+- 当前 `LocalSyncState` 已新增：
+  - `syncTargetConfig`
+- 当前 `webdav target config` 会保存在：
+  - 本机 `SQLite sync_meta`
+- 当前应用密码不会进入：
+  - `syncTargetConfig`
+  - 同步目录
+  - `items / tombstones`
+  - JSON 备份
+
+## WebDAV POC 02 当前已接通的能力
+
+- 当前 main/preload/storage bridge 已提供：
+  - `repository.sync.testWebdavTarget(config, password)`
+  - `repository.sync.clearWebdavTarget()`
+- 当前 `testWebdavTarget(...)` 会做：
+  - `ensureDir(rootPath)`
+  - 生成或复用 `sync-info.json`
+  - 写入 `devices/<deviceId>.json`
+  - `list(rootPath)`
+- 当前测试成功后才会：
+  - 保存 `webdav target config`
+  - 保存对应 credential
+- 当前测试失败时：
+  - 不保存 password
+  - 不覆盖旧 target config
+
+## WebDAV POC 02 接手提醒
+
+- 当前仍然不是完整同步：
+  - 未接 `syncNow`
+  - 未接 `items / tombstones`
+  - 未跑 `LWW`
+- 当前如果要继续推进，下一轮建议做：
+  - `WebDAV SyncTargetDriver` 最小实现
+  - 或 `sync-info / devices` POC 再往 `syncNow` 前收一层
+- 当前仍先不要同时去改：
+  - 设置页最终 UI
+  - 自动同步
+  - OneDrive
+
+## 2026-05-20 WebDAV POC 03 当前有效状态
+
+- 当前已新增正式：
+  - `WebDAV SyncTargetDriver`
+- 当前 driver 已具备：
+  - `readText`
+  - `writeText`
+  - `delete`
+  - `list`
+  - `exists`
+  - `ensureDir`
+  - `safeWriteJson`
+- 当前 driver 仍然只服务于 WebDAV POC，不接完整同步主链。
+
+## WebDAV POC 03 当前关键实现点
+
+- 当前 `WebDAV SyncTargetDriver` 继续使用 POSIX `logicalPath` 心智。
+- 当前继续拒绝：
+  - 反斜杠
+  - 绝对路径
+  - `../` 路径穿越
+- 当前 driver 会通过：
+  - `createWebdavDriverFromStoredCredential(...)`
+  从本机 credential store 读取 password，再创建 low-level `WebDAV client`
+- 当前不会把 password 暴露给 renderer，也不会把 password 放进 driver 对外返回值。
+
+## WebDAV POC 03 接手提醒
+
+- 当前仍未接入：
+  - `syncNow`
+  - `sync-export`
+  - `sync-import`
+- 当前如果继续推进，下一轮最自然的是：
+  - 开始把 `webdav driver` 接到现有 sync core 的 metadata / import / export 入口
+  - 或先做一轮更小的 `syncNow` 前接线计划
+- 当前仍先不要同时去碰：
+  - 设置页最终 UI
+  - 自动同步
+  - OneDrive
+
+## 2026-05-20 WebDAV 接入 Sync Core 当前有效计划
+
+- 当前已新增：
+  - `docs/sync-webdav-core-integration-plan.md`
+- 当前推荐顺序已经收口为：
+  1. 先抽通用 metadata helper
+  2. 先让 `localFolder` 回归同一套 helper
+  3. 再让 `webdav` 跑 metadata helper
+  4. 再接 `import / export`
+  5. 最后再接 `syncNow`
+
+## WebDAV 接入 Sync Core 接手提醒
+
+- 下一轮如果开始改代码，建议第一步只动：
+  - `sync-folder.ts`
+  - 或新增通用 metadata helper
+- 当前不建议直接跳到：
+  - `syncNow`
+  - 或完整 WebDAV 同步闭环
+## 2026-05-21 - WebDAV import/export POC 状态
+
+### 当前已完成
+
+- `WebDAV low-level client`
+- `WebDAV credential store`
+- `WebDAV metadata POC`
+- `WebDAV SyncTargetDriver`
+- 通用 `sync metadata helper`
+- `WebDAV target` 版 `sync-export` / `sync-import` 验证
+
+### 当前确认有效
+
+- `exportLocalChangesToSyncTarget(...)` 已可用，WebDAV target 可写：
+  - `items/<entityDir>/<id>.json`
+  - `tombstones/<entityDir>/<id>.json`
+- `importRemoteChangesFromSyncTarget(...)` 已可用，WebDAV target 可读：
+  - `items/`
+  - `tombstones/`
+- `LWW`、`partial failure`、`syncedAt`、`lastSyncedAt` 规则保持不变
+- password 仍不进入返回值、同步目录、JSON 备份或日志
+
+### 仍未开始
+
+- `syncNow` 接入 WebDAV target
+- 完整 WebDAV 同步闭环
+- 设置页最终 WebDAV 同步 UI
+
+### 下一步建议
+
+- 下一轮再决定是否进入“WebDAV 接入 syncNow”阶段
+- 如果继续保持小步走，优先把 `syncNow` 与 `webdav target config / driver` 的接线做成单独一轮
+
+## 2026-05-21 - 设置页同步目标 UI 当前状态
+
+### 当前已完成
+
+- 设置页同步卡片已从“同步文件夹”升级为“同步目标”
+- 当前支持两类目标：
+  - 本地文件夹
+  - 坚果云 `WebDAV`
+- 当前设置页已接入：
+  - 本地文件夹选择 / 更改 / 打开
+  - 坚果云 `WebDAV` 测试并保存
+  - 清除当前同步目标
+  - 手动触发 `syncNow()`
+  - 查看最近一次同步摘要 / 错误 / 警告 / backup 路径
+
+### 当前关键行为
+
+- 当前 `syncTargetConfig` 会通过 `repository.sync.getState()` 返回给 renderer
+- 当前设置页优先按：
+  - `syncTargetConfig`
+  - 旧 `syncTargetPath`
+  来判断实际启用中的目标
+- 当前切换目标时，UI 会先清理另一侧旧入口，避免：
+  - `webdav config` 与旧 `localFolder path` 同时残留
+- 坚果云 `WebDAV` password：
+  - 不进入 `syncTargetConfig`
+  - 不回显
+  - 只通过 `testWebdavTarget(config, password)` 进入 main 侧保存
+
+### 当前仍未做
+
+- 自动同步 / 后台同步
+- `OneDrive` 目标 UI
+- 更复杂的目标管理页
+
+### 如果继续推进
+
+- 下一轮优先做人工点检和轻微文案 / 交互微调
+- 如果 UI 稳定，再考虑是否需要补轻量 renderer 级测试
+
+## 2026-05-22 - 坚果云 WebDAV 根目录 MKCOL 503 修复
+
+### 当前已修复
+
+- 设置页实测中，坚果云根目录已存在时，偶发会在：
+  - `prepare-target`
+  - `MKCOL logicalPath=. status=503`
+  卡住
+- 当前已在 [electron/webdav/client.ts](./electron/webdav/client.ts) 中增强：
+  - `ensureDir(...)`
+- 当前根目录存在性判断顺序是：
+  - `exists(...)`
+  - 对瞬时错误重试一次
+  - 根目录场景额外尝试 `list('')`
+- 只要根目录实际上已经可列，就不会再继续发 `MKCOL`
+
+### 当前验证
+
+- `electron/webdav/client.test.ts`
+- `electron/webdav/metadata-poc.test.ts`
+- `electron/webdav/service.test.ts`
+- `electron/sync-target/metadata.test.ts`
+- `electron/sync-now.test.ts`
+
+都已通过。
+
+### 你接手时需要知道
+
+- 这轮还没有改：
+  - `syncNow` 规则
+  - `LWW`
+  - 设置页主交互逻辑
+- 当前最关键的下一步是：
+  - 重新跑一次 `corepack pnpm run test:webdav:manual`
+  - 确认真实坚果云下不再卡在根目录 `MKCOL 503`
+
+## 2026-05-22 - 坚果云已存在子目录 MKCOL 503 修复
+
+### 当前已修复
+
+- Electron 设置页实测里，坚果云对已存在子目录也可能返回：
+  - `WebDAV 创建目录失败：503 operation=MKCOL logicalPath=tombstones/activityTypes status=503`
+- 当前 `WebDAV ensureDir(...)` 已补强为：
+  - 根目录通过 `list('')` 兜底判断存在
+  - 子目录通过 `list(parent)` 兜底判断存在
+- 只要远端父目录可列，且目标子目录条目已存在，就不会继续发 `MKCOL`
+
+### 当前测试已覆盖
+
+- 根目录两次 `PROPFIND` 瞬时失败后，通过 `list('')` 认定存在
+- 已存在子目录在 `exists(...)` 不稳定时，通过 `list(parent)` 认定存在
+- 相关测试：
+  - `electron/webdav/client.test.ts`
+  - `electron/webdav/metadata-poc.test.ts`
+  - `electron/webdav/service.test.ts`
+  - `electron/sync-target/metadata.test.ts`
+  - `electron/sync-now.test.ts`
+
+### 当前下一步
+
+- 回到 Electron 设置页再做一次真实坚果云手动同步
+- 重点观察是否还会出现：
+  - `logicalPath=.`
+  - `logicalPath=tombstones/activityTypes`
+  的 `MKCOL 503`

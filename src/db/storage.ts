@@ -21,6 +21,7 @@ import type {
   SyncExportResult,
   SyncImportResult,
   SyncNowResult,
+  SyncTargetConfig,
   SyncTargetTestResult,
   TaskTemplate,
 } from '@/types'

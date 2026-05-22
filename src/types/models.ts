@@ -221,6 +221,7 @@ export interface LocalSyncState {
   lastSyncAttemptedAt: string | null
   lastSyncResult: LocalSyncResultSummary | null
   syncTargetPath: string | null
+  syncTargetConfig: SyncTargetConfig | null
 }
 
 export interface LocalSyncResultSummary {
@@ -258,6 +259,17 @@ export interface SyncInfoFile {
   appName: 'J-Flow'
   minSupportedAppVersion: string
 }
+
+export type SyncTargetConfig =
+  | {
+      type: 'localFolder'
+      path: string
+    }
+  | {
+      type: 'oneDriveAppFolder'
+      accountId: string
+      displayName?: string
+    }
 
 export interface SyncDeviceInfoFile {
   syncVersion: number

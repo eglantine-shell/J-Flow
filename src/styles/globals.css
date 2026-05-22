@@ -2259,8 +2259,15 @@ button:hover:not(:disabled) {
 .settings-sync-card__row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
+}
+
+.settings-sync-card__status {
+  justify-content: flex-start;
+}
+
+.settings-sync-card__row {
+  justify-content: space-between;
 }
 
 .settings-sync-card__status-copy,
@@ -2365,6 +2372,36 @@ button:hover:not(:disabled) {
 
 .settings-sync-card__actions {
   justify-content: flex-start;
+}
+
+.settings-sync-card__target-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.settings-sync-card__config {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(218, 212, 200, 0.76);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.settings-sync-card__config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-sync-card__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
 }
 
 .settings-sync-card__details {
@@ -2917,7 +2954,7 @@ button:hover:not(:disabled) {
 
 .settings-choice-row--tools .check-tile {
   min-height: 38px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .settings-data-path-card {
@@ -2985,7 +3022,8 @@ button:hover:not(:disabled) {
   .form-grid,
   .inline-creator__controls,
   .template-manager__layout,
-  .editor-row {
+  .editor-row,
+  .settings-sync-card__config-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

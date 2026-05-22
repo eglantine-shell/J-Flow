@@ -71,6 +71,7 @@ import type {
   SyncTargetTestResult,
   TaskTemplate,
   TaskTemplateUpdateInput,
+  SyncTargetConfig,
 } from './types.js'
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))

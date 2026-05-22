@@ -28,6 +28,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+.env.local
+.env.*.local
+
 tmp/
 temp/
 backups/

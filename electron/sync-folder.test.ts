@@ -4,7 +4,12 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { readSyncDirectoryInfo, testSyncTargetDirectory } from './sync-folder'
+import {
+  acquireSyncLock,
+  readSyncDirectoryInfo,
+  releaseSyncLock,
+  testSyncTargetDirectory,
+} from './sync-folder'
 
 const tempDirectories: string[] = []
 
@@ -116,5 +121,76 @@ describe('electron/sync-folder', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('sync-info.json')
+  })
+
+  it('keeps lock conflict behavior unchanged when another device holds a valid lock', async () => {
+    const targetPath = await createTempDirectory()
+
+    await testSyncTargetDirectory({
+      targetPath,
+      deviceId: 'device-a',
+      deviceName: 'Test Mac',
+      platform: 'darwin',
+      appVersion: '0.1.0',
+      lastSyncedAt: null,
+    })
+
+    const firstLock = await acquireSyncLock({
+      targetPath,
+      deviceId: 'device-a',
+      appVersion: '0.1.0',
+    })
+    const secondLock = await acquireSyncLock({
+      targetPath,
+      deviceId: 'device-b',
+      appVersion: '0.1.0',
+    })
+
+    expect(firstLock.acquired).toBe(true)
+    expect(secondLock).toMatchObject({
+      acquired: false,
+      reason: '另一台设备正在同步：device-a',
+      lockPath: null,
+    })
+
+    await releaseSyncLock(targetPath, 'device-a')
+  })
+
+  it('cleans up expired lock files before acquiring a new lock', async () => {
+    const targetPath = await createTempDirectory()
+
+    await testSyncTargetDirectory({
+      targetPath,
+      deviceId: 'device-a',
+      deviceName: 'Test Mac',
+      platform: 'darwin',
+      appVersion: '0.1.0',
+      lastSyncedAt: null,
+    })
+
+    await writeFile(
+      path.join(targetPath, 'locks/sync_expired-device.json'),
+      JSON.stringify({
+        deviceId: 'expired-device',
+        createdAt: '2026-05-18T09:00:00.000Z',
+        expiresAt: '2026-05-18T09:01:00.000Z',
+        appVersion: '0.1.0',
+        operation: 'sync-now',
+      }),
+      'utf8',
+    )
+
+    const lock = await acquireSyncLock({
+      targetPath,
+      deviceId: 'device-b',
+      appVersion: '0.1.0',
+    })
+
+    expect(lock.acquired).toBe(true)
+    await expect(readFile(path.join(targetPath, 'locks/sync_expired-device.json'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+
+    await releaseSyncLock(targetPath, 'device-b')
   })
 })

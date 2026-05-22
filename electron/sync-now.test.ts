@@ -9,6 +9,7 @@ import {
   getSqliteLocalSyncState,
   listPendingSqliteSyncChanges,
   replaceSqliteSnapshot,
+  setSqliteSyncTargetConfig,
   setSqliteSyncTargetPath,
 } from './sqlite'
 import { exportLocalChangesToSyncFolder } from './sync-export'
@@ -22,7 +23,20 @@ const createTempDirectory = async (prefix: string) => {
   return directory
 }
 
+const createMockDriver = (type: 'localFolder' = 'localFolder') => ({
+  type,
+  readText: vi.fn(),
+  writeText: vi.fn(),
+  delete: vi.fn(),
+  list: vi.fn(),
+  exists: vi.fn(),
+  ensureDir: vi.fn(),
+  safeWriteJson: vi.fn(),
+})
+
 const createDependencies = () => {
+  const localDriver = createMockDriver('localFolder')
+
   const getLocalSyncState = vi.fn(() => ({
     deviceId: 'device-sync-test',
     lastSyncedAt: null,
@@ -31,12 +45,31 @@ const createDependencies = () => {
     lastSyncAttemptedAt: null,
     lastSyncResult: null,
     syncTargetPath: '/tmp/j-flow-sync',
+    syncTargetConfig: null,
   }))
-  const prepareSyncTargetDirectory = vi.fn(async () => undefined)
+  const prepareSyncTarget = vi.fn(async () => ({
+    syncInfo: {
+      syncVersion: 1,
+      createdAt: '2026-05-18T09:59:00.000Z',
+      updatedAt: '2026-05-18T09:59:00.000Z',
+      appName: 'J-Flow' as const,
+      minSupportedAppVersion: '0.1.0',
+    },
+    deviceInfo: {
+      syncVersion: 1,
+      deviceId: 'device-sync-test',
+      deviceName: 'Test Mac',
+      platform: 'darwin',
+      appVersion: '0.1.0',
+      lastSeenAt: '2026-05-18T09:59:00.000Z',
+      lastSyncedAt: null,
+    },
+    wasInitialized: false,
+  }))
   const acquireSyncLock = vi.fn(async () => ({
-    acquired: true,
+    acquired: true as const,
     reason: null,
-    lockPath: '/tmp/j-flow-sync/locks/sync_device-sync-test.json',
+    lockLogicalPath: 'locks/sync_device-sync-test.json',
   }))
   const releaseSyncLock = vi.fn(async () => undefined)
   const createAutoBackup = vi.fn(async () => ({
@@ -49,19 +82,15 @@ const createDependencies = () => {
       latestBackupAt: '2026-05-18T09:59:00.000Z',
     },
   }))
-  const importRemoteChangesFromSyncFolder = vi.fn(async () => ({
+  const importRemoteChangesFromSyncTarget = vi.fn(async () => ({
     success: true,
-    targetPath: '/tmp/j-flow-sync',
-    deviceId: 'device-sync-test',
     appliedCount: 1,
     skippedCount: 0,
     failedCount: 0,
     failures: [],
   }))
-  const exportLocalChangesToSyncFolder = vi.fn(async () => ({
+  const exportLocalChangesToSyncTarget = vi.fn(async () => ({
     success: true,
-    targetPath: '/tmp/j-flow-sync',
-    deviceId: 'device-sync-test',
     exportedCount: 2,
     failedCount: 0,
     failures: [],
@@ -74,6 +103,7 @@ const createDependencies = () => {
     lastSyncAttemptedAt: null,
     lastSyncResult: null,
     syncTargetPath: '/tmp/j-flow-sync',
+    syncTargetConfig: null,
   }))
   const setSqliteLastSyncResult = vi.fn(() => ({
     deviceId: 'device-sync-test',
@@ -83,8 +113,9 @@ const createDependencies = () => {
     lastSyncAttemptedAt: '2026-05-18T10:00:05.000Z',
     lastSyncResult: null,
     syncTargetPath: '/tmp/j-flow-sync',
+    syncTargetConfig: null,
   }))
-  const updateSyncDeviceInfo = vi.fn(async () => undefined)
+  const updateDeviceInfo = vi.fn(async () => undefined)
   const now = vi
     .fn<() => string>()
     .mockReturnValueOnce('2026-05-18T10:00:00.000Z')
@@ -92,18 +123,43 @@ const createDependencies = () => {
 
   return {
     getLocalSyncState,
-    prepareSyncTargetDirectory,
+    prepareSyncTarget,
     acquireSyncLock,
     releaseSyncLock,
     createAutoBackup,
-    importRemoteChangesFromSyncFolder,
-    exportLocalChangesToSyncFolder,
+    importRemoteChangesFromSyncTarget,
+    exportLocalChangesToSyncTarget,
     setSqliteLastSyncedAt,
     setSqliteLastSyncResult,
-    updateSyncDeviceInfo,
+    updateDeviceInfo,
     now,
     getDeviceName: () => 'Test Mac',
     platform: 'darwin',
+    resolveSyncTargetConfig: (syncState: ReturnType<typeof getLocalSyncState>) =>
+      syncState.syncTargetConfig ??
+      (syncState.syncTargetPath
+        ? {
+            type: 'localFolder' as const,
+            path: syncState.syncTargetPath,
+          }
+        : null),
+    createSyncTargetDriver: vi.fn(async ({ config }: { dataPath: string; config: { type: string } }) => {
+      if (config.type === 'localFolder') {
+        return localDriver
+      }
+
+      throw new Error(`当前还不支持同步目标类型：${config.type}`)
+    }),
+    describeSyncTarget: (config:
+      | { type: 'localFolder'; path: string }
+      | { type: 'oneDriveAppFolder'; accountId: string; displayName?: string }) => {
+      if (config.type === 'localFolder') {
+        return config.path
+      }
+
+      return config.type
+    },
+    localDriver,
   }
 }
 
@@ -122,40 +178,36 @@ describe('electron/sync-now', () => {
     expect(result.status).toBe('success')
     expect(result.success).toBe(true)
     expect(result.lastSyncedAtWritten).toBe(true)
-    expect(dependencies.importRemoteChangesFromSyncFolder).toHaveBeenCalledTimes(1)
-    expect(dependencies.exportLocalChangesToSyncFolder).toHaveBeenCalledTimes(1)
+    expect(dependencies.importRemoteChangesFromSyncTarget).toHaveBeenCalledTimes(1)
+    expect(dependencies.exportLocalChangesToSyncTarget).toHaveBeenCalledTimes(1)
     expect(dependencies.setSqliteLastSyncedAt).toHaveBeenCalledWith(
       '/tmp/j-flow-db',
       '2026-05-18T10:00:05.000Z',
     )
-    expect(dependencies.updateSyncDeviceInfo).toHaveBeenCalledWith(
+    expect(dependencies.updateDeviceInfo).toHaveBeenCalledWith(
+      dependencies.localDriver,
       expect.objectContaining({
-        targetPath: '/tmp/j-flow-sync',
         deviceId: 'device-sync-test',
         lastSyncedAt: '2026-05-18T10:00:05.000Z',
       }),
     )
     expect(dependencies.releaseSyncLock).toHaveBeenCalledWith(
-      '/tmp/j-flow-sync',
+      dependencies.localDriver,
       'device-sync-test',
     )
   })
 
   it('writes lastSyncedAt even when there are no changes but the full closure succeeds', async () => {
     const dependencies = createDependencies()
-    dependencies.importRemoteChangesFromSyncFolder.mockResolvedValue({
+    dependencies.importRemoteChangesFromSyncTarget.mockResolvedValue({
       success: true,
-      targetPath: '/tmp/j-flow-sync',
-      deviceId: 'device-sync-test',
       appliedCount: 0,
       skippedCount: 0,
       failedCount: 0,
       failures: [],
     })
-    dependencies.exportLocalChangesToSyncFolder.mockResolvedValue({
+    dependencies.exportLocalChangesToSyncTarget.mockResolvedValue({
       success: true,
-      targetPath: '/tmp/j-flow-sync',
-      deviceId: 'device-sync-test',
       exportedCount: 0,
       failedCount: 0,
       failures: [],
@@ -175,16 +227,14 @@ describe('electron/sync-now', () => {
 
   it('returns partial and does not write lastSyncedAt when import has failures', async () => {
     const dependencies = createDependencies()
-    dependencies.importRemoteChangesFromSyncFolder.mockResolvedValue({
+    dependencies.importRemoteChangesFromSyncTarget.mockResolvedValue({
       success: false,
-      targetPath: '/tmp/j-flow-sync',
-      deviceId: 'device-sync-test',
       appliedCount: 1,
       skippedCount: 0,
       failedCount: 1,
       failures: [
         {
-          filePath: '/tmp/j-flow-sync/items/dayPlanItems/bad.json',
+          filePath: 'items/dayPlanItems/bad.json',
           message: '坏文件',
         },
       ],
@@ -206,10 +256,8 @@ describe('electron/sync-now', () => {
 
   it('returns partial and does not write lastSyncedAt when export has failures', async () => {
     const dependencies = createDependencies()
-    dependencies.exportLocalChangesToSyncFolder.mockResolvedValue({
+    dependencies.exportLocalChangesToSyncTarget.mockResolvedValue({
       success: false,
-      targetPath: '/tmp/j-flow-sync',
-      deviceId: 'device-sync-test',
       exportedCount: 1,
       failedCount: 1,
       failures: [
@@ -236,7 +284,7 @@ describe('electron/sync-now', () => {
     expect(dependencies.setSqliteLastSyncedAt).not.toHaveBeenCalled()
   })
 
-  it('fails fast when syncTargetPath is missing', async () => {
+  it('fails fast when no sync target is configured', async () => {
     const dependencies = createDependencies()
     dependencies.getLocalSyncState.mockReturnValue({
       deviceId: 'device-sync-test',
@@ -246,6 +294,7 @@ describe('electron/sync-now', () => {
       lastSyncAttemptedAt: null,
       lastSyncResult: null,
       syncTargetPath: null,
+      syncTargetConfig: null,
     })
 
     const result = await runManualSync(
@@ -257,10 +306,34 @@ describe('electron/sync-now', () => {
     )
 
     expect(result.status).toBe('failed')
-    expect(dependencies.prepareSyncTargetDirectory).not.toHaveBeenCalled()
+    expect(dependencies.prepareSyncTarget).not.toHaveBeenCalled()
     expect(dependencies.createAutoBackup).not.toHaveBeenCalled()
-    expect(dependencies.importRemoteChangesFromSyncFolder).not.toHaveBeenCalled()
-    expect(dependencies.exportLocalChangesToSyncFolder).not.toHaveBeenCalled()
+    expect(dependencies.importRemoteChangesFromSyncTarget).not.toHaveBeenCalled()
+    expect(dependencies.exportLocalChangesToSyncTarget).not.toHaveBeenCalled()
+  })
+
+  it('fails with unsupported target config instead of crashing', async () => {
+    const dependencies = createDependencies()
+    dependencies.resolveSyncTargetConfig = () => ({
+      type: 'oneDriveAppFolder',
+      accountId: 'account-1',
+      displayName: 'OneDrive',
+    })
+
+    const result = await runManualSync(
+      {
+        dataPath: '/tmp/j-flow-db',
+        appVersion: '0.1.0',
+      },
+      dependencies,
+    )
+
+    expect(result.status).toBe('failed')
+    expect(result.errors[0]).toContain('当前还不支持同步目标类型')
+    expect(dependencies.prepareSyncTarget).not.toHaveBeenCalled()
+    expect(dependencies.createAutoBackup).not.toHaveBeenCalled()
+    expect(dependencies.importRemoteChangesFromSyncTarget).not.toHaveBeenCalled()
+    expect(dependencies.exportLocalChangesToSyncTarget).not.toHaveBeenCalled()
   })
 
   it('fails and skips backup/import/export when lock acquisition conflicts', async () => {
@@ -268,7 +341,7 @@ describe('electron/sync-now', () => {
     dependencies.acquireSyncLock.mockResolvedValue({
       acquired: false,
       reason: '另一台设备正在同步：remote-device',
-      lockPath: null,
+      lockLogicalPath: null,
     })
 
     const result = await runManualSync(
@@ -282,8 +355,8 @@ describe('electron/sync-now', () => {
     expect(result.status).toBe('failed')
     expect(result.errors[0]).toContain('另一台设备正在同步')
     expect(dependencies.createAutoBackup).not.toHaveBeenCalled()
-    expect(dependencies.importRemoteChangesFromSyncFolder).not.toHaveBeenCalled()
-    expect(dependencies.exportLocalChangesToSyncFolder).not.toHaveBeenCalled()
+    expect(dependencies.importRemoteChangesFromSyncTarget).not.toHaveBeenCalled()
+    expect(dependencies.exportLocalChangesToSyncTarget).not.toHaveBeenCalled()
     expect(dependencies.releaseSyncLock).not.toHaveBeenCalled()
   })
 
@@ -309,17 +382,17 @@ describe('electron/sync-now', () => {
     )
 
     expect(result.status).toBe('failed')
-    expect(dependencies.importRemoteChangesFromSyncFolder).not.toHaveBeenCalled()
-    expect(dependencies.exportLocalChangesToSyncFolder).not.toHaveBeenCalled()
+    expect(dependencies.importRemoteChangesFromSyncTarget).not.toHaveBeenCalled()
+    expect(dependencies.exportLocalChangesToSyncTarget).not.toHaveBeenCalled()
     expect(dependencies.releaseSyncLock).toHaveBeenCalledWith(
-      '/tmp/j-flow-sync',
+      dependencies.localDriver,
       'device-sync-test',
     )
   })
 
   it('releases its lock when an exception is thrown mid-sync', async () => {
     const dependencies = createDependencies()
-    dependencies.importRemoteChangesFromSyncFolder.mockRejectedValue(new Error('import exploded'))
+    dependencies.importRemoteChangesFromSyncTarget.mockRejectedValue(new Error('import exploded'))
 
     const result = await runManualSync(
       {
@@ -332,7 +405,7 @@ describe('electron/sync-now', () => {
     expect(result.status).toBe('failed')
     expect(result.errors[0]).toContain('import exploded')
     expect(dependencies.releaseSyncLock).toHaveBeenCalledWith(
-      '/tmp/j-flow-sync',
+      dependencies.localDriver,
       'device-sync-test',
     )
   })
@@ -364,6 +437,29 @@ describe('electron/sync-now', () => {
     expect(listPendingSqliteSyncChanges(dataPath)).toEqual([])
     expect(getSqliteLocalSyncState(dataPath).lastSyncedAt).toBe(result.completedAt)
     expect(deviceInfo.lastSyncedAt).toBe(result.completedAt)
+  })
+
+  it('supports localFolder through syncTargetConfig as well as legacy syncTargetPath', async () => {
+    const dataPath = await createTempDirectory('j-flow-sync-now-config-db-')
+    const targetPath = await createTempDirectory('j-flow-sync-now-config-folder-')
+
+    replaceSqliteSnapshot(dataPath, sqliteTestSeedAppData)
+    setSqliteSyncTargetConfig(dataPath, {
+      type: 'localFolder',
+      path: targetPath,
+    })
+    await exportLocalChangesToSyncFolder({
+      dataPath,
+      appVersion: '0.1.0',
+    })
+
+    const result = await runManualSync({
+      dataPath,
+      appVersion: '0.1.0',
+    })
+
+    expect(result.status).toBe('success')
+    expect(result.targetPath).toBe(targetPath)
   })
 })
 

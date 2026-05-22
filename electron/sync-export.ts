@@ -1,5 +1,4 @@
 import os from 'node:os'
-import path from 'node:path'
 
 import {
   getSqliteActivityTypeById,
@@ -12,12 +11,9 @@ import {
   listPendingSqliteSyncChanges,
   markSqliteSyncChangeSyncedAt,
 } from './sqlite.js'
-import {
-  getSyncItemDirectoryPath,
-  getSyncTombstoneDirectoryPath,
-  prepareSyncTargetDirectory,
-  safeWriteJsonAtomic,
-} from './sync-folder.js'
+import { prepareSyncTarget } from './sync-target/metadata.js'
+import type { SyncTargetDriver } from './sync-target/index.js'
+import { LocalFolderDriver } from './sync-target/index.js'
 import type {
   ActivityType,
   AppSettings,
@@ -49,6 +45,12 @@ const ENTITY_DIRECTORY_MAP: Record<
   recurringTaskInstance: 'recurringTaskInstances',
   dayPlanItem: 'dayPlanItems',
 }
+
+const buildItemLogicalPath = (entityType: SyncEntityType, entityId: string) =>
+  `items/${ENTITY_DIRECTORY_MAP[entityType]}/${entityId}.json`
+
+const buildTombstoneLogicalPath = (entityType: SyncEntityType, entityId: string) =>
+  `tombstones/${ENTITY_DIRECTORY_MAP[entityType]}/${entityId}.json`
 
 const readEntityForSyncExport = (
   dataPath: string,
@@ -131,6 +133,22 @@ export const exportPendingSyncChanges = async (input: {
   deviceId: string
   pendingChanges: SyncChange[]
 }): Promise<Pick<SyncExportResult, 'success' | 'exportedCount' | 'failedCount' | 'failures'>> => {
+  const driver = new LocalFolderDriver(input.targetPath)
+
+  return exportPendingSyncChangesToTarget({
+    dataPath: input.dataPath,
+    deviceId: input.deviceId,
+    driver,
+    pendingChanges: input.pendingChanges,
+  })
+}
+
+export const exportPendingSyncChangesToTarget = async (input: {
+  dataPath: string
+  deviceId: string
+  driver: SyncTargetDriver
+  pendingChanges: SyncChange[]
+}): Promise<Pick<SyncExportResult, 'success' | 'exportedCount' | 'failedCount' | 'failures'>> => {
   const failures: SyncExportFailure[] = []
   let exportedCount = 0
 
@@ -145,20 +163,13 @@ export const exportPendingSyncChanges = async (input: {
         }
 
         const payload = buildItemFilePayload(change, input.deviceId, entity)
-        const filePath = path.join(
-          getSyncItemDirectoryPath(input.targetPath, ENTITY_DIRECTORY_MAP[change.entityType]),
-          `${change.entityId}.json`,
-        )
-
-        await safeWriteJsonAtomic(filePath, payload)
+        await input.driver.safeWriteJson(buildItemLogicalPath(change.entityType, change.entityId), payload)
       } else {
         const payload = buildTombstoneFilePayload(change, input.deviceId)
-        const filePath = path.join(
-          getSyncTombstoneDirectoryPath(input.targetPath, ENTITY_DIRECTORY_MAP[change.entityType]),
-          `${change.entityId}.json`,
+        await input.driver.safeWriteJson(
+          buildTombstoneLogicalPath(change.entityType, change.entityId),
+          payload,
         )
-
-        await safeWriteJsonAtomic(filePath, payload)
       }
 
       const syncedAt = nowIso()
@@ -183,6 +194,44 @@ export const exportPendingSyncChanges = async (input: {
     failedCount: failures.length,
     failures,
   }
+}
+
+export const exportLocalChangesToSyncTarget = async (input: {
+  dataPath: string
+  appVersion: string
+  deviceId: string
+  deviceName: string
+  platform: string
+  lastSyncedAt: string | null
+  driver: SyncTargetDriver
+}) => {
+  await prepareSyncTarget(input.driver, {
+    deviceId: input.deviceId,
+    deviceName: input.deviceName,
+    platform: input.platform,
+    appVersion: input.appVersion,
+    lastSyncedAt: input.lastSyncedAt,
+  })
+
+  const pendingChanges = listPendingSqliteSyncChanges(input.dataPath)
+  const exportResult = await exportPendingSyncChangesToTarget({
+    dataPath: input.dataPath,
+    deviceId: input.deviceId,
+    driver: input.driver,
+    pendingChanges,
+  })
+
+  if (exportResult.exportedCount > 0) {
+    await prepareSyncTarget(input.driver, {
+      deviceId: input.deviceId,
+      deviceName: input.deviceName,
+      platform: input.platform,
+      appVersion: input.appVersion,
+      lastSyncedAt: input.lastSyncedAt,
+    })
+  }
+
+  return exportResult
 }
 
 export const exportLocalChangesToSyncFolder = async (input: {
@@ -210,33 +259,15 @@ export const exportLocalChangesToSyncFolder = async (input: {
     }
   }
 
-  await prepareSyncTargetDirectory({
-    targetPath: syncState.syncTargetPath,
+  const exportResult = await exportLocalChangesToSyncTarget({
+    dataPath: input.dataPath,
+    appVersion: input.appVersion,
     deviceId: syncState.deviceId,
     deviceName: os.hostname(),
     platform: process.platform,
-    appVersion: input.appVersion,
     lastSyncedAt: syncState.lastSyncedAt,
+    driver: new LocalFolderDriver(syncState.syncTargetPath),
   })
-
-  const pendingChanges = listPendingSqliteSyncChanges(input.dataPath)
-  const exportResult = await exportPendingSyncChanges({
-    dataPath: input.dataPath,
-    targetPath: syncState.syncTargetPath,
-    deviceId: syncState.deviceId,
-    pendingChanges,
-  })
-
-  if (exportResult.exportedCount > 0) {
-    await prepareSyncTargetDirectory({
-      targetPath: syncState.syncTargetPath,
-      deviceId: syncState.deviceId,
-      deviceName: os.hostname(),
-      platform: process.platform,
-      appVersion: input.appVersion,
-      lastSyncedAt: syncState.lastSyncedAt,
-    })
-  }
 
   return {
     success: exportResult.success,

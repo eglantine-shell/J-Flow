@@ -11,6 +11,7 @@ import type {
   LocalSyncResultSummary,
   LocalSyncState,
   SyncNowResult,
+  SyncTargetConfig,
   TieBreakerOrder,
 } from '@/types'
 
@@ -26,6 +27,7 @@ type SettingsViewState = {
   lastSyncAttemptedAt: string | null
   lastSyncResult: LocalSyncResultSummary | null
   syncTargetPath: string | null
+  syncTargetConfig: SyncTargetConfig | null
   autoBackupCount: number
   latestAutoBackupAt: string | null
 }
@@ -42,6 +44,7 @@ const initialViewState: SettingsViewState = {
   lastSyncAttemptedAt: null,
   lastSyncResult: null,
   syncTargetPath: null,
+  syncTargetConfig: null,
   autoBackupCount: 0,
   latestAutoBackupAt: null,
 }
@@ -76,6 +79,19 @@ const getSyncFolderName = (value: string | null) => {
   return parts[parts.length - 1] ?? value
 }
 
+const getFirstNonEmptyLine = (value: string | null) => {
+  if (!value) {
+    return null
+  }
+
+  return (
+    value
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean) ?? null
+  )
+}
+
 const applySyncStateToViewState = (
   current: SettingsViewState,
   syncState: LocalSyncState | null,
@@ -88,6 +104,7 @@ const applySyncStateToViewState = (
   lastSyncAttemptedAt: syncState?.lastSyncAttemptedAt ?? null,
   lastSyncResult: syncState?.lastSyncResult ?? null,
   syncTargetPath: syncState?.syncTargetPath ?? null,
+  syncTargetConfig: syncState?.syncTargetConfig ?? null,
 })
 
 export function SettingsPanel() {
@@ -128,6 +145,7 @@ export function SettingsPanel() {
           lastSyncAttemptedAt: syncState?.lastSyncAttemptedAt ?? null,
           lastSyncResult: syncState?.lastSyncResult ?? null,
           syncTargetPath: syncState?.syncTargetPath ?? null,
+          syncTargetConfig: syncState?.syncTargetConfig ?? null,
           autoBackupCount: autoBackupInfo?.backupCount ?? 0,
           latestAutoBackupAt: autoBackupInfo?.latestBackupAt ?? null,
         })
@@ -410,6 +428,19 @@ export function SettingsPanel() {
     })
   }
 
+  const localFolderConfigPath =
+    viewState.syncTargetConfig?.type === 'localFolder'
+      ? viewState.syncTargetConfig.path
+      : viewState.syncTargetPath
+
+  const activeSyncTarget = localFolderConfigPath
+    ? ({ type: 'localFolder', path: localFolderConfigPath } as const)
+    : null
+
+  const activeSyncTargetType = activeSyncTarget?.type ?? null
+  const isLocalFolderTargetActive = activeSyncTargetType === 'localFolder'
+  const hasConfiguredSyncTarget = activeSyncTarget !== null
+
   const chooseDesktopSyncDirectory = async () => {
     const desktopApi = window.jflowDesktop
 
@@ -433,7 +464,7 @@ export function SettingsPanel() {
       const nextState = await desktopApi.repository.sync.setTargetPath(selectedPath)
 
       setViewState((current) => applySyncStateToViewState(current, nextState))
-      setSuccessMessage(`已连接同步文件夹：${getSyncFolderName(selectedPath)}`)
+      setSuccessMessage(`已连接本地同步文件夹：${getSyncFolderName(selectedPath)}`)
     })
   }
 
@@ -472,7 +503,7 @@ export function SettingsPanel() {
       const nextState = await desktopApi.repository.sync.clearTargetPath()
 
       setViewState((current) => applySyncStateToViewState(current, nextState))
-      setSuccessMessage('已清除同步文件夹路径。')
+      setSuccessMessage('已清除本地文件夹同步目标。')
     })
   }
 
@@ -526,7 +557,7 @@ export function SettingsPanel() {
   }
 
   const syncCardStatus = (() => {
-    if (!viewState.syncTargetPath) {
+    if (!hasConfiguredSyncTarget) {
       return 'not_configured' as const
     }
 
@@ -551,7 +582,7 @@ export function SettingsPanel() {
 
   const syncStatusTitle =
     syncCardStatus === 'not_configured'
-      ? '未设置同步文件夹'
+      ? '未设置同步目标'
       : syncCardStatus === 'syncing'
         ? '正在同步'
         : syncCardStatus === 'success'
@@ -560,20 +591,23 @@ export function SettingsPanel() {
             ? '部分完成'
             : syncCardStatus === 'failed'
               ? '同步失败'
-              : '同步已就绪'
+              : '使用本地文件夹同步'
 
   const syncStatusDescription =
     syncCardStatus === 'not_configured'
-      ? '选择一个同步文件夹后，即可在多台桌面设备之间手动同步。'
+      ? '选择本地文件夹后，即可手动同步。'
       : syncCardStatus === 'syncing'
         ? '正在导入与导出变化…'
-        : syncCardStatus === 'success'
-          ? `上次同步：${formatDateTime(viewState.lastSyncedAt)}`
-          : syncCardStatus === 'partial'
-            ? `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
-            : syncCardStatus === 'failed'
-              ? `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
-              : '同步文件夹已连接，可以随时手动同步。'
+      : syncCardStatus === 'success'
+        ? `上次同步：${formatDateTime(viewState.lastSyncedAt)}`
+        : syncCardStatus === 'partial'
+          ? `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
+          : syncCardStatus === 'failed'
+            ? getFirstNonEmptyLine(viewState.lastSyncError) ??
+              `上次尝试：${formatDateTime(viewState.lastSyncAttemptedAt)}`
+            : viewState.lastSyncedAt
+              ? `上次同步：${formatDateTime(viewState.lastSyncedAt)}`
+              : '尚未同步'
 
   const syncResultSummary =
     syncCardStatus === 'syncing'
@@ -589,11 +623,15 @@ export function SettingsPanel() {
               : '尚未同步'
 
   const syncPrimaryActionLabel =
-    syncCardStatus === 'not_configured'
-      ? '选择同步文件夹'
-      : syncCardStatus === 'syncing'
-        ? '同步中…'
-        : '立即同步'
+    syncCardStatus === 'syncing'
+      ? '同步中…'
+      : hasConfiguredSyncTarget
+        ? '立即同步'
+        : '选择文件夹'
+
+  const syncTargetTypeLabel = isLocalFolderTargetActive ? '本地文件夹' : '未设置'
+
+  const localTargetDisplayName = getSyncFolderName(localFolderConfigPath)
 
   if (viewState.isLoading) {
     return (
@@ -698,7 +736,7 @@ export function SettingsPanel() {
               <h3>数据导入 / 导出</h3>
               <p>
                 {viewState.isDesktop
-                  ? '导入与导出仍使用原来的 JSON 备份格式；“恢复备份”会直接导入最新一份自动备份。'
+                  ? '导入与导出当前本地数据，或用自动备份文件整体覆盖当前本地数据。'
                   : '导出当前本地数据，或用备份文件整体覆盖当前本地数据。'}
               </p>
             </div>
@@ -759,7 +797,7 @@ export function SettingsPanel() {
               <div className="settings-panel__section-header">
                 <p className="eyebrow">Sync</p>
                 <h3>同步</h3>
-                <p>通过同步文件夹，在多台桌面设备之间手动同步数据。</p>
+                <p>通过本地文件夹，在多台桌面设备之间手动同步数据。</p>
               </div>
 
               <div
@@ -780,30 +818,27 @@ export function SettingsPanel() {
 
                 <div className="settings-sync-card__row">
                   <div className="settings-sync-card__meta">
-                    <p className="settings-sync-card__label">同步文件夹</p>
-                    <p className="settings-sync-card__value">
-                      {getSyncFolderName(viewState.syncTargetPath)}
-                    </p>
-                    {viewState.syncTargetPath ? (
+                    <p className="settings-sync-card__label">同步目标</p>
+                    <p className="settings-sync-card__value">{syncTargetTypeLabel}</p>
+                  </div>
+                </div>
+
+                <div className="settings-sync-card__row">
+                  <div className="settings-sync-card__meta">
+                    <p className="settings-sync-card__label">本地文件夹</p>
+                    <p className="settings-sync-card__value">{localTargetDisplayName}</p>
+                    {localFolderConfigPath ? (
                       <p
                         className="settings-sync-card__path"
-                        title={viewState.syncTargetPath}
+                        title={localFolderConfigPath}
                       >
-                        {viewState.syncTargetPath}
+                        {localFolderConfigPath}
                       </p>
-                    ) : null}
+                    ) : (
+                      <p className="settings-sync-card__path">尚未选择</p>
+                    )}
                   </div>
                   <div className="settings-sync-card__inline-actions">
-                    <button
-                      className="ghost-button ghost-button--compact"
-                      type="button"
-                      disabled={isSaving || isSyncing || !viewState.syncTargetPath}
-                      onClick={() => {
-                        void openDesktopSyncDirectory()
-                      }}
-                    >
-                      打开
-                    </button>
                     <button
                       className="ghost-button ghost-button--compact"
                       type="button"
@@ -812,7 +847,17 @@ export function SettingsPanel() {
                         void chooseDesktopSyncDirectory()
                       }}
                     >
-                      更改
+                      {isLocalFolderTargetActive ? '更改' : '选择文件夹'}
+                    </button>
+                    <button
+                      className="ghost-button ghost-button--compact"
+                      type="button"
+                      disabled={isSaving || isSyncing || !isLocalFolderTargetActive}
+                      onClick={() => {
+                        void openDesktopSyncDirectory()
+                      }}
+                    >
+                      打开
                     </button>
                   </div>
                 </div>
@@ -830,7 +875,7 @@ export function SettingsPanel() {
                     type="button"
                     disabled={isSaving || isSyncing}
                     onClick={() => {
-                      if (!viewState.syncTargetPath) {
+                      if (!hasConfiguredSyncTarget) {
                         void chooseDesktopSyncDirectory()
                         return
                       }
@@ -846,6 +891,10 @@ export function SettingsPanel() {
                   <summary className="settings-sync-card__details-summary">查看详情</summary>
                   <div className="settings-sync-card__details-body">
                     <div className="settings-sync-card__details-grid">
+                      <div>
+                        <p className="settings-sync-card__label">同步目标类型</p>
+                        <p className="settings-sync-card__detail-value">{syncTargetTypeLabel}</p>
+                      </div>
                       <div>
                         <p className="settings-sync-card__label">上次同步时间</p>
                         <p className="settings-sync-card__detail-value">
@@ -886,6 +935,15 @@ export function SettingsPanel() {
                           {viewState.lastSyncResult?.backupFilePath ?? '暂无记录'}
                         </p>
                       </div>
+                      <div>
+                        <p className="settings-sync-card__label">同步路径</p>
+                        <p
+                          className="settings-sync-card__detail-value settings-sync-card__detail-value--mono"
+                          title={localFolderConfigPath ?? '暂无记录'}
+                        >
+                          {localFolderConfigPath ?? '暂无记录'}
+                        </p>
+                      </div>
                       <div className="settings-sync-card__details-grid-item--wide">
                         <p className="settings-sync-card__label">完整错误信息</p>
                         <p className="settings-sync-card__detail-value settings-sync-card__detail-value--multiline">
@@ -894,13 +952,21 @@ export function SettingsPanel() {
                             : '暂无错误'}
                         </p>
                       </div>
+                      <div className="settings-sync-card__details-grid-item--wide">
+                        <p className="settings-sync-card__label">最近警告</p>
+                        <p className="settings-sync-card__detail-value settings-sync-card__detail-value--multiline">
+                          {viewState.lastSyncResult?.warnings.length
+                            ? viewState.lastSyncResult.warnings.join('\n')
+                            : '暂无警告'}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="settings-sync-card__detail-actions">
                       <button
                         className="ghost-button ghost-button--compact"
                         type="button"
-                        disabled={isSaving || isSyncing || !viewState.syncTargetPath}
+                        disabled={isSaving || isSyncing || !isLocalFolderTargetActive}
                         onClick={() => {
                           void testDesktopSyncDirectory()
                         }}
@@ -910,7 +976,7 @@ export function SettingsPanel() {
                       <button
                         className="ghost-button ghost-button--compact ghost-button--danger"
                         type="button"
-                        disabled={isSaving || isSyncing || !viewState.syncTargetPath}
+                        disabled={isSaving || isSyncing || !hasConfiguredSyncTarget}
                         onClick={() => {
                           void clearDesktopSyncDirectory()
                         }}

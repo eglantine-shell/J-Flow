@@ -293,11 +293,9 @@
 - `docs/sync-implementation-plan.md`
 
 ### 当前未开始
-- `deviceId` 持久化
-- 同步文件夹配置落地
-- sync items / tombstones 文件写入
-- 远端合并逻辑
-- 设置页同步入口
+- 自动同步
+- 后台同步
+- `OneDrive`
 
 ### 后续实现建议顺序
 - Sync 1：`deviceId` 与 sync metadata
@@ -306,7 +304,7 @@
 - Sync 4：远端 sync items 导入与合并
 - Sync 5：立即同步按钮与结果提示
 - Sync 6：锁、错误处理与自动备份收口
-- Sync 7：后续自动同步预留
+- Sync 7：最小自动同步
 - Windows 打包
 - Windows 真机测试
 - 路径差异适配

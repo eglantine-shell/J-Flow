@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  clearSqliteSyncTargetConfig,
   clearSqliteSyncTargetPath,
   createSqliteDayPlanItem,
   createSqliteSceneTag,
@@ -18,6 +19,7 @@ import {
   listSqliteSyncChanges,
   listSqliteDayPlanItems,
   replaceSqliteSnapshot,
+  setSqliteSyncTargetConfig,
   setSqliteSyncTargetPath,
   updateSqliteSceneTag,
   updateSqliteDayPlanItem,
@@ -292,5 +294,25 @@ describe('electron/sqlite', () => {
     const cleared = clearSqliteSyncTargetPath(dataPath)
     expect(cleared.syncTargetPath).toBeNull()
     expect(getSqliteLocalSyncState(dataPath).syncTargetPath).toBeNull()
+  })
+
+  it('persists localFolder syncTargetConfig in local sync metadata', async () => {
+    const dataPath = await createTempDataPath()
+    replaceSqliteSnapshot(dataPath, sqliteTestSeedAppData)
+
+    const saved = setSqliteSyncTargetConfig(dataPath, {
+      type: 'localFolder',
+      path: '/tmp/j-flow-sync-config',
+    })
+
+    expect(saved.syncTargetConfig).toEqual({
+      type: 'localFolder',
+      path: '/tmp/j-flow-sync-config',
+    })
+    expect(getSqliteLocalSyncState(dataPath).syncTargetConfig?.type).toBe('localFolder')
+
+    const cleared = clearSqliteSyncTargetConfig(dataPath)
+    expect(cleared.syncTargetConfig).toBeNull()
+    expect(getSqliteLocalSyncState(dataPath).syncTargetConfig).toBeNull()
   })
 })

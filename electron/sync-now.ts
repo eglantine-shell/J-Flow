@@ -1,8 +1,8 @@
 import os from 'node:os'
 
 import { createAutoBackup } from './backup.js'
-import { exportLocalChangesToSyncFolder } from './sync-export.js'
-import { importRemoteChangesFromSyncFolder } from './sync-import.js'
+import { exportLocalChangesToSyncTarget } from './sync-export.js'
+import { importRemoteChangesFromSyncTarget } from './sync-import.js'
 import {
   getSqliteLocalSyncState,
   setSqliteLastSyncResult,
@@ -10,59 +10,86 @@ import {
 } from './sqlite.js'
 import {
   acquireSyncLock,
-  prepareSyncTargetDirectory,
+  prepareSyncTarget,
   releaseSyncLock,
-  updateSyncDeviceInfo,
-} from './sync-folder.js'
-import type {
-  LocalSyncState,
-  LocalSyncResultSummary,
-  SyncExportResult,
-  SyncImportResult,
-  SyncNowResult,
-} from './types.js'
+  updateDeviceInfo,
+} from './sync-target/metadata.js'
+import type { SyncTargetConfig, SyncTargetDriver } from './sync-target/index.js'
+import { LocalFolderDriver } from './sync-target/index.js'
+import type { LocalSyncState, LocalSyncResultSummary, SyncNowResult } from './types.js'
 
 const nowIso = () => new Date().toISOString()
 
+type ImportSummaryResult = Awaited<ReturnType<typeof importRemoteChangesFromSyncTarget>>
+type ExportSummaryResult = Awaited<ReturnType<typeof exportLocalChangesToSyncTarget>>
+
 type SyncNowDependencies = {
   getLocalSyncState: (dataPath: string) => LocalSyncState
-  prepareSyncTargetDirectory: typeof prepareSyncTargetDirectory
+  prepareSyncTarget: typeof prepareSyncTarget
   acquireSyncLock: typeof acquireSyncLock
   releaseSyncLock: typeof releaseSyncLock
   createAutoBackup: typeof createAutoBackup
-  importRemoteChangesFromSyncFolder: typeof importRemoteChangesFromSyncFolder
-  exportLocalChangesToSyncFolder: typeof exportLocalChangesToSyncFolder
+  importRemoteChangesFromSyncTarget: typeof importRemoteChangesFromSyncTarget
+  exportLocalChangesToSyncTarget: typeof exportLocalChangesToSyncTarget
   setSqliteLastSyncedAt: typeof setSqliteLastSyncedAt
   setSqliteLastSyncResult: typeof setSqliteLastSyncResult
-  updateSyncDeviceInfo: typeof updateSyncDeviceInfo
+  updateDeviceInfo: typeof updateDeviceInfo
   now: () => string
   getDeviceName: () => string
   platform: string
+  resolveSyncTargetConfig: (syncState: LocalSyncState) => SyncTargetConfig | null
+  createSyncTargetDriver: (input: {
+    dataPath: string
+    config: SyncTargetConfig
+  }) => Promise<SyncTargetDriver>
+  describeSyncTarget: (config: SyncTargetConfig) => string
 }
 
 const defaultDependencies: SyncNowDependencies = {
   getLocalSyncState: getSqliteLocalSyncState,
-  prepareSyncTargetDirectory,
+  prepareSyncTarget,
   acquireSyncLock,
   releaseSyncLock,
   createAutoBackup,
-  importRemoteChangesFromSyncFolder,
-  exportLocalChangesToSyncFolder,
+  importRemoteChangesFromSyncTarget,
+  exportLocalChangesToSyncTarget,
   setSqliteLastSyncedAt,
   setSqliteLastSyncResult,
-  updateSyncDeviceInfo,
+  updateDeviceInfo,
   now: nowIso,
   getDeviceName: () => os.hostname(),
   platform: process.platform,
+  resolveSyncTargetConfig: (syncState) =>
+    syncState.syncTargetConfig ??
+    (syncState.syncTargetPath
+      ? {
+          type: 'localFolder',
+          path: syncState.syncTargetPath,
+        }
+      : null),
+  createSyncTargetDriver: async ({ dataPath, config }) => {
+    if (config.type === 'localFolder') {
+      return new LocalFolderDriver(config.path)
+    }
+
+    throw new Error(`当前还不支持同步目标类型：${config.type}`)
+  },
+  describeSyncTarget: (config) => {
+    if (config.type === 'localFolder') {
+      return config.path
+    }
+
+    return config.type
+  },
 }
 
-const summarizeImportResult = (result: SyncImportResult) => ({
+const summarizeImportResult = (result: ImportSummaryResult) => ({
   appliedCount: result.appliedCount,
   skippedCount: result.skippedCount,
   failedCount: result.failedCount,
 })
 
-const summarizeExportResult = (result: SyncExportResult) => ({
+const summarizeExportResult = (result: ExportSummaryResult) => ({
   exportedCount: result.exportedCount,
   failedCount: result.failedCount,
 })
@@ -74,8 +101,8 @@ const buildFailureResult = (input: {
   deviceId: string
   backupCreated?: boolean
   backupFilePath?: string | null
-  importResult?: SyncImportResult
-  exportResult?: SyncExportResult
+  importResult?: ImportSummaryResult
+  exportResult?: ExportSummaryResult
   errors: string[]
   warnings?: string[]
 }): SyncNowResult => ({
@@ -101,8 +128,8 @@ const buildPartialResult = (input: {
   deviceId: string
   backupCreated: boolean
   backupFilePath: string | null
-  importResult: SyncImportResult
-  exportResult: SyncExportResult
+  importResult: ImportSummaryResult
+  exportResult: ExportSummaryResult
   errors: string[]
   warnings?: string[]
 }): SyncNowResult => ({
@@ -128,8 +155,8 @@ const buildSuccessResult = (input: {
   deviceId: string
   backupCreated: boolean
   backupFilePath: string | null
-  importResult: SyncImportResult
-  exportResult: SyncExportResult
+  importResult: ImportSummaryResult
+  exportResult: ExportSummaryResult
 }): SyncNowResult => ({
   success: true,
   status: 'success',
@@ -146,7 +173,7 @@ const buildSuccessResult = (input: {
   warnings: [],
 })
 
-const collectPartialErrors = (importResult: SyncImportResult, exportResult: SyncExportResult) => [
+const collectPartialErrors = (importResult: ImportSummaryResult, exportResult: ExportSummaryResult) => [
   ...importResult.failures.map((failure) => failure.message),
   ...exportResult.failures.map((failure) => failure.message),
 ]
@@ -171,8 +198,10 @@ export const runManualSync = async (
 ): Promise<SyncNowResult> => {
   const startedAt = dependencies.now()
   const syncState = dependencies.getLocalSyncState(input.dataPath)
-  const targetPath = syncState.syncTargetPath
   const deviceId = syncState.deviceId
+  const targetConfig = dependencies.resolveSyncTargetConfig(syncState)
+  const targetPath = targetConfig ? dependencies.describeSyncTarget(targetConfig) : null
+  let driver: SyncTargetDriver | null = null
   let lockAcquired = false
   let result: SyncNowResult = buildFailureResult({
     startedAt,
@@ -181,19 +210,23 @@ export const runManualSync = async (
     errors: ['手动同步未完成。'],
   })
 
-  if (!targetPath) {
+  if (!targetConfig) {
     return buildFailureResult({
       startedAt,
       completedAt: dependencies.now(),
       targetPath: null,
       deviceId,
-      errors: ['当前还没有设置同步文件夹路径。'],
+      errors: ['当前还没有设置同步目标。'],
     })
   }
 
   try {
-    await dependencies.prepareSyncTargetDirectory({
-      targetPath,
+    driver = await dependencies.createSyncTargetDriver({
+      dataPath: input.dataPath,
+      config: targetConfig,
+    })
+
+    await dependencies.prepareSyncTarget(driver, {
       deviceId,
       deviceName: dependencies.getDeviceName(),
       platform: dependencies.platform,
@@ -201,8 +234,7 @@ export const runManualSync = async (
       lastSyncedAt: syncState.lastSyncedAt,
     })
 
-    const lockResult = await dependencies.acquireSyncLock({
-      targetPath,
+    const lockResult = await dependencies.acquireSyncLock(driver, {
       deviceId,
       appVersion: input.appVersion,
     })
@@ -213,7 +245,7 @@ export const runManualSync = async (
         completedAt: dependencies.now(),
         targetPath,
         deviceId,
-        errors: [lockResult.reason ?? '当前同步文件夹已被另一台设备占用。'],
+        errors: [lockResult.reason ?? '当前同步目标已被另一台设备占用。'],
       })
       dependencies.setSqliteLastSyncResult(input.dataPath, toLocalSyncResultSummary(result))
     } else {
@@ -233,13 +265,23 @@ export const runManualSync = async (
         })
         dependencies.setSqliteLastSyncResult(input.dataPath, toLocalSyncResultSummary(result))
       } else {
-        const importResult = await dependencies.importRemoteChangesFromSyncFolder({
+        const importResult = await dependencies.importRemoteChangesFromSyncTarget({
           dataPath: input.dataPath,
           appVersion: input.appVersion,
+          deviceId,
+          deviceName: dependencies.getDeviceName(),
+          platform: dependencies.platform,
+          lastSyncedAt: syncState.lastSyncedAt,
+          driver,
         })
-        const exportResult = await dependencies.exportLocalChangesToSyncFolder({
+        const exportResult = await dependencies.exportLocalChangesToSyncTarget({
           dataPath: input.dataPath,
           appVersion: input.appVersion,
+          deviceId,
+          deviceName: dependencies.getDeviceName(),
+          platform: dependencies.platform,
+          lastSyncedAt: syncState.lastSyncedAt,
+          driver,
         })
         const completedAt = dependencies.now()
 
@@ -247,7 +289,7 @@ export const runManualSync = async (
           result = buildPartialResult({
             startedAt,
             completedAt,
-            targetPath,
+            targetPath: targetPath ?? '',
             deviceId,
             backupCreated: true,
             backupFilePath: backupResult.filePath,
@@ -257,8 +299,7 @@ export const runManualSync = async (
           })
           dependencies.setSqliteLastSyncResult(input.dataPath, toLocalSyncResultSummary(result))
         } else {
-          await dependencies.updateSyncDeviceInfo({
-            targetPath,
+          await dependencies.updateDeviceInfo(driver, {
             deviceId,
             deviceName: dependencies.getDeviceName(),
             platform: dependencies.platform,
@@ -270,7 +311,7 @@ export const runManualSync = async (
           result = buildSuccessResult({
             startedAt,
             completedAt,
-            targetPath,
+            targetPath: targetPath ?? '',
             deviceId,
             backupCreated: true,
             backupFilePath: backupResult.filePath,
@@ -290,13 +331,13 @@ export const runManualSync = async (
       errors: [error instanceof Error ? error.message : '手动同步失败。'],
     })
 
-    if (targetPath) {
+    if (targetConfig) {
       dependencies.setSqliteLastSyncResult(input.dataPath, toLocalSyncResultSummary(result))
     }
   } finally {
-    if (lockAcquired) {
+    if (lockAcquired && driver) {
       try {
-        await dependencies.releaseSyncLock(targetPath, deviceId)
+        await dependencies.releaseSyncLock(driver, deviceId)
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : '同步锁释放失败。'
         const warnings = [...result.warnings, `同步锁释放失败：${message}`]

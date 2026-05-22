@@ -183,6 +183,7 @@ export interface LocalSyncState {
   lastSyncAttemptedAt: string | null
   lastSyncResult: LocalSyncResultSummary | null
   syncTargetPath: string | null
+  syncTargetConfig: SyncTargetConfig | null
 }
 
 export interface LocalSyncResultSummary {
@@ -257,6 +258,17 @@ export interface SyncTombstoneFile {
   deletedAt: string
   deviceId: string
 }
+
+export type SyncTargetConfig =
+  | {
+      type: 'localFolder'
+      path: string
+    }
+  | {
+      type: 'oneDriveAppFolder'
+      accountId: string
+      displayName?: string
+    }
 
 export interface SyncExportFailure {
   changeId: string
