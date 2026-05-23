@@ -1,5 +1,55 @@
 # Dev Log
 
+## 2026-05-23（V2.1 版本线收口与 macOS dmg 打包）
+
+### 本轮目标
+- 将当前 macOS 自用打包版本名从：
+  - `V1.4`
+  收口为：
+  - `V2.1`
+- 在相关文档里明确：
+  - `V1.4`
+    - 上一版稳定 macOS 自用包
+  - `V2.0`
+    - 主要更新为本地文件夹同步能力
+  - `V2.1`
+    - 在 `V2.0` 基础上增加必要事项 `DDL`
+
+### 本轮修改
+- 更新：
+  - `package.json`
+  - `README.md`
+  - `handoff.md`
+  - `manual-test-checklist.md`
+- 当前打包产物名已从：
+  - `J-Flow-V1.4.dmg`
+  调整为：
+  - `J-Flow-V2.1.dmg`
+- 当前版本说明已统一为：
+  - 不写成：
+    - 官方云同步
+  - 继续写为：
+    - 本地文件夹同步能力
+    - 最小自动同步
+
+### 当前待验证
+- 需要实际执行：
+  - `corepack pnpm run package:mac`
+  - 确认生成：
+    - `release/J-Flow-V2.1.dmg`
+
+### 验证结果
+- `corepack pnpm run package:mac`：通过
+- 成功产出：
+  - `release/J-Flow-V2.1.dmg`
+  - `release/J-Flow-V2.1.dmg.blockmap`
+
+### 当前说明
+- `release/` 中当前仍同时保留：
+  - `J-Flow-V1.4.dmg`
+  - `J-Flow-V2.1.dmg`
+- 若后续希望只保留最新版本产物，可再单独清理旧包。
+
 ## 2026-05-23（日志快照重构为单一列表，并纳入 DDL / 逾期 / 分次 tag）
 
 ### 本轮目标

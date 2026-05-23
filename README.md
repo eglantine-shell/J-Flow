@@ -21,8 +21,17 @@ J-Flow 试图解决几件很日常、但常常分散在不同工具里的事：
 - `V2 Web` 已部署，作为可试用和参考版本保留
 - `V3 Desktop` 是当前主线
 - macOS 桌面版目前已经可以本地打包自用
-- 当前最新 macOS 自用包产物名为 `J-Flow-V1.4.dmg`
+- 当前最新 macOS 自用包产物名为 `J-Flow-V2.1.dmg`
 - Windows 已接入首轮 `portable` 打包，但仍待真机继续验证
+
+当前版本线：
+
+- `V1.4`
+  - 上一版稳定 macOS 自用包
+- `V2.0`
+  - 主要更新为本地文件夹同步能力
+- `V2.1`
+  - 在 `V2.0` 基础上新增必要事项 `DDL`
 
 ## 功能亮点
 
@@ -36,6 +45,8 @@ J-Flow 试图解决几件很日常、但常常分散在不同工具里的事：
 - 桌面端本地 SQLite 存储
 - JSON 导入 / 导出
 - 数据目录入口与本地自动备份
+- 本地文件夹同步与最小自动同步
+- 必要事项 `DDL`
 - 日志页（Logbook）查看每日完成、未完成与删除快照
 
 ## 平台支持
@@ -120,7 +131,7 @@ corepack pnpm run package:win
 
 常见产物位置：
 
-- macOS `.dmg`：`release/J-Flow-V1.4.dmg`
+- macOS `.dmg`：`release/J-Flow-V2.1.dmg`
 - Windows `.exe`：`release/J-Flow-V1-win-portable.exe`
 
 说明：

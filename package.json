@@ -58,7 +58,7 @@
       "winCodeSign": "1.1.0"
     },
     "dmg": {
-      "artifactName": "J-Flow-V1.4.dmg"
+      "artifactName": "J-Flow-V2.1.dmg"
     }
   },
   "dependencies": {
