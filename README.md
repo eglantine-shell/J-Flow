@@ -180,4 +180,8 @@ J-Flow 当前是本地优先应用。
 
 ## License
 
-TBD
+MIT
+
+Copyright (c) 2026 Ye Tingzhi
+
+See [LICENSE](LICENSE).
