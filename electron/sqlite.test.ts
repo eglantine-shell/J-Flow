@@ -50,17 +50,18 @@ describe('electron/sqlite', () => {
       logbookEntries: [
         {
           date: '2026-05-01',
-          completedItems: [
+          snapshotItems: [
             {
               id: 'completed-1',
+              status: 'completed',
               titleSnapshot: '完成事项',
-              time: '10：30',
-              kind: 'completed',
+              time: '1030',
               isNecessary: true,
+              isPicked: false,
+              isSegmented: false,
+              deadlineStatus: 'none',
             },
           ],
-          unfinishedItems: [],
-          deletedItems: [],
           remark: '测试备注',
           generatedAt: '2026-05-02T00:00:00.000Z',
         },
@@ -95,6 +96,40 @@ describe('electron/sqlite', () => {
         fromProgress: 20,
         toProgress: 40,
       },
+    ])
+  })
+
+  it('accepts legacy logbook entries when replacing a full desktop snapshot', async () => {
+    const dataPath = await createTempDataPath()
+    const result = replaceSqliteSnapshot(dataPath, {
+      ...sqliteTestSeedAppData,
+      logbookEntries: [
+        {
+          date: '2026-05-01',
+          completedItems: [
+            {
+              id: 'legacy-completed-1',
+              titleSnapshot: '旧日志完成事项',
+              time: '10：30',
+              kind: 'completed',
+              isNecessary: false,
+            },
+          ],
+          unfinishedItems: [],
+          deletedItems: [],
+          remark: '',
+          generatedAt: '2026-05-02T00:00:00.000Z',
+        },
+      ],
+    } as unknown as typeof sqliteTestSeedAppData)
+
+    expect(result.ok).toBe(true)
+    expect(getSqliteAppData(dataPath)?.logbookEntries[0]?.snapshotItems).toEqual([
+      expect.objectContaining({
+        id: 'legacy-completed-1',
+        status: 'completed',
+        time: '1030',
+      }),
     ])
   })
 

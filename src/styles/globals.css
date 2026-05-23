@@ -3695,42 +3695,113 @@ button:hover:not(:disabled) {
 
 .logbook-list {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.logbook-list li {
-  display: grid;
-  grid-template-columns: 56px 48px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
+.logbook-snapshot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
   font-size: 0.92rem;
-  line-height: 1.5;
+  line-height: 1.28;
 }
 
-.logbook-list--plain li {
-  grid-template-columns: minmax(0, 1fr);
+.logbook-snapshot__checkbox {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid rgba(90, 115, 255, 0.46);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.92);
+  flex: 0 0 auto;
 }
 
-.logbook-list__time,
-.logbook-list__kind {
+.logbook-snapshot__checkbox--checked {
+  border-color: rgba(90, 115, 255, 0.6);
+  background: rgba(90, 115, 255, 0.09);
+}
+
+.logbook-snapshot__checkbox--checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border-right: 1.5px solid #5a73ff;
+  border-bottom: 1.5px solid #5a73ff;
+  transform: rotate(42deg);
+}
+
+.logbook-snapshot__checkbox--pending {
+  border-color: rgba(133, 125, 110, 0.52);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.logbook-snapshot__time {
   color: var(--text-muted);
   font-size: 0.82rem;
-}
-
-.logbook-list__kind {
   letter-spacing: 0.04em;
 }
 
-.logbook-list__title--necessary {
+.logbook-snapshot__title--necessary {
   font-weight: 700;
 }
 
-.logbook-list__deleted {
+.logbook-snapshot__detail {
+  color: var(--text-secondary);
+}
+
+.logbook-snapshot__detail::before {
+  content: "|";
+  margin-right: 8px;
+  color: rgba(85, 83, 78, 0.42);
+}
+
+.logbook-snapshot--completed {
+  color: rgba(85, 83, 78, 0.78);
+}
+
+.logbook-snapshot--completed .logbook-snapshot__title,
+.logbook-snapshot--completed .logbook-snapshot__detail {
+  color: rgba(85, 83, 78, 0.78);
+}
+
+.logbook-snapshot--completed .logbook-snapshot__time {
+  color: rgba(133, 125, 110, 0.9);
+}
+
+.logbook-snapshot--deleted {
   color: var(--text-muted);
+}
+
+.logbook-snapshot--deleted .logbook-snapshot__title {
   text-decoration: line-through;
+}
+
+.logbook-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(56, 89, 249, 0.18);
+  border-radius: 999px;
+  background: rgba(240, 248, 255, 0.9);
+  color: #3859f9;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.logbook-inline-tag {
+  color: #5a73ff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .logbook-entry__remark {

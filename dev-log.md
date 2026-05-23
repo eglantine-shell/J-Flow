@@ -1,5 +1,153 @@
 # Dev Log
 
+## 2026-05-23（日志快照重构为单一列表，并纳入 DDL / 逾期 / 分次 tag）
+
+### 本轮目标
+- 重做日志页与日志 Markdown 的组织方式
+- 删除：
+  - 当日完成
+  - 当日未完成
+  - 当日删除
+  三分区
+- 将：
+  - 完成
+  - 未完成
+  - 删除
+  - 必要
+  - `DDL`
+  - 逾期
+  - 拔草
+  - 分次推进
+  统一进单一快照列表
+
+### 本轮修改
+- 更新：
+  - `src/types/models.ts`
+  - `electron/types.ts`
+  - `src/db/schema.ts`
+  - `src/db/storage.test.ts`
+  - `electron/sqlite.ts`
+  - `electron/sqlite.test.ts`
+  - `src/features/logbook/logbook-service.ts`
+  - `src/features/logbook/logbook-service.test.ts`
+  - `src/pages/logbook/LogbookPage.tsx`
+  - `src/styles/globals.css`
+  - `product-rules.md`
+  - `data-model.md`
+- 当前日志数据模型已从：
+  - `completedItems / unfinishedItems / deletedItems`
+  收口为：
+  - `snapshotItems`
+- 当前日志规则已落地为：
+  - 统一使用：
+    - `- [x]`
+    - `- [ ]`
+  - 删除项显示为：
+    - `- [x] ~~事项~~`
+  - 必要事项正文加粗
+  - `[拔草]`
+    - `[逾期]`
+    - `[分次]`
+    作为末尾简易 tag
+  - 未完成必要事项显示：
+    - `DDL MMDD`
+  - 已完成必要事项若逾期完成，仅保留：
+    - `[逾期]`
+    不再重复显示 `DDL`
+  - 分次事项显示：
+    - `已推进 a%→b%`
+    或：
+    - `当前进度 b%`
+- 当前历史兼容已补：
+  - 旧 `logbookEntries` 若仍是三分区结构
+  - 读取时会自动转换为新 `snapshotItems`
+  - SQLite 也已新增：
+    - `snapshot_items_json`
+    兼容列
+
+### 验证结果
+- `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts src/db/storage.test.ts electron/sqlite.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前风险
+- 历史日志若生成于旧结构时代：
+  - 不会补出新的 `DDL / 分次 / 拔草` 细粒度语义
+  - 只能按旧快照信息做兼容转换
+- 这属于当前接受范围，后续不建议为历史日志做高风险回填迁移
+
+### 后续补丁
+- 首页曾出现：
+  - `db:app-data:replace`
+  - `Provided value cannot be bound to SQLite parameter 2`
+- 根因是：
+  - 本机仍存在旧三分区日志结构
+  - 在整库回写到 SQLite 时，个别条目未先归一化出：
+    - `snapshotItems`
+- 已补两层兼容：
+  - `src/db/storage.ts`
+    - 旧日志先归一化为：
+      - `snapshotItems`
+  - `electron/sqlite.ts`
+    - 写入前再次兜底把旧日志转换为：
+      - `snapshotItems`
+- 额外补充回归测试：
+  - `electron/sqlite.test.ts`
+    覆盖“旧日志直接 replace 进桌面 SQLite”场景
+
+### 后续补丁 2
+- 用户继续反馈：
+  - 日志条目之间行间距偏大
+  - 旧日志里的分次事项仍显示为：
+    - `事项 进度：81%`
+    而不是约定的新格式
+- 已补：
+  - `src/styles/globals.css`
+    - 收紧：
+      - `logbook-list` 条目间距
+      - `logbook-snapshot` 内联间距与行高
+  - `src/db/storage.ts`
+  - `electron/sqlite.ts`
+    - 为旧日志快照追加二次兼容：
+      - `xxx 进度：81%` -> 标题 `xxx` + `当前进度 81%`
+      - `推进 xxx 30% -> 50%` -> 标题 `xxx` + `已推进 30%→50%`
+- 这样旧日志无需手动重建，也能在页面里按新约定显示。
+
+### 后续补丁 3
+- 用户继续微调日志 UI：
+  - `[分次]` 不要显示成胶囊
+  - 行距再压一点
+- 已补：
+  - `src/pages/logbook/LogbookPage.tsx`
+    - `[分次]` 当前改为普通文本 tag：
+      - `[分次]`
+  - `src/styles/globals.css`
+    - 继续收紧日志列表条目间距、内联间距与行高
+
+### 后续补丁 4
+- 用户继续微调日志 UI：
+  - `[分次]`
+    - `[逾期]`
+    - `[拔草]`
+    都改为蓝色文本 tag
+  - `[ ] / [x]` 改为视觉 checkbox
+  - 已完成事项整体颜色变浅
+- 已补：
+  - `src/pages/logbook/LogbookPage.tsx`
+    - 纯文本勾选前缀改为视觉 checkbox
+    - `[分次] / [逾期] / [拔草]` 统一改为文本 tag 输出
+  - `src/styles/globals.css`
+    - 新增日志 checkbox 样式
+    - 已完成项整体降低对比度
+    - 文本 tag 统一改为蓝色
+
+### 后续补丁 5
+- 用户继续微调日志 UI：
+  - 日志页蓝色再浅一点
+  - 这一轮日志重构可以收口
+- 已补：
+  - `src/styles/globals.css`
+    - 将日志页 checkbox 与文本 tag 的蓝色统一调浅一档
+
 ## 2026-05-23（DDL 录入区与今日截止颜色微调）
 
 ### 本轮目标

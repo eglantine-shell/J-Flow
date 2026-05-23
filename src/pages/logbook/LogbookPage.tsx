@@ -4,6 +4,7 @@ import { CopyIcon, SaveIcon } from '@/components/ui/Icons'
 import { appDataRepository } from '@/db'
 import {
   buildLogbookMarkdown,
+  getLogbookSnapshotPresentation,
   ensureDailyLogbookUpToDate,
 } from '@/features/logbook/logbook-service'
 import type { LogbookEntry } from '@/types'
@@ -206,50 +207,61 @@ export function LogbookPage() {
               </header>
 
               <section className="logbook-section">
-                <h4>当日完成</h4>
-                {entry.completedItems.length === 0 ? (
-                  <p className="logbook-section__empty">无</p>
-                ) : (
-                  <ul className="logbook-list">
-                    {entry.completedItems.map((item) => (
-                      <li key={item.id}>
-                        <span className="logbook-list__time">{item.time}</span>
-                        <span className="logbook-list__kind">
-                          {item.kind === 'picked' ? '拔草' : '完成'}
-                        </span>
-                        <span className={item.isNecessary ? 'logbook-list__title logbook-list__title--necessary' : 'logbook-list__title'}>
-                          {item.titleSnapshot}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section className="logbook-section">
-                <h4>当日未完成</h4>
-                {entry.unfinishedItems.length === 0 ? (
+                <h4>当日快照</h4>
+                {entry.snapshotItems.length === 0 ? (
                   <p className="logbook-section__empty">无</p>
                 ) : (
                   <ul className="logbook-list logbook-list--plain">
-                    {entry.unfinishedItems.map((item) => (
-                      <li key={item.id}>{item.titleSnapshot}</li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+                    {entry.snapshotItems.map((item) => {
+                      const presentation = getLogbookSnapshotPresentation(item)
 
-              <section className="logbook-section">
-                <h4>当日删除</h4>
-                {entry.deletedItems.length === 0 ? (
-                  <p className="logbook-section__empty">无</p>
-                ) : (
-                  <ul className="logbook-list logbook-list--plain">
-                    {entry.deletedItems.map((item) => (
-                      <li className="logbook-list__deleted" key={item.id}>
-                        {item.titleSnapshot}
-                      </li>
-                    ))}
+                      return (
+                        <li
+                          className={
+                            presentation.isDeleted
+                              ? 'logbook-snapshot logbook-snapshot--deleted'
+                              : item.status === 'completed'
+                                ? 'logbook-snapshot logbook-snapshot--completed'
+                              : 'logbook-snapshot'
+                          }
+                          key={item.id}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={
+                              item.status === 'pending'
+                                ? 'logbook-snapshot__checkbox logbook-snapshot__checkbox--pending'
+                                : 'logbook-snapshot__checkbox logbook-snapshot__checkbox--checked'
+                            }
+                          />
+                          {presentation.time ? (
+                            <span className="logbook-snapshot__time">{presentation.time}</span>
+                          ) : null}
+                          <span
+                            className={
+                              presentation.isNecessary
+                                ? 'logbook-snapshot__title logbook-snapshot__title--necessary'
+                                : 'logbook-snapshot__title'
+                            }
+                          >
+                            {item.titleSnapshot}
+                          </span>
+                          {presentation.details.map((detail) => (
+                            <span className="logbook-snapshot__detail" key={`${item.id}-${detail}`}>
+                              {detail}
+                            </span>
+                          ))}
+                          {presentation.tags.map((tag) => (
+                            <span
+                              className="logbook-inline-tag"
+                              key={`${item.id}-${tag}`}
+                            >
+                              [{tag}]
+                            </span>
+                          ))}
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </section>

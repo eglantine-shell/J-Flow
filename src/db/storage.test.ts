@@ -167,7 +167,51 @@ describe('appDataRepository.taskTemplates.create', () => {
       ],
     })
 
-    expect(imported.logbookEntries[0]?.completedItems[0]?.time).toBe('16：36')
+    expect(imported.logbookEntries[0]?.snapshotItems[0]?.time).toBe('1636')
+  })
+
+  it('normalizes legacy segmented logbook text into title and progress details', async () => {
+    const { appDataRepository } = await import('@/db/storage')
+
+    const imported = await appDataRepository.importSnapshot({
+      ...mockSeedAppData,
+      logbookEntries: [
+        {
+          date: '2026-05-04',
+          completedItems: [],
+          unfinishedItems: [
+            {
+              id: 'unfinished-progress-1',
+              titleSnapshot: '整理资料 进度：81%',
+              isNecessary: false,
+            },
+            {
+              id: 'unfinished-progress-2',
+              titleSnapshot: '推进 报销材料 30% -> 50%',
+              isNecessary: true,
+            },
+          ],
+          deletedItems: [],
+          remark: '',
+          generatedAt: '2026-05-05T00:00:00.000Z',
+        },
+      ],
+    } as unknown as typeof mockSeedAppData)
+
+    expect(imported.logbookEntries[0]?.snapshotItems).toEqual([
+      expect.objectContaining({
+        id: 'unfinished-progress-1',
+        titleSnapshot: '整理资料',
+        isSegmented: true,
+        progressText: '当前进度 81%',
+      }),
+      expect.objectContaining({
+        id: 'unfinished-progress-2',
+        titleSnapshot: '报销材料',
+        isSegmented: true,
+        progressText: '已推进 30%→50%',
+      }),
+    ])
   })
 
   it('defaults segmented progress logs to an empty array for legacy imports', async () => {

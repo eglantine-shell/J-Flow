@@ -20,7 +20,8 @@ export type RecurringInstanceStatus = 'pending' | 'completed' | 'expired'
 export type ProgressState = 'not_started' | 'in_progress' | 'completed'
 export type TieBreakerOrder = 'asc' | 'desc'
 export type CompletedAtRoundingMinutes = 0 | 5 | 10 | 30
-export type LogbookCompletedKind = 'completed' | 'picked'
+export type LogbookSnapshotStatus = 'completed' | 'pending' | 'deleted'
+export type LogbookSnapshotDeadlineStatus = 'none' | 'normal' | 'overdue'
 export type SyncEntityType =
   | 'settings'
   | 'sceneTag'
@@ -118,25 +119,17 @@ export interface DayPlanItem {
   deletedAt?: string
 }
 
-export interface LogbookCompletedItem {
+export interface LogbookSnapshotItem {
   id: string
+  status: LogbookSnapshotStatus
   titleSnapshot: string
-  time: string
-  kind: LogbookCompletedKind
+  time?: string
   isNecessary: boolean
-}
-
-export interface LogbookUnfinishedItem {
-  id: string
-  titleSnapshot: string
-  isNecessary: boolean
-  progressPercent?: number
-}
-
-export interface LogbookDeletedItem {
-  id: string
-  titleSnapshot: string
-  isNecessary: boolean
+  isPicked: boolean
+  isSegmented: boolean
+  progressText?: string
+  deadlineDate?: string
+  deadlineStatus: LogbookSnapshotDeadlineStatus
 }
 
 export interface SegmentedProgressLog {
@@ -150,9 +143,7 @@ export interface SegmentedProgressLog {
 
 export interface LogbookEntry {
   date: string
-  completedItems: LogbookCompletedItem[]
-  unfinishedItems: LogbookUnfinishedItem[]
-  deletedItems: LogbookDeletedItem[]
+  snapshotItems: LogbookSnapshotItem[]
   remark: string
   generatedAt: string
 }

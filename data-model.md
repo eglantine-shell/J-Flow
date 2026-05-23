@@ -234,23 +234,17 @@ type SceneTag = {
 ```ts
 type LogbookEntry = {
   date: string
-  completedItems: Array<{
+  snapshotItems: Array<{
     id: string
+    status: 'completed' | 'pending' | 'deleted'
     titleSnapshot: string
-    time: string
-    kind: 'completed' | 'picked'
+    time?: string
     isNecessary: boolean
-  }>
-  unfinishedItems: Array<{
-    id: string
-    titleSnapshot: string
-    isNecessary: boolean
-    progressPercent?: number
-  }>
-  deletedItems: Array<{
-    id: string
-    titleSnapshot: string
-    isNecessary: boolean
+    isPicked: boolean
+    isSegmented: boolean
+    progressText?: string
+    deadlineDate?: string
+    deadlineStatus: 'none' | 'normal' | 'overdue'
   }>
   remark: string
   generatedAt: string
@@ -259,16 +253,24 @@ type LogbookEntry = {
 
 说明：
 - 每天一条日志容器。
-- `completedItems` 记录当日完成快照。
-- `kind = picked` 表示这条完成来自种草。
-- `unfinishedItems` 只记录当天页面上仍存在的 pending。
+- `snapshotItems` 当前已收口为单一快照列表。
+- `status = completed`：
+  - 表示当日完成快照
+  - `isPicked = true` 表示这条完成来自种草
+- `status = pending`：
+  - 只记录当天页面上仍存在的 pending
 - 手动改到未来日期的事项，不计入原日期未完成。
-- 分次事项可在 `titleSnapshot` 中体现：
-  - 无推进汇总时：
-    - `xxx 进度：40%`
-  - 若当天有推进且当天结束时仍未完成：
-    - `推进 xxx 20% -> 40%`
-- `deletedItems` 记录当日删除快照。
+- 分次事项通过：
+  - `isSegmented`
+  - `progressText`
+  表达日志快照
+- 必要事项通过：
+  - `deadlineDate`
+  - `deadlineStatus`
+  表达日志中的 `DDL / 逾期` 状态
+- 已完成事项不再在日志里重复展示 `DDL` 日期本身。
+- `status = deleted`：
+  - 记录当日删除快照
 - `remark` 是唯一允许后续编辑的区域，其余正文保持归档语义。
 
 ### 7. SegmentedProgressLog

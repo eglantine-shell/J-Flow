@@ -2,10 +2,8 @@ import { appDataRepository } from '@/db/storage'
 import type {
   AppData,
   DayPlanItem,
-  LogbookCompletedItem,
-  LogbookDeletedItem,
   LogbookEntry,
-  LogbookUnfinishedItem,
+  LogbookSnapshotItem,
 } from '@/types'
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -19,10 +17,16 @@ const toCompactDateKey = (dateKey: string) => {
   return `${year.slice(-2)}${month}${day}`
 }
 
+const toCompactMonthDay = (dateKey: string) => {
+  const [, month, day] = dateKey.split('-')
+
+  return `${month ?? ''}${day ?? ''}`
+}
+
 const toTimeLabel = (isoString: string) => {
   const date = new Date(isoString)
 
-  return `${pad(date.getHours())}：${pad(date.getMinutes())}`
+  return `${pad(date.getHours())}${pad(date.getMinutes())}`
 }
 
 const getPreviousDay = (date: Date) => {
@@ -32,9 +36,6 @@ const getPreviousDay = (date: Date) => {
   return previous
 }
 
-const appendProgress = (item: Pick<DayPlanItem, 'isSegmented' | 'progressPercent' | 'title'>) =>
-  item.isSegmented ? `${item.title} 进度：${Math.round(item.progressPercent)}%` : item.title
-
 const buildSegmentedProgressLogMap = (appData: AppData, dateKey: string) =>
   new Map(
     appData.segmentedProgressLogs
@@ -42,7 +43,21 @@ const buildSegmentedProgressLogMap = (appData: AppData, dateKey: string) =>
       .map((log) => [log.itemId, log] as const),
   )
 
-const buildCompletedItems = (appData: AppData, dateKey: string): LogbookCompletedItem[] =>
+const isOverdueAtDate = (deadlineDate: string | undefined, referenceDateKey: string) =>
+  Boolean(deadlineDate && deadlineDate < referenceDateKey)
+
+const resolveDeadlineStatus = (
+  item: Pick<DayPlanItem, 'isNecessary' | 'deadlineDate'>,
+  referenceDateKey: string,
+): LogbookSnapshotItem['deadlineStatus'] => {
+  if (!item.isNecessary || !item.deadlineDate) {
+    return 'none'
+  }
+
+  return isOverdueAtDate(item.deadlineDate, referenceDateKey) ? 'overdue' : 'normal'
+}
+
+const buildCompletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSnapshotItem[] =>
   appData.dayPlanItems
     .filter((item) => item.status === 'completed' && item.completedAt && item.completedAt.slice(0, 10) === dateKey)
     .sort((left, right) => {
@@ -56,52 +71,175 @@ const buildCompletedItems = (appData: AppData, dateKey: string): LogbookComplete
     })
     .map((item) => ({
       id: item.id,
+      status: 'completed',
       titleSnapshot: item.title,
       time: toTimeLabel(item.completedAt as string),
-      kind: item.source === 'decision_selected' ? 'picked' : 'completed',
       isNecessary: item.isNecessary,
+      isPicked: item.source === 'decision_selected',
+      isSegmented: item.isSegmented,
+      deadlineDate: item.isNecessary ? item.deadlineDate : undefined,
+      deadlineStatus: resolveDeadlineStatus(item, dateKey),
     }))
 
-const buildUnfinishedItems = (appData: AppData, dateKey: string): LogbookUnfinishedItem[] =>
-  (() => {
-    const segmentedProgressLogMap = buildSegmentedProgressLogMap(appData, dateKey)
+const buildPendingSnapshotItems = (appData: AppData, dateKey: string): LogbookSnapshotItem[] => {
+  const segmentedProgressLogMap = buildSegmentedProgressLogMap(appData, dateKey)
 
-    return appData.dayPlanItems
-      .filter((item) => item.status === 'pending' && item.date === dateKey)
-      .sort(
-        (left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt),
+  return appData.dayPlanItems
+    .filter((item) => item.status === 'pending' && item.date === dateKey)
+    .sort((left, right) => {
+      const leftProgressLog = segmentedProgressLogMap.get(left.id)
+      const rightProgressLog = segmentedProgressLogMap.get(right.id)
+      const leftHasProgressAdvance = Boolean(
+        leftProgressLog && leftProgressLog.toProgress > leftProgressLog.fromProgress,
       )
-      .map((item) => {
-        const progressLog = segmentedProgressLogMap.get(item.id)
-        const titleSnapshot =
-          progressLog && progressLog.toProgress > progressLog.fromProgress
-            ? `推进 ${progressLog.titleSnapshot} ${Math.round(progressLog.fromProgress)}% -> ${Math.round(progressLog.toProgress)}%`
-            : appendProgress(item)
+      const rightHasProgressAdvance = Boolean(
+        rightProgressLog && rightProgressLog.toProgress > rightProgressLog.fromProgress,
+      )
+      const leftGroup = left.isSegmented ? (leftHasProgressAdvance ? 0 : 1) : 2
+      const rightGroup = right.isSegmented ? (rightHasProgressAdvance ? 0 : 1) : 2
 
-        return {
-          id: item.id,
-          titleSnapshot,
-          isNecessary: item.isNecessary,
-          progressPercent: item.isSegmented ? Math.round(item.progressPercent) : undefined,
+      if (leftGroup !== rightGroup) {
+        return leftGroup - rightGroup
+      }
+
+      if (left.isNecessary !== right.isNecessary) {
+        return left.isNecessary ? -1 : 1
+      }
+
+      if (left.isNecessary && right.isNecessary) {
+        const leftIsOverdue = isOverdueAtDate(left.deadlineDate, dateKey)
+        const rightIsOverdue = isOverdueAtDate(right.deadlineDate, dateKey)
+
+        if (leftIsOverdue !== rightIsOverdue) {
+          return leftIsOverdue ? -1 : 1
         }
-      })
-  })()
 
-const buildDeletedItems = (appData: AppData, dateKey: string): LogbookDeletedItem[] =>
+        const leftDeadline = left.deadlineDate ?? '9999-12-31'
+        const rightDeadline = right.deadlineDate ?? '9999-12-31'
+
+        if (leftDeadline !== rightDeadline) {
+          return leftDeadline.localeCompare(rightDeadline)
+        }
+      }
+
+      return left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt)
+    })
+    .map((item) => {
+      const progressLog = segmentedProgressLogMap.get(item.id)
+      const hasProgressAdvance = Boolean(progressLog && progressLog.toProgress > progressLog.fromProgress)
+
+      return {
+        id: item.id,
+        status: 'pending',
+        titleSnapshot: item.title,
+        isNecessary: item.isNecessary,
+        isPicked: item.source === 'decision_selected',
+        isSegmented: item.isSegmented,
+        progressText: item.isSegmented
+          ? hasProgressAdvance
+            ? `已推进 ${Math.round(progressLog?.fromProgress ?? item.progressPercent)}%→${Math.round(progressLog?.toProgress ?? item.progressPercent)}%`
+            : `当前进度 ${Math.round(item.progressPercent)}%`
+          : undefined,
+        deadlineDate: item.isNecessary ? item.deadlineDate : undefined,
+        deadlineStatus: resolveDeadlineStatus(item, dateKey),
+      } satisfies LogbookSnapshotItem
+    })
+}
+
+const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSnapshotItem[] =>
   appData.dayPlanItems
     .filter((item) => item.status === 'deleted' && item.deletedAt && item.deletedAt.slice(0, 10) === dateKey)
-    .sort((left, right) => (left.deletedAt ?? '').localeCompare(right.deletedAt ?? '') || left.createdAt.localeCompare(right.createdAt))
+    .sort(
+      (left, right) =>
+        (left.deletedAt ?? '').localeCompare(right.deletedAt ?? '') ||
+        left.createdAt.localeCompare(right.createdAt),
+    )
     .map((item) => ({
       id: item.id,
+      status: 'deleted',
       titleSnapshot: item.title,
       isNecessary: item.isNecessary,
+      isPicked: item.source === 'decision_selected',
+      isSegmented: item.isSegmented,
+      deadlineDate: item.isNecessary ? item.deadlineDate : undefined,
+      deadlineStatus: resolveDeadlineStatus(item, dateKey),
     }))
+
+const wrapTitleMarkdown = (item: LogbookSnapshotItem) => {
+  const baseTitle = item.isNecessary ? `**${item.titleSnapshot}**` : item.titleSnapshot
+
+  return item.status === 'deleted' ? `~~${baseTitle}~~` : baseTitle
+}
+
+const getLogbookTags = (item: LogbookSnapshotItem) => {
+  const tags: string[] = []
+
+  if (item.deadlineStatus === 'overdue') {
+    tags.push('逾期')
+  }
+
+  if (item.isPicked) {
+    tags.push('拔草')
+  }
+
+  if (item.isSegmented) {
+    tags.push('分次')
+  }
+
+  return tags
+}
+
+const getLogbookDetails = (item: LogbookSnapshotItem) => {
+  const details: string[] = []
+
+  if (item.progressText) {
+    details.push(item.progressText)
+  }
+
+  if (item.status === 'pending' && item.isNecessary && item.deadlineDate) {
+    details.push(`DDL ${toCompactMonthDay(item.deadlineDate)}`)
+  }
+
+  return details
+}
+
+export const getLogbookSnapshotPresentation = (item: LogbookSnapshotItem) => ({
+  checkbox: item.status === 'pending' ? '[ ]' : '[x]',
+  time: item.status === 'completed' ? item.time ?? null : null,
+  titleMarkdown: wrapTitleMarkdown(item),
+  details: getLogbookDetails(item),
+  tags: getLogbookTags(item),
+  isNecessary: item.isNecessary,
+  isDeleted: item.status === 'deleted',
+  isOverdue: item.deadlineStatus === 'overdue',
+})
+
+export const buildLogbookSnapshotMarkdownLine = (item: LogbookSnapshotItem) => {
+  const presentation = getLogbookSnapshotPresentation(item)
+  const headlineSegments = [presentation.checkbox]
+
+  if (presentation.time) {
+    headlineSegments.push(presentation.time)
+  }
+
+  headlineSegments.push(presentation.titleMarkdown)
+
+  const lineSegments = [headlineSegments.join(' '), ...presentation.details]
+  const tagSuffix =
+    presentation.tags.length > 0
+      ? ` ${presentation.tags.map((tag) => `[${tag}]`).join(' ')}`
+      : ''
+
+  return `- ${lineSegments.join(' | ')}${tagSuffix}`
+}
 
 export const buildLogbookEntryForDate = (appData: AppData, dateKey: string): LogbookEntry => ({
   date: dateKey,
-  completedItems: buildCompletedItems(appData, dateKey),
-  unfinishedItems: buildUnfinishedItems(appData, dateKey),
-  deletedItems: buildDeletedItems(appData, dateKey),
+  snapshotItems: [
+    ...buildCompletedSnapshotItems(appData, dateKey),
+    ...buildPendingSnapshotItems(appData, dateKey),
+    ...buildDeletedSnapshotItems(appData, dateKey),
+  ],
   remark: '',
   generatedAt: new Date().toISOString(),
 })
@@ -125,40 +263,13 @@ export async function ensureDailyLogbookUpToDate(referenceDate = new Date()) {
   })
 }
 
-const emphasizeIfNecessary = (title: string, isNecessary: boolean) =>
-  (isNecessary ? `**${title}**` : title)
-
 export const buildLogbookMarkdown = (entry: LogbookEntry) => {
-  const lines = [
-    `## ${toCompactDateKey(entry.date)}`,
-    '### 当日完成',
-  ]
+  const lines = [`## ${toCompactDateKey(entry.date)}`, '### 当日快照']
 
-  if (entry.completedItems.length === 0) {
+  if (entry.snapshotItems.length === 0) {
     lines.push('- 无')
   } else {
-    lines.push(
-      ...entry.completedItems.map(
-        (item) =>
-          `- ${item.time} *${item.kind === 'picked' ? '拔草' : '完成'}* ${emphasizeIfNecessary(item.titleSnapshot, item.isNecessary)}`,
-      ),
-    )
-  }
-
-  lines.push('### 当日未完成')
-
-  if (entry.unfinishedItems.length === 0) {
-    lines.push('- 无')
-  } else {
-    lines.push(...entry.unfinishedItems.map((item) => `- ${item.titleSnapshot}`))
-  }
-
-  lines.push('### 当日删除')
-
-  if (entry.deletedItems.length === 0) {
-    lines.push('- 无')
-  } else {
-    lines.push(...entry.deletedItems.map((item) => `- ~~${item.titleSnapshot}~~`))
+    lines.push(...entry.snapshotItems.map(buildLogbookSnapshotMarkdownLine))
   }
 
   lines.push('### 备注')

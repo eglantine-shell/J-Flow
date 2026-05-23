@@ -7,10 +7,8 @@ import {
   type AppData,
   type AppSettings,
   type DayPlanItem,
-  type LogbookCompletedItem,
-  type LogbookDeletedItem,
   type LogbookEntry,
-  type LogbookUnfinishedItem,
+  type LogbookSnapshotItem,
   type RecurringTaskInstance,
   type SegmentedProgressLog,
   type SceneTag,
@@ -147,26 +145,63 @@ export const dayPlanItemSchema = z.object({
   }
 }) satisfies z.ZodType<DayPlanItem>
 
-export const logbookCompletedItemSchema = z.object({
+const legacyLogbookCompletedItemSchema = z.object({
   id: z.string().min(1),
   titleSnapshot: z.string().min(1),
   time: z.string().regex(/^\d{2}[:：]\d{2}$/),
   kind: z.enum(['completed', 'picked']),
   isNecessary: z.boolean(),
-}) satisfies z.ZodType<LogbookCompletedItem>
+})
 
-export const logbookUnfinishedItemSchema = z.object({
+const legacyLogbookUnfinishedItemSchema = z.object({
   id: z.string().min(1),
   titleSnapshot: z.string().min(1),
   isNecessary: z.boolean(),
   progressPercent: progressPercentSchema.optional(),
-}) satisfies z.ZodType<LogbookUnfinishedItem>
+})
 
-export const logbookDeletedItemSchema = z.object({
+const legacyLogbookDeletedItemSchema = z.object({
   id: z.string().min(1),
   titleSnapshot: z.string().min(1),
   isNecessary: z.boolean(),
-}) satisfies z.ZodType<LogbookDeletedItem>
+})
+
+export const logbookSnapshotItemSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['completed', 'pending', 'deleted']),
+  titleSnapshot: z.string().min(1),
+  time: z.string().regex(/^(\d{4}|\d{2}[:：]\d{2})$/).optional(),
+  isNecessary: z.boolean(),
+  isPicked: z.boolean(),
+  isSegmented: z.boolean(),
+  progressText: z.string().min(1).optional(),
+  deadlineDate: dateSchema.optional(),
+  deadlineStatus: z.enum(['none', 'normal', 'overdue']),
+}).superRefine((item, context) => {
+  if (item.status === 'completed' && !item.time) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['time'],
+      message: 'completed logbook snapshot items require time',
+    })
+  }
+
+  if (item.deadlineStatus !== 'none' && !item.deadlineDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['deadlineDate'],
+      message: 'deadline snapshot items require deadlineDate',
+    })
+  }
+
+  if (item.deadlineStatus === 'none' && item.deadlineDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['deadlineStatus'],
+      message: 'deadlineDate requires a non-none deadlineStatus',
+    })
+  }
+}) satisfies z.ZodType<LogbookSnapshotItem>
 
 export const segmentedProgressLogSchema = z.object({
   date: dateSchema,
@@ -179,12 +214,53 @@ export const segmentedProgressLogSchema = z.object({
 
 export const logbookEntrySchema = z.object({
   date: dateSchema,
-  completedItems: z.array(logbookCompletedItemSchema),
-  unfinishedItems: z.array(logbookUnfinishedItemSchema),
-  deletedItems: z.array(logbookDeletedItemSchema),
+  snapshotItems: z.array(logbookSnapshotItemSchema),
   remark: z.string(),
   generatedAt: isoDatetimeSchema,
-}) satisfies z.ZodType<LogbookEntry>
+}).or(
+  z.object({
+    date: dateSchema,
+    completedItems: z.array(legacyLogbookCompletedItemSchema),
+    unfinishedItems: z.array(legacyLogbookUnfinishedItemSchema),
+    deletedItems: z.array(legacyLogbookDeletedItemSchema),
+    remark: z.string(),
+    generatedAt: isoDatetimeSchema,
+  }).transform((entry) => ({
+    date: entry.date,
+    snapshotItems: [
+      ...entry.completedItems.map((item) => ({
+        id: item.id,
+        status: 'completed' as const,
+        titleSnapshot: item.titleSnapshot,
+        time: item.time.replace(':', '').replace('：', ''),
+        isNecessary: item.isNecessary,
+        isPicked: item.kind === 'picked',
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      })),
+      ...entry.unfinishedItems.map((item) => ({
+        id: item.id,
+        status: 'pending' as const,
+        titleSnapshot: item.titleSnapshot,
+        isNecessary: item.isNecessary,
+        isPicked: false,
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      })),
+      ...entry.deletedItems.map((item) => ({
+        id: item.id,
+        status: 'deleted' as const,
+        titleSnapshot: item.titleSnapshot,
+        isNecessary: item.isNecessary,
+        isPicked: false,
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      })),
+    ],
+    remark: entry.remark,
+    generatedAt: entry.generatedAt,
+  })),
+) satisfies z.ZodType<LogbookEntry>
 
 export const appSettingsSchema = z.object({
   initialized: z.boolean(),
@@ -212,7 +288,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 9
+export const APP_DATA_SCHEMA_VERSION = 10
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

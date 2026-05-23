@@ -101,9 +101,106 @@ const resolveGrassStatus = (
   return item.isArchived ? 'archived' : 'active'
 }
 
+const LEGACY_SEGMENTED_ADVANCE_PATTERN = /^推进\s+(.+?)\s+(\d+)%\s*->\s*(\d+)%$/
+const LEGACY_SEGMENTED_PROGRESS_PATTERN = /^(.+?)\s+进度：(\d+)%$/
+
+const normalizeLogbookSnapshotItem = (item: Record<string, unknown>) => {
+  const normalized = {
+    ...item,
+  }
+
+  if (typeof normalized.titleSnapshot !== 'string') {
+    return normalized
+  }
+
+  const advanceMatch = normalized.titleSnapshot.match(LEGACY_SEGMENTED_ADVANCE_PATTERN)
+
+  if (advanceMatch) {
+    normalized.titleSnapshot = advanceMatch[1]?.trim() ?? normalized.titleSnapshot
+    normalized.isSegmented = true
+    normalized.progressText = `已推进 ${advanceMatch[2]}%→${advanceMatch[3]}%`
+    return normalized
+  }
+
+  const progressMatch = normalized.titleSnapshot.match(LEGACY_SEGMENTED_PROGRESS_PATTERN)
+
+  if (progressMatch) {
+    normalized.titleSnapshot = progressMatch[1]?.trim() ?? normalized.titleSnapshot
+    normalized.isSegmented = true
+    normalized.progressText = `当前进度 ${progressMatch[2]}%`
+  }
+
+  return normalized
+}
+
+const normalizeLegacyLogbookEntry = (entry: unknown) => {
+  if (!entry || typeof entry !== 'object') {
+    return entry
+  }
+
+  const candidate = entry as Record<string, unknown>
+
+  if (Array.isArray(candidate.snapshotItems)) {
+    return {
+      ...candidate,
+      snapshotItems: candidate.snapshotItems
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map((item) => normalizeLogbookSnapshotItem(item)),
+    }
+  }
+
+  const completedItems = Array.isArray(candidate.completedItems) ? candidate.completedItems : []
+  const unfinishedItems = Array.isArray(candidate.unfinishedItems) ? candidate.unfinishedItems : []
+  const deletedItems = Array.isArray(candidate.deletedItems) ? candidate.deletedItems : []
+
+  return {
+    ...candidate,
+    snapshotItems: [
+      ...completedItems
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map((item) => ({
+          id: typeof item.id === 'string' ? item.id : createId('logbook-snapshot'),
+          status: 'completed' as const,
+          titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : '',
+          time:
+            typeof item.time === 'string'
+              ? item.time.replace(':', '').replace('：', '')
+              : undefined,
+          isNecessary: Boolean(item.isNecessary),
+          isPicked: item.kind === 'picked',
+          isSegmented: false,
+          deadlineStatus: 'none' as const,
+        })),
+      ...unfinishedItems
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map((item) => ({
+          id: typeof item.id === 'string' ? item.id : createId('logbook-snapshot'),
+          status: 'pending' as const,
+          titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : '',
+          isNecessary: Boolean(item.isNecessary),
+          isPicked: false,
+          isSegmented: false,
+          deadlineStatus: 'none' as const,
+        }))
+        .map((item) => normalizeLogbookSnapshotItem(item)),
+      ...deletedItems
+        .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+        .map((item) => ({
+          id: typeof item.id === 'string' ? item.id : createId('logbook-snapshot'),
+          status: 'deleted' as const,
+          titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : '',
+          isNecessary: Boolean(item.isNecessary),
+          isPicked: false,
+          isSegmented: false,
+          deadlineStatus: 'none' as const,
+        })),
+    ],
+  }
+}
+
 const normalizeLegacyAppData = (appData: AppData): AppData => ({
   ...appData,
-  logbookEntries: appData.logbookEntries ?? [],
+  logbookEntries: (appData.logbookEntries ?? []).map((entry) => normalizeLegacyLogbookEntry(entry)) as AppData['logbookEntries'],
   segmentedProgressLogs: appData.segmentedProgressLogs ?? [],
   settings: {
     ...appData.settings,

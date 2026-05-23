@@ -13,6 +13,7 @@ import type {
   LocalSyncState,
   LocalSyncResultSummary,
   LogbookEntry,
+  LogbookSnapshotItem,
   RecurringTaskInstance,
   RecurringTaskInstanceUpdateInput,
   SceneTag,
@@ -26,7 +27,7 @@ import type {
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
-const SQLITE_SCHEMA_VERSION = 3
+const SQLITE_SCHEMA_VERSION = 4
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
@@ -92,7 +93,42 @@ const parseJsonArray = <Item>(
 
 const serializeJsonArray = <Item>(value: Item[]) => JSON.stringify(value)
 
-const isLogbookCompletedItem = (value: unknown): value is LogbookEntry['completedItems'][number] => {
+const LEGACY_SEGMENTED_ADVANCE_PATTERN = /^推进\s+(.+?)\s+(\d+)%\s*->\s*(\d+)%$/
+const LEGACY_SEGMENTED_PROGRESS_PATTERN = /^(.+?)\s+进度：(\d+)%$/
+
+const normalizeLogbookSnapshotItem = (item: LogbookSnapshotItem): LogbookSnapshotItem => {
+  const advanceMatch = item.titleSnapshot.match(LEGACY_SEGMENTED_ADVANCE_PATTERN)
+
+  if (advanceMatch) {
+    return {
+      ...item,
+      titleSnapshot: advanceMatch[1]?.trim() ?? item.titleSnapshot,
+      isSegmented: true,
+      progressText: `已推进 ${advanceMatch[2]}%→${advanceMatch[3]}%`,
+    }
+  }
+
+  const progressMatch = item.titleSnapshot.match(LEGACY_SEGMENTED_PROGRESS_PATTERN)
+
+  if (progressMatch) {
+    return {
+      ...item,
+      titleSnapshot: progressMatch[1]?.trim() ?? item.titleSnapshot,
+      isSegmented: true,
+      progressText: `当前进度 ${progressMatch[2]}%`,
+    }
+  }
+
+  return item
+}
+
+const isLegacyLogbookCompletedItem = (value: unknown): value is {
+  id: string
+  titleSnapshot: string
+  time: string
+  kind: 'completed' | 'picked'
+  isNecessary: boolean
+} => {
   if (!value || typeof value !== 'object') {
     return false
   }
@@ -108,7 +144,12 @@ const isLogbookCompletedItem = (value: unknown): value is LogbookEntry['complete
   )
 }
 
-const isLogbookUnfinishedItem = (value: unknown): value is LogbookEntry['unfinishedItems'][number] => {
+const isLegacyLogbookUnfinishedItem = (value: unknown): value is {
+  id: string
+  titleSnapshot: string
+  isNecessary: boolean
+  progressPercent?: number
+} => {
   if (!value || typeof value !== 'object') {
     return false
   }
@@ -123,7 +164,11 @@ const isLogbookUnfinishedItem = (value: unknown): value is LogbookEntry['unfinis
   )
 }
 
-const isLogbookDeletedItem = (value: unknown): value is LogbookEntry['deletedItems'][number] => {
+const isLegacyLogbookDeletedItem = (value: unknown): value is {
+  id: string
+  titleSnapshot: string
+  isNecessary: boolean
+} => {
   if (!value || typeof value !== 'object') {
     return false
   }
@@ -134,6 +179,29 @@ const isLogbookDeletedItem = (value: unknown): value is LogbookEntry['deletedIte
     typeof candidate.id === 'string' &&
     typeof candidate.titleSnapshot === 'string' &&
     typeof candidate.isNecessary === 'boolean'
+  )
+}
+
+const isLogbookSnapshotItem = (value: unknown): value is LogbookSnapshotItem => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+
+  return (
+    typeof candidate.id === 'string' &&
+    (candidate.status === 'completed' || candidate.status === 'pending' || candidate.status === 'deleted') &&
+    typeof candidate.titleSnapshot === 'string' &&
+    (candidate.time === undefined || typeof candidate.time === 'string') &&
+    typeof candidate.isNecessary === 'boolean' &&
+    typeof candidate.isPicked === 'boolean' &&
+    typeof candidate.isSegmented === 'boolean' &&
+    (candidate.progressText === undefined || typeof candidate.progressText === 'string') &&
+    (candidate.deadlineDate === undefined || typeof candidate.deadlineDate === 'string') &&
+    (candidate.deadlineStatus === 'none' ||
+      candidate.deadlineStatus === 'normal' ||
+      candidate.deadlineStatus === 'overdue')
   )
 }
 
@@ -279,6 +347,7 @@ const ensureSchema = (database: DatabaseSync) => {
 
     CREATE TABLE IF NOT EXISTS logbook_entries (
       date_value TEXT PRIMARY KEY,
+      snapshot_items_json TEXT NOT NULL DEFAULT '[]',
       completed_items_json TEXT NOT NULL,
       unfinished_items_json TEXT NOT NULL,
       deleted_items_json TEXT NOT NULL,
@@ -320,6 +389,9 @@ const ensureSchema = (database: DatabaseSync) => {
   const taskTemplateColumns = database
     .prepare('PRAGMA table_info(task_templates)')
     .all() as Array<{ name?: unknown }>
+  const logbookEntryColumns = database
+    .prepare('PRAGMA table_info(logbook_entries)')
+    .all() as Array<{ name?: unknown }>
 
   const sceneTagColumns = database
     .prepare('PRAGMA table_info(scene_tags)')
@@ -349,6 +421,13 @@ const ensureSchema = (database: DatabaseSync) => {
     database.exec(`
       ALTER TABLE task_templates
       ADD COLUMN deadline_date TEXT;
+    `)
+  }
+
+  if (!logbookEntryColumns.some((column) => column.name === 'snapshot_items_json')) {
+    database.exec(`
+      ALTER TABLE logbook_entries
+      ADD COLUMN snapshot_items_json TEXT NOT NULL DEFAULT '[]';
     `)
   }
 
@@ -782,12 +861,114 @@ const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => ({
 
 const mapLogbookEntryRow = (row: Record<string, unknown>): LogbookEntry => ({
   date: row.date_value as string,
-  completedItems: parseJsonArray(row.completed_items_json, isLogbookCompletedItem),
-  unfinishedItems: parseJsonArray(row.unfinished_items_json, isLogbookUnfinishedItem),
-  deletedItems: parseJsonArray(row.deleted_items_json, isLogbookDeletedItem),
+  snapshotItems: (() => {
+    const snapshotItems = parseJsonArray(row.snapshot_items_json, isLogbookSnapshotItem)
+
+    if (snapshotItems.length > 0) {
+      return snapshotItems.map((item) => normalizeLogbookSnapshotItem(item))
+    }
+
+    const completedItems = parseJsonArray(row.completed_items_json, isLegacyLogbookCompletedItem)
+    const unfinishedItems = parseJsonArray(row.unfinished_items_json, isLegacyLogbookUnfinishedItem)
+    const deletedItems = parseJsonArray(row.deleted_items_json, isLegacyLogbookDeletedItem)
+
+    return [
+      ...completedItems.map((item) => ({
+        id: item.id,
+        status: 'completed' as const,
+        titleSnapshot: item.titleSnapshot,
+        time: item.time.replace(':', '').replace('：', ''),
+        isNecessary: item.isNecessary,
+        isPicked: item.kind === 'picked',
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      })),
+      ...unfinishedItems
+        .map((item) => ({
+          id: item.id,
+          status: 'pending' as const,
+          titleSnapshot: item.titleSnapshot,
+          isNecessary: item.isNecessary,
+          isPicked: false,
+          isSegmented: false,
+          deadlineStatus: 'none' as const,
+        }))
+        .map((item) => normalizeLogbookSnapshotItem(item)),
+      ...deletedItems.map((item) => ({
+        id: item.id,
+        status: 'deleted' as const,
+        titleSnapshot: item.titleSnapshot,
+        isNecessary: item.isNecessary,
+        isPicked: false,
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      })),
+    ]
+  })(),
   remark: row.remark as string,
   generatedAt: row.generated_at as string,
 })
+
+const getPersistedSnapshotItems = (entry: LogbookEntry) => {
+  if (Array.isArray((entry as { snapshotItems?: unknown }).snapshotItems)) {
+    return ((entry as { snapshotItems: LogbookSnapshotItem[] }).snapshotItems ?? []).map((item) =>
+      normalizeLogbookSnapshotItem(item),
+    )
+  }
+
+  const legacyEntry = entry as LogbookEntry & {
+    completedItems?: Array<{
+      id: string
+      titleSnapshot: string
+      time: string
+      kind: 'completed' | 'picked'
+      isNecessary: boolean
+    }>
+    unfinishedItems?: Array<{
+      id: string
+      titleSnapshot: string
+      isNecessary: boolean
+    }>
+    deletedItems?: Array<{
+      id: string
+      titleSnapshot: string
+      isNecessary: boolean
+    }>
+  }
+
+  return [
+    ...(legacyEntry.completedItems ?? []).map((item) => ({
+      id: item.id,
+      status: 'completed' as const,
+      titleSnapshot: item.titleSnapshot,
+      time: item.time.replace(':', '').replace('：', ''),
+      isNecessary: item.isNecessary,
+      isPicked: item.kind === 'picked',
+      isSegmented: false,
+      deadlineStatus: 'none' as const,
+    })),
+    ...(legacyEntry.unfinishedItems ?? [])
+      .map((item) => ({
+        id: item.id,
+        status: 'pending' as const,
+        titleSnapshot: item.titleSnapshot,
+        isNecessary: item.isNecessary,
+        isPicked: false,
+        isSegmented: false,
+        deadlineStatus: 'none' as const,
+      }))
+      .map((item) => normalizeLogbookSnapshotItem(item)),
+    ...(legacyEntry.deletedItems ?? []).map((item) => ({
+      id: item.id,
+      status: 'deleted' as const,
+      titleSnapshot: item.titleSnapshot,
+      isNecessary: item.isNecessary,
+      isPicked: false,
+      isSegmented: false,
+      deadlineStatus: 'none' as const,
+    })),
+  ]
+}
 
 const readAppData = (database: DatabaseSync): AppData | null => {
   const settingsRow = database
@@ -927,8 +1108,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
   `)
   const insertLogbookEntry = database.prepare(`
     INSERT INTO logbook_entries (
-      date_value, completed_items_json, unfinished_items_json, deleted_items_json, remark, generated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      date_value, snapshot_items_json, completed_items_json, unfinished_items_json, deleted_items_json, remark, generated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
   const insertSegmentedProgressLog = database.prepare(`
     INSERT INTO segmented_progress_logs (
@@ -1035,11 +1216,14 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
   }
 
   for (const entry of appData.logbookEntries) {
+    const snapshotItems = getPersistedSnapshotItems(entry)
+
     insertLogbookEntry.run(
       entry.date,
-      serializeJsonArray(entry.completedItems),
-      serializeJsonArray(entry.unfinishedItems),
-      serializeJsonArray(entry.deletedItems),
+      serializeJsonArray(snapshotItems),
+      '[]',
+      '[]',
+      '[]',
       entry.remark,
       entry.generatedAt,
     )
