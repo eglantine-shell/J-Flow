@@ -1,5 +1,28 @@
 # 项目交接摘要
 
+## 最新状态（2026-05-23，Windows V2.1 portable 图标修复已并回主线，优先参考）
+- Windows V2.1 portable 已在真机打包成功。
+- 当前最新 Windows 产物名为：
+  - `release/J-Flow-V2.1-win-portable.exe`
+- 当前已确认的产物 SHA256：
+  - `00846D667827B552887BB6010F87C94B2D479E566E37586C03BE5CF337829385`
+- Windows 图标修复已并回主线，当前处理方式为：
+  - `scripts/sync-icon.mjs` 在 Windows 下生成圆角 `build/icon.png` 与多尺寸 `build/icon.ico`
+  - `package.json` 的 `win.icon` 使用 `build/icon.ico`
+  - `extraResources` 将 `icon.ico` 带入 `resources/icon.ico`
+  - `electron/main.ts` 在 Windows 下对 `BrowserWindow` 显式传入该图标
+  - `electron/main.ts` 在 Windows 下设置：
+    - `app.setAppUserModelId('com.jflow.desktop')`
+- 当前仍保持：
+  - `win.signAndEditExecutable = false`
+  因为 Windows 真机启用后会因 `winCodeSign` 解压 symlink 权限失败。
+- 当前仍需用户在 Windows 真机重新打开最终 exe，确认：
+  - 标题栏小图标
+  - 任务栏图标
+  均已刷新
+- 文档口径提醒：
+  - 不要把“本地文件夹同步”写成官方云同步。
+
 ## 最新状态（2026-05-23，版本线切到 V2.1，优先参考）
 - 当前已确认上一版稳定 macOS 自用包为：
   - `V1.4`

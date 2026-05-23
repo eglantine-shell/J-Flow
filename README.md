@@ -22,7 +22,7 @@ J-Flow 试图解决几件很日常、但常常分散在不同工具里的事：
 - `V3 Desktop` 是当前主线
 - macOS 桌面版目前已经可以本地打包自用
 - 当前最新 macOS 自用包产物名为 `J-Flow-V2.1.dmg`
-- Windows 已接入首轮 `portable` 打包，但仍待真机继续验证
+- 当前最新 Windows portable 产物名为 `J-Flow-V2.1-win-portable.exe`
 
 当前版本线：
 
@@ -132,7 +132,8 @@ corepack pnpm run package:win
 常见产物位置：
 
 - macOS `.dmg`：`release/J-Flow-V2.1.dmg`
-- Windows `.exe`：`release/J-Flow-V1-win-portable.exe`
+- Windows `.exe`：`release/J-Flow-V2.1-win-portable.exe`
+- Windows SHA256：`00846D667827B552887BB6010F87C94B2D479E566E37586C03BE5CF337829385`
 
 说明：
 
@@ -154,7 +155,7 @@ J-Flow 当前是本地优先应用。
 
 ## 当前限制与 Roadmap
 
-- Windows 端虽已能出包，但仍待真机稳定性验证
+- Windows V2.1 portable 已在真机重新出包，仍待打开后的功能级手测
 - 当前以单人长期自用为优先，不做多人协作
 - 当前不做账号系统、云数据库、iCloud 或手机端同步
 - 自动备份已支持基础能力，后续仍可继续完善备份管理体验

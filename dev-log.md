@@ -1,5 +1,46 @@
 # Dev Log
 
+## 2026-05-23（Mac 收尾：并回 Windows V2.1 portable 图标修复）
+
+### 本轮目标
+- 不重打 macOS 包
+- 只将 Windows 真机已验证有效的打包修复并回 Mac 主工作区
+- 收口文档，明确 Windows V2.1 portable 已成功
+
+### 本轮修改
+- 更新：
+  - `package.json`
+  - `electron/main.ts`
+  - `scripts/sync-icon.mjs`
+  - `README.md`
+  - `handoff.md`
+- 新增：
+  - `scripts/generate-icon-win.ps1`
+- 当前并回的 Windows 有效修复包括：
+  - `package:win` 参数从：
+    - `-c.npmRebuild=false`
+    修正为：
+    - `--config.npmRebuild=false`
+  - Windows portable 产物名收口为：
+    - `J-Flow-V2.1-win-portable.exe`
+  - `win.icon` 改为：
+    - `build/icon.ico`
+  - `extraResources` 带入：
+    - `resources/icon.ico`
+  - Windows 下 `BrowserWindow` 显式加载图标
+  - Windows 下设置：
+    - `app.setAppUserModelId('com.jflow.desktop')`
+  - Windows 下 `sync-icon` 改为生成：
+    - 圆角 `icon.png`
+    - 多尺寸 `icon.ico`
+
+### 当前结论
+- Windows 真机那轮有价值的源码修复已并回主线。
+- 这轮不需要重新打包 macOS `.dmg`。
+- 后续若要继续收尾，优先只做：
+  - 一次最小桌面构建验证
+  - 文档核对
+
 ## 2026-05-23（V2.1 版本线收口与 macOS dmg 打包）
 
 ### 本轮目标

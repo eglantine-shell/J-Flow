@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import path from 'node:path'
@@ -79,6 +80,15 @@ const preloadPath = path.join(currentDir, 'preload.cjs')
 const rendererDistPath = path.join(currentDir, '../dist-desktop/renderer/index.html')
 const devServerUrl = process.env.VITE_DEV_SERVER_URL
 const syncCoordinator = createSyncCoordinator()
+const appUserModelId = 'com.jflow.desktop'
+
+const getAppIconPath = () => {
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.ico')
+    : path.join(currentDir, '../build/icon.ico')
+
+  return process.platform === 'win32' && existsSync(iconPath) ? iconPath : undefined
+}
 
 const ensureDataDirectory = async () => {
   const dataPath = app.getPath('userData')
@@ -96,6 +106,7 @@ const createMainWindow = async (dataPath: string) => {
     minHeight: 730,
     autoHideMenuBar: true,
     title: 'J-Flow',
+    icon: getAppIconPath(),
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -674,6 +685,10 @@ const registerAppIpc = () => {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(appUserModelId)
+  }
+
   registerAppIpc()
   const dataPath = await ensureDataDirectory()
 
