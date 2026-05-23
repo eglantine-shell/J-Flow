@@ -77,6 +77,7 @@ export interface TaskTemplate {
   templateKind: TemplateKind
   title: string
   date: string
+  deadlineDate?: string
   activityTypeId?: string
   sceneTagIds: string[]
   interestLevel: InterestLevel
@@ -117,6 +118,7 @@ export interface DayPlanItem {
   date: string
   originDate?: string
   targetDate?: string
+  deadlineDate?: string
   timeBlock: TimeBlock
   timeBlockSource: TimeBlockSource
   sortOrder: number

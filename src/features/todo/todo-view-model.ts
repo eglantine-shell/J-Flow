@@ -1,4 +1,5 @@
 import type { DayPlanItem, RecurringTaskInstance, TaskTemplate, TimeBlock } from '@/types'
+import { getDeadlinePresentation } from '@/features/todo/deadline'
 
 export type TodoOriginLabel = '手动' | '种草' | '重复' | '自动'
 
@@ -20,6 +21,10 @@ export type TodoViewModel = {
   progressPercent: number
   isRepeating: boolean
   isNecessary: boolean
+  deadlineDate?: string
+  deadlineLabel: string
+  isDeadlineOverdue: boolean
+  isDeadlineDueToday: boolean
   preparationNotes: string
   createdAtHint: string
   originLabel: TodoOriginLabel
@@ -157,6 +162,12 @@ export function mapDayPlanItemToTodoViewModel(
     ? context.recurringInstancesById?.[item.recurringInstanceId]
     : undefined
   const capabilities = getTodoCapabilities(item, templateKind, template)
+  const today = new Date()
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+    today.getDate(),
+  ).padStart(2, '0')}`
+  const deadlinePresentation =
+    item.status === 'completed' ? null : getDeadlinePresentation(item.deadlineDate, todayKey)
 
   return {
     id: item.id,
@@ -169,6 +180,10 @@ export function mapDayPlanItemToTodoViewModel(
     progressPercent: item.progressPercent,
     isRepeating: isRepeatingTodo(item, templateKind),
     isNecessary: item.isNecessary,
+    deadlineDate: item.deadlineDate,
+    deadlineLabel: deadlinePresentation?.label ?? '',
+    isDeadlineOverdue: deadlinePresentation?.isOverdue ?? false,
+    isDeadlineDueToday: deadlinePresentation?.isDueToday ?? false,
     preparationNotes:
       item.requiresPreparation && item.preparationNotes.trim() ? item.preparationNotes : '',
     createdAtHint: getCreatedAtHint(item),

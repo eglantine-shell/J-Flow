@@ -121,6 +121,7 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
   })),
   taskTemplates: appData.taskTemplates.map((template) => ({
     ...template,
+    deadlineDate: template.isNecessary ? template.deadlineDate ?? (template.date || undefined) : undefined,
     ...serializeRepeatRule(resolveRepeatRule(template)),
     grassStatus: resolveGrassStatus(template),
     isArchived:
@@ -152,6 +153,7 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
   dayPlanItems: appData.dayPlanItems.map((item) => ({
     ...item,
     originDate: resolveDayPlanItemOriginDate(item),
+    deadlineDate: item.isNecessary ? item.deadlineDate ?? item.date : undefined,
     updatedAt: resolveDayPlanItemUpdatedAt(item),
     deletedAt: item.deletedAt,
   })),
@@ -518,6 +520,7 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     templateKind,
     title: input.title,
     date: input.date ?? todayDateString(),
+    deadlineDate: input.deadlineDate,
     activityTypeId: input.activityTypeId,
     sceneTagIds: [...input.sceneTagIds],
     interestLevel: input.interestLevel,
@@ -571,6 +574,7 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     date: input.date,
     originDate: resolveDayPlanItemOriginDate(input),
     targetDate: input.targetDate,
+    deadlineDate: input.deadlineDate,
     timeBlock: input.timeBlock,
     timeBlockSource: input.timeBlockSource,
     sortOrder: input.sortOrder,

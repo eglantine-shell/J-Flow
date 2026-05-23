@@ -51,6 +51,7 @@ export const taskTemplateSchema = z.object({
   templateKind: z.enum(['grass', 'todo_recurring']).default('grass'),
   title: z.string().min(1),
   date: templateDateSchema,
+  deadlineDate: dateSchema.optional(),
   activityTypeId: z.string().min(1).optional(),
   sceneTagIds: z.array(z.string().min(1)),
   interestLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -72,6 +73,14 @@ export const taskTemplateSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['activityTypeId'],
       message: 'grass templates require activityTypeId',
+    })
+  }
+
+  if (template.isNecessary && !template.deadlineDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['deadlineDate'],
+      message: 'necessary templates require deadlineDate',
     })
   }
 })
@@ -99,6 +108,7 @@ export const dayPlanItemSchema = z.object({
   date: dateSchema,
   originDate: dateSchema.optional(),
   targetDate: dateSchema.optional(),
+  deadlineDate: dateSchema.optional(),
   timeBlock: z.enum(['day', 'night']),
   timeBlockSource: z.enum([
     'mapped_day',
@@ -127,6 +137,14 @@ export const dayPlanItemSchema = z.object({
   updatedAt: isoDatetimeSchema,
   completedAt: isoDatetimeSchema.optional(),
   deletedAt: isoDatetimeSchema.optional(),
+}).superRefine((item, context) => {
+  if (item.isNecessary && !item.deadlineDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['deadlineDate'],
+      message: 'necessary day plan items require deadlineDate',
+    })
+  }
 }) satisfies z.ZodType<DayPlanItem>
 
 export const logbookCompletedItemSchema = z.object({

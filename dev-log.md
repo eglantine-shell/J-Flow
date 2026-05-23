@@ -1,5 +1,119 @@
 # Dev Log
 
+## 2026-05-23（DDL 录入区与今日截止颜色微调）
+
+### 本轮目标
+- 只修正 `DDL` 相关 UI
+- 不改任何 `DDL` 业务逻辑
+
+### 本轮修改
+- 更新：
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/styles/globals.css`
+- 当前录入区已从：
+  - 白色长条框内嵌蓝色日期按钮
+  调整为：
+  - 单独蓝色按钮 `DDL MM/DD`
+  - 紧接 `x 日内完成`
+- 当前列表里的：
+  - `今日截止`
+  已从黄色改为与未到期相同的蓝色视觉
+- 当前 `DDL` 蓝色按钮高度已对齐为：
+  - `34px`
+  与紧随其后的 stepper 输入高度一致
+
+## 2026-05-23（DDL 反推天数允许超过 100，手输仍限制 1-100）
+
+### 本轮目标
+- 修补 `DDL` 表单联动的一个边界
+- 保持：
+  - 手动输入 `x 日内完成` 仍只允许 `1-100`
+- 放开：
+  - 根据日历真实日期反推出的 `x`
+  可以超过 `100` 并显示出来
+
+### 本轮修改
+- 更新：
+  - `src/features/todo/deadline.ts`
+  - `src/features/todo/deadline.test.ts`
+- 当前规则收口为：
+  - 手动输入 `x 日内完成`：
+    - 只允许 `1-100`
+  - 日历点选真实 `deadlineDate` 后：
+    - 系统反推出的 `x` 不再受 `100` 上限限制
+    - 例如可显示：
+      - `103`
+      - `135`
+- 这样做的原因是：
+  - 当前底层主存仍然是：
+    - 真实 `deadlineDate`
+  - `x 日内完成` 同时承担：
+    - 快捷输入器
+    - 对真实日期的解释器
+  - 因此超过 `100` 时不应留空
+
+### 验证结果
+- `corepack pnpm exec vitest run src/features/todo/deadline.test.ts src/db/storage.test.ts electron/sqlite.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+## 2026-05-22（必要事项 DDL 第一版落地）
+
+### 本轮目标
+- 为必要事项增加强约束 `DDL`
+- 第一版只做：
+  - 日期型 `DDL`
+  - 必要事项必填
+  - Todo 列表展示
+  - 模板 / 重复事项基础支持
+- 当前不做：
+  - 提醒
+  - 自动排序
+  - 日志细化规则
+
+### 本轮修改
+- 新增：
+  - `src/features/todo/deadline.ts`
+  - `src/features/todo/deadline.test.ts`
+- 更新：
+  - `src/types/models.ts`
+  - `electron/types.ts`
+  - `src/db/schema.ts`
+  - `src/db/storage.ts`
+  - `src/db/storage.test.ts`
+  - `electron/sqlite.ts`
+  - `src/features/decision/recommendation.ts`
+  - `src/features/recurrence/auto-generated.ts`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/features/todo/todo-view-model.ts`
+  - `src/styles/globals.css`
+  - `src/mocks/app-data.ts`
+  - `product-rules.md`
+  - `data-model.md`
+  - `handoff.md`
+- 当前规则已落地为：
+  - `DDL` 只属于必要事项
+  - 勾选必要时默认 `deadlineDate = item.date`
+  - 取消必要时自动清空 `DDL`
+  - 表单支持：
+    - 日历选真实日期
+    - `x 日内完成`
+  - 底层只保存真实 `deadlineDate`
+  - 修改 Todo `date` 不自动顺延 `deadlineDate`
+  - 已完成事项不再显示 `DDL`
+- 当前重复事项实现：
+  - 通过模板 `date` 与模板 `deadlineDate` 的偏移，换算 future occurrence 的真实 `deadlineDate`
+  - occurrence 一旦生成后，其 `deadlineDate` 固定
+
+### 验证结果
+- `corepack pnpm exec vitest run src/features/todo/deadline.test.ts src/db/storage.test.ts electron/sqlite.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前风险
+- 当前 overdue 项再次编辑时，允许保留过去的 `DDL`，但表单里的 `x 日内完成` 会因为无法反推而显示为空
+- 当前未细化：
+  - 已完成事项进入日志后，`DDL` 信息是否保留、如何保留
+  - 这是下一轮需要单独讨论的规则
+
 ## 2026-05-22（最小自动同步落地）
 
 ### 本轮目标

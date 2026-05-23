@@ -97,6 +97,7 @@ type TodoItem = {
   title: string
   date: string
   originDate?: string
+  deadlineDate?: string
 
   timeBlock: 'day' | 'night'
   order: number
@@ -122,6 +123,13 @@ type TodoItem = {
 
 说明：
 - `date` 表示当前有效计划日期。
+- `deadlineDate` 表示必要事项的真实截止日期。
+- `deadlineDate` 当前只在：
+  - `isNecessary = true`
+  时有效。
+- 第一版表单虽然支持：
+  - `x 日内完成`
+  但底层仍只保存真实 `deadlineDate`。
 - `originDate` 用于追踪更早来源日期或首次生成日期，但不应直接决定当前显示归属。
 - `order` 用于当天未完成事项手动排序。
 - 当前实现优先复用现有 `sortOrder` 字段表达该语义，不额外新增独立 `order` 字段。
@@ -133,6 +141,7 @@ type TodoItem = {
 - 恢复未完成时清空为 `undefined`。
 - 删除时写入 `deletedAt`，供日志归档“当日删除”使用。
 - 恢复未完成后，事项回到当前有效计划日期 `date` 的未完成区。
+- 修改事项 `date` 时，不自动修改 `deadlineDate`。
 - 若事项此前已被顺延到今天，则其当前 `date` 应视为今天：
   - 完成后再取消完成，应回到今天，而不是回到更早历史日期。
 - 历史已完成事项若缺少 `completedAt`，本阶段先兼容排序到已完成组最后，不强制立刻 migration。
@@ -170,6 +179,16 @@ type RepeatRule = {
   - `repeatIntervalUnit`
   - `repeatIntervalValue`
 - 若新字段缺失，则回退到旧 `recurrence` 自动映射
+
+### 2.1 Recurring Todo 与 DDL
+- 对重复 Todo，模板仍保存真实 `deadlineDate`。
+- 后续 occurrence 生成时，通过：
+  - 模板 `date`
+  - 模板 `deadlineDate`
+  反推出相对偏移，再换算出当次 occurrence 的真实 `deadlineDate`。
+- 一旦 occurrence 已生成，其 `deadlineDate` 固定：
+  - 后续改该条 Todo 的 `date`
+  - 不自动顺延 `deadlineDate`
 
 ### 3. GrassItem
 

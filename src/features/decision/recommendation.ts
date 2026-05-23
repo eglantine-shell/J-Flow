@@ -131,6 +131,7 @@ export async function getDecisionRecommendations({
 
 type DecisionSelectedOptions = {
   isNecessary: boolean
+  deadlineDate?: string
   requiresPreparation: boolean
   preparationNotes: string
   isSegmented: boolean
@@ -187,6 +188,7 @@ export async function createDecisionSelectedDayPlanItem({
     title: template.title,
     activityTypeId: template.activityTypeId,
     isNecessary: options.isNecessary,
+    deadlineDate: options.deadlineDate,
     requiresPreparation: options.requiresPreparation,
     preparationNotes: options.preparationNotes,
     isSegmented: options.isSegmented,

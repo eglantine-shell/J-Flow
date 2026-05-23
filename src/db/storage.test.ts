@@ -181,6 +181,28 @@ describe('appDataRepository.taskTemplates.create', () => {
     expect(imported.segmentedProgressLogs).toEqual([])
   })
 
+  it('defaults legacy necessary deadlines to the item or template date during import', async () => {
+    const { appDataRepository } = await import('@/db/storage')
+
+    const imported = await appDataRepository.importSnapshot({
+      ...mockSeedAppData,
+      taskTemplates: mockSeedAppData.taskTemplates.map((template) =>
+        template.templateKind === 'todo_recurring' && template.isNecessary
+          ? { ...template, deadlineDate: undefined }
+          : template,
+      ),
+      dayPlanItems: mockSeedAppData.dayPlanItems.map((item) =>
+        item.isNecessary ? { ...item, deadlineDate: undefined } : item,
+      ),
+    } as unknown as typeof mockSeedAppData)
+
+    expect(
+      imported.dayPlanItems
+        .filter((item) => item.isNecessary)
+        .every((item) => item.deadlineDate === item.date),
+    ).toBe(true)
+  })
+
   it('initializes missing updatedAt fields for legacy sync entities during import', async () => {
     const { appDataRepository } = await import('@/db/storage')
 
