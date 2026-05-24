@@ -1,95 +1,115 @@
 # Dev Log
 
-## 2026-05-24（README 正式版定稿，补 Releases 分发口径）
+## 2026-05-23（Windows 真机：修复 portable 运行时图标）
+### 本轮背景
+- 用户手测确认 V2.1 exe 功能正常，但窗口左上角小图标与任务栏图标仍显示 Electron 默认图标。
 
-### 本轮目标
-- 将用户重写后的正式版 `README` 落到仓库
-- 仅修正必要的事实状态与 Markdown 问题
-- 明确 `GitHub Releases` 作为当前 `.dmg / .exe` 分发入口
+### 定位结论
+- `BrowserWindow` 创建时没有显式传入 `icon`，Windows 运行时窗口会回落到 Electron 默认图标。
+- `win.signAndEditExecutable=true` 可尝试写入 exe 资源，但当前 Windows 环境解压 `winCodeSign` 时因 symlink 权限失败，不能作为本轮稳定路径。
+- 现有 `build/icon.png` 是 3000x3000 原图，不是 Windows 多尺寸 `.ico`。
 
-### 本轮修改
-- 更新：
-  - `README.md`
-- `README` 当前已切换为更面向潜在使用者的正式说明结构，重点覆盖：
-  - 产品定位
-  - 适合谁
-  - 基本使用方式
-  - 数据保存、备份与同步
-  - 下载与平台状态
-- 当前仅对用户文案做了最小必要修正：
-  - 将 Windows / macOS 平台状态同步为：
-    - 已真机验证通过
-  - 将 Releases 段落明确为：
-    - `https://github.com/eglantine-shell/J-Flow/releases`
-  - 修正少量 Markdown / 排版问题，不改正文表达方向
+### 本轮处理
+- 新增 Windows 图标生成脚本：`scripts/generate-icon-win.ps1`。
+- 更新 `scripts/sync-icon.mjs`：Windows 下从 `J-Flow.PNG` 生成圆角 `build/icon.png` 与多尺寸 `build/icon.ico`。
+- 更新 `package.json`：Windows 图标改为 `build/icon.ico`，并通过 `extraResources` 把 `icon.ico` 带入 `resources/icon.ico`。
+- 更新 `electron/main.ts`：Windows 下设置 `app.setAppUserModelId('com.jflow.desktop')`，并在 `BrowserWindow` 显式使用打包后的 `resources/icon.ico`。
+- 保持 `win.signAndEditExecutable=false`，避免当前机器上的 `winCodeSign` symlink 权限问题阻塞打包。
 
-### 当前结论
-- `README` 当前已更适合作为外部读者的产品入口。
-- 当前发布下载口径已统一为：
-  - 通过 `GitHub Releases` 分发 `.dmg` 与 `.exe`
+### 验证结果
+- `pnpm run sync:icon`：通过，生成圆角 `build/icon.png` 和多尺寸 `build/icon.ico`。
+- `pnpm run build:desktop`：通过。
+- `electron-builder --win portable --config.npmRebuild=false --config.directories.output=release-win-v21-icon2`：通过。
+- 外层 portable exe 关联图标已验证为 J-Flow 圆角图标。
+- 打包后的 `win-unpacked/resources/icon.ico` 已存在。
+- 产物 asar 仍确认包含 `deadlineDate` / `syncNow` / `localFolder` / `maybeAutoSync`。
 
-## 2026-05-23（发布收尾：补 MIT License）
+### 最终产物
+- `E:\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+- Size: `94,125,575 bytes`
+- SHA256: `00846D667827B552887BB6010F87C94B2D479E566E37586C03BE5CF337829385`
 
-### 本轮目标
-- 明确仓库许可证
-- 将 `README` 里的 License 占位改为正式说明
+### 剩余风险
+- 由于当前 Windows 环境不能启用 `winCodeSign`，内层 `win-unpacked/J-Flow.exe` 的 VersionInfo 仍显示 Electron；但运行窗口和任务栏已改为显式加载 `resources/icon.ico`。
 
-### 本轮修改
-- 新增：
-  - `LICENSE`
-- 更新：
-  - `README.md`
-- 当前许可证已明确为：
-  - `MIT`
-- 当前版权声明为：
-  - `Copyright (c) 2026 Ye Tingzhi`
+## 2026-05-23（Windows 真机：最终隔离输出重打包）
+### 本轮补充处理
+- 使用修正后的 `package:win` 复验标准脚本时，`sync:icon` 首次因旧 `build/icon.png` 无法覆盖而失败。
+- 确认 `build/icon.png` 不是 Git 跟踪文件后，删除该旧生成物并重新执行。
+- 标准脚本随后完成 `sync:icon` 与 `build:desktop`，但 NSIS 写入默认 `release/J-Flow-V2.1-win-portable.exe` 时报告 `Can't open output file`。
+- 为避免覆盖可能被 Windows 占用的默认 release 产物，改用隔离输出目录重新执行 electron-builder：
+  - `release-win-v21-final`
+- 隔离目录打包成功，并已将最终 exe 同步到标准 release 路径。
 
-### 当前结论
-- 仓库现在已具备明确许可证文本，不再是 `TBD` 占位状态。
-- 下一步可以继续进入：
-  - 分发方案收口
-  - 正式版 `README` 重写
+### 最终产物
+- `E:\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+- `E:\J-Flow\_mac_import\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+- `E:\J-Flow\_mac_import\J-Flow\release-win-v21-final\J-Flow-V2.1-win-portable.exe`
+- Size: `94,125,575 bytes`
+- SHA256: `00846D667827B552887BB6010F87C94B2D479E566E37586C03BE5CF337829385`
 
-## 2026-05-23（Mac 收尾：并回 Windows V2.1 portable 图标修复）
+### 验证
+- 产物 asar 已再次确认包含 `deadlineDate` / `syncNow` / `localFolder` / `maybeAutoSync`。
+- 文档口径继续保持：这是本地文件夹同步能力，不写成官方云同步。
 
-### 本轮目标
-- 不重打 macOS 包
-- 只将 Windows 真机已验证有效的打包修复并回 Mac 主工作区
-- 收口文档，明确 Windows V2.1 portable 已成功
+## 2026-05-23（Windows 真机：补充标准构建脚本复验）
+### 本轮补充验证
+- 修复文档编辑过程中遗留的 UTF-8 BOM 后，重新执行项目标准脚本：
+  - `pnpm run build:desktop`
+- 首次复验时，Vite 清理旧 `dist-desktop/renderer` 产物遇到 Windows `EPERM`。
+- 清理旧生成目录后，渲染端构建通过。
+- 随后 TypeScript 覆盖旧 `dist-electron` 产物同样遇到 Windows `EPERM`。
+- 清理旧 `dist-electron` 生成目录后，完整 `pnpm run build:desktop` 通过。
 
-### 本轮修改
-- 更新：
-  - `package.json`
-  - `electron/main.ts`
-  - `scripts/sync-icon.mjs`
-  - `README.md`
-  - `handoff.md`
-- 新增：
-  - `scripts/generate-icon-win.ps1`
-- 当前并回的 Windows 有效修复包括：
-  - `package:win` 参数从：
-    - `-c.npmRebuild=false`
-    修正为：
-    - `--config.npmRebuild=false`
-  - Windows portable 产物名收口为：
-    - `J-Flow-V2.1-win-portable.exe`
-  - `win.icon` 改为：
-    - `build/icon.ico`
-  - `extraResources` 带入：
-    - `resources/icon.ico`
-  - Windows 下 `BrowserWindow` 显式加载图标
-  - Windows 下设置：
-    - `app.setAppUserModelId('com.jflow.desktop')`
-  - Windows 下 `sync-icon` 改为生成：
-    - 圆角 `icon.png`
-    - 多尺寸 `icon.ico`
+### 当前判断
+- 该问题来自 Mac 工作区迁移后旧生成目录在 Windows 上的写入/删除兼容问题，不是业务源码问题。
+- 当前 V2.1 Windows portable 产物仍以重新构建并打包出的文件为准：
+  - `E:\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+- 文档口径继续保持：这是本地文件夹同步能力，不写成官方云同步。
 
-### 当前结论
-- Windows 真机那轮有价值的源码修复已并回主线。
-- 这轮不需要重新打包 macOS `.dmg`。
-- 后续若要继续收尾，优先只做：
-  - 一次最小桌面构建验证
-  - 文档核对
+## 2026-05-23（Windows 真机：V2.1 portable 重新打包）
+
+### 本轮背景
+- Windows 侧旧工作树缺少 MacBook 上已完成的 V2.0 / V2.1 源码。
+- 用户已将 MacBook 完整 J-Flow 工作区打包为 `J-Flow.zip` 放入 Windows 工作区。
+
+### 本轮处理
+- 将 Mac 工作区解压到：
+  - `E:\J-Flow\_mac_import\J-Flow`
+- 以该工作区作为当前有效源码继续 Windows 打包。
+- 修正 `package.json` 中 Windows portable 产物名：
+  - 从 `J-Flow-V1-win-portable.${ext}`
+  - 改为 `J-Flow-V2.1-win-portable.${ext}`
+- Windows 侧重新安装依赖并补齐 Windows optional native 包。
+- 重新构建 renderer / Electron main。
+- 使用 electron-builder 在 Windows 真机重新产出 portable 包。
+- 将 `package:win` 中已验证会误解析的 `-c.npmRebuild=false` 改为 `--config.npmRebuild=false`。
+
+### 验证结果
+- `vite build --base ./ --outDir dist-desktop/renderer`：通过。
+- `tsc -p electron/tsconfig.json`：通过。
+- `electron-builder --win portable --config.npmRebuild=false`：通过。
+- 产物已生成并复制到：
+  - `E:\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+  - `E:\J-Flow\_mac_import\J-Flow\release\J-Flow-V2.1-win-portable.exe`
+- 产物大小：
+  - `94,125,575` bytes
+- SHA256：
+  - `00846D667827B552887BB6010F87C94B2D479E566E37586C03BE5CF337829385`
+- 产物 asar 已确认包含：
+  - `deadlineDate`
+  - `syncNow`
+  - `localFolder`
+  - `maybeAutoSync`
+
+### 测试说明 / 风险
+- DDL / 日志 / 自动同步相关测试通过：
+  - `src/features/todo/deadline.test.ts`
+  - `src/features/logbook/logbook-service.test.ts`
+  - `electron/auto-sync.test.ts`
+- `electron/sqlite.test.ts` 与 `electron/sync-now.test.ts` 中涉及真实 SQLite 临时库清理的用例，在 Windows 下出现 `EBUSY: resource busy or locked` 删除临时 `j-flow.sqlite3` / `-shm` 文件失败。
+- 这些失败发生在临时文件清理阶段，不是业务断言失败；后续如要收口 Windows 测试，应单独修 SQLite 测试 teardown。
+- 文档口径继续保持：这是本地文件夹同步能力，不写成官方云同步。
 
 ## 2026-05-23（V2.1 版本线收口与 macOS dmg 打包）
 
@@ -5995,3 +6015,5 @@
   - 不再出现 `logicalPath=.`
   - 不再出现 `logicalPath=tombstones/activityTypes`
   的 `MKCOL 503`
+
+

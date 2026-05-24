@@ -1,0 +1,17 @@
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react-swc';
+export default defineConfig({
+    base: '/J-Flow/',
+    plugins: [react()],
+    resolve: {
+        alias: {
+            '@': new URL('./src', import.meta.url).pathname,
+        },
+    },
+    test: {
+        environment: 'node',
+        globals: true,
+        setupFiles: './src/tests/setup.ts',
+        passWithNoTests: true,
+    },
+});

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>J-Flow</title>
+    <script>
+      ;(function (location) {
+        const segments = location.pathname.split('/').filter(Boolean)
+        const repoBase = segments.length > 0 ? `/${segments[0]}` : ''
+        const restPath = location.pathname.slice(repoBase.length)
+        const fullPath = `${restPath}${location.search}`
+        const target = `${repoBase}/?p=${encodeURIComponent(fullPath)}${location.hash}`
+
+        location.replace(target)
+      })(window.location)
+    </script>
+  </head>
+  <body></body>
+</html>

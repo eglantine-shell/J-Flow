@@ -1,0 +1,97 @@
+{
+  "name": "j-flow",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:web": "tsc -b && vite build",
+    "sync:icon": "node scripts/sync-icon.mjs",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build:desktop:renderer": "vite build --base ./ --outDir dist-desktop/renderer",
+    "build:desktop": "vite build --base ./ --outDir dist-desktop/renderer && tsc -p electron/tsconfig.json",
+    "package:mac": "pnpm run sync:icon && pnpm run build:desktop && electron-builder --mac dmg -c.electronDist=node_modules/electron/dist",
+    "package:win": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win portable --config.npmRebuild=false",
+    "dev:desktop": "tsc -p electron/tsconfig.json && concurrently -k \"vite --host localhost --port 4173 --strictPort\" \"wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js\"",
+    "dev:desktop:web": "vite --host localhost --port 4173 --strictPort",
+    "dev:desktop:electron": "wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "main": "dist-electron/main.js",
+  "build": {
+    "appId": "com.jflow.desktop",
+    "productName": "J-Flow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-desktop/renderer/**/*",
+      "dist-electron/**/*.js",
+      "dist-electron/**/*.cjs",
+      "!dist-electron/preload.js",
+      "!dist-electron/preload.js.map",
+      "!dist-electron/**/*.test.js",
+      "!dist-electron/**/test-fixtures.js",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "J-Flow-V2.1-win-portable.${ext}",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
+    "dmg": {
+      "artifactName": "J-Flow-V2.1.dmg"
+    },
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ]
+  },
+  "dependencies": {
+    "dexie": "^4.0.11",
+    "fast-xml-parser": "^5.3.0",
+    "lucide-react": "^1.11.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.0",
+    "zod": "^3.24.4",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react-swc": "^3.8.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.3",
+    "wait-on": "^9.0.5"
+  }
+}
