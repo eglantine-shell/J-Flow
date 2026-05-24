@@ -1,5 +1,28 @@
 # Dev Log
 
+## 2026-05-24（V2.1 已正式发布）
+
+### 本轮目标
+- 在交接与日志中补记：
+  - `J-Flow V2.1` 已正式发布
+- 固定当前发布口径，便于后续继续开发时回看
+
+### 本轮修改
+- 更新：
+  - `handoff.md`
+  - `dev-log.md`
+- 当前已确认：
+  - `GitHub Releases` 已创建
+  - macOS `dmg` 与 Windows portable `exe` 都已真机验证通过并发布
+- 当前发布入口统一为：
+  - `https://github.com/eglantine-shell/J-Flow/releases`
+
+### 当前结论
+- `V2.1` 现已完成从开发态到对外发布态的收口。
+- 后续若继续推进，应视为：
+  - `post-V2.1` 迭代
+  而不是继续补做 `V2.1` 主体功能。
+
 ## 2026-05-24（README 正式版定稿，补 Releases 分发口径）
 
 ### 本轮目标

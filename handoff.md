@@ -1,5 +1,31 @@
 # 项目交接摘要
 
+## 最新状态（2026-05-24，V2.1 已正式发布，优先参考）
+- `J-Flow V2.1` 已正式发布。
+- 当前发布入口为：
+  - `GitHub Releases`
+  - `https://github.com/eglantine-shell/J-Flow/releases`
+- 当前已确认真机验证通过的桌面产物：
+  - macOS：
+    - `release/J-Flow-V2.1.dmg`
+  - Windows：
+    - `release/J-Flow-V2.1-win-portable.exe`
+- 当前版本线口径维持为：
+  - `V1.4`
+    - 上一版稳定 macOS 自用包
+  - `V2.0`
+    - 主要更新为本地文件夹同步能力
+  - `V2.1`
+    - 在 `V2.0` 基础上增加必要事项 `DDL`
+- 当前 README / License / Releases 口径已对齐：
+  - `README` 已改为更面向潜在使用者的正式说明
+  - 仓库许可证已明确为：
+    - `MIT`
+  - 分发口径已统一为：
+    - 通过 `GitHub Releases` 分发 `.dmg` 与 `.exe`
+- 当前文档提醒仍然有效：
+  - 不要把“本地文件夹同步”写成官方云同步
+
 ## 最新状态（2026-05-23，Windows V2.1 portable 图标修复已并回主线，优先参考）
 - Windows V2.1 portable 已在真机打包成功。
 - 当前最新 Windows 产物名为：
