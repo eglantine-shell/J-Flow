@@ -5,6 +5,11 @@ export type TemplateKind = 'grass' | 'todo_recurring'
 export type RecurrenceRule = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
 export type RepeatType = 'none' | 'calendar' | 'afterCompletion'
 export type RepeatIntervalUnit = 'day' | 'week' | 'month' | 'year'
+export type RepeatRule = {
+  repeatType: RepeatType
+  intervalValue?: number
+  intervalUnit?: RepeatIntervalUnit
+}
 export type TimeBlock = 'day' | 'night'
 export type TimeBlockSource =
   | 'mapped_day'

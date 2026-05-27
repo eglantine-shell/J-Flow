@@ -103,6 +103,15 @@ const resolveGrassStatus = (
 
 const LEGACY_SEGMENTED_ADVANCE_PATTERN = /^推进\s+(.+?)\s+(\d+)%\s*->\s*(\d+)%$/
 const LEGACY_SEGMENTED_PROGRESS_PATTERN = /^(.+?)\s+进度：(\d+)%$/
+const normalizeLogbookTime = (time: string) => {
+  const compact = time.replace(':', '').replace('：', '')
+
+  if (!/^\d{4}$/.test(compact)) {
+    return time
+  }
+
+  return `${compact.slice(0, 2)}:${compact.slice(2, 4)}`
+}
 
 const normalizeLogbookSnapshotItem = (item: Record<string, unknown>) => {
   const normalized = {
@@ -164,7 +173,7 @@ const normalizeLegacyLogbookEntry = (entry: unknown) => {
           titleSnapshot: typeof item.titleSnapshot === 'string' ? item.titleSnapshot : '',
           time:
             typeof item.time === 'string'
-              ? item.time.replace(':', '').replace('：', '')
+              ? normalizeLogbookTime(item.time)
               : undefined,
           isNecessary: Boolean(item.isNecessary),
           isPicked: item.kind === 'picked',
@@ -451,6 +460,16 @@ async function runDesktopManualSync(): Promise<SyncNowResult> {
   }
 
   return desktopRepository.sync.syncNow()
+}
+
+async function prepareDesktopCurrentDayState(selectedDateKey?: string) {
+  const desktopApi = getDesktopStorageApi()
+
+  if (!desktopApi?.prepareCurrentDayState) {
+    throw new Error('Desktop lifecycle bridge unavailable')
+  }
+
+  return desktopApi.prepareCurrentDayState(selectedDateKey)
 }
 
 async function readAppDataRecord() {
@@ -1530,6 +1549,9 @@ export const appDataRepository = {
     importRemoteChanges: importRemoteSyncChanges,
     syncNow: runDesktopManualSync,
     listChanges: listLocalSyncChanges,
+  },
+  lifecycle: {
+    prepareCurrentDayState: prepareDesktopCurrentDayState,
   },
 }
 

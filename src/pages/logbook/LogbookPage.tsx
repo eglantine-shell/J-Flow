@@ -9,6 +9,9 @@ import {
 } from '@/features/logbook/logbook-service'
 import type { LogbookEntry } from '@/types'
 
+const isDesktopRuntime = () =>
+  typeof window !== 'undefined' && Boolean(window.jflowDesktop)
+
 type CopyState = Record<string, boolean>
 type RemarkDraftState = Record<string, string>
 type SavingState = Record<string, boolean>
@@ -36,7 +39,12 @@ export function LogbookPage() {
       setErrorMessage(null)
 
       try {
-        await ensureDailyLogbookUpToDate()
+        if (isDesktopRuntime()) {
+          await appDataRepository.lifecycle.prepareCurrentDayState()
+        } else {
+          await ensureDailyLogbookUpToDate()
+        }
+
         const appData = await appDataRepository.get()
 
         if (cancelled) {

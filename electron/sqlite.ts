@@ -31,6 +31,7 @@ const SQLITE_SCHEMA_VERSION = 4
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
+const META_LAST_DAILY_ROLLOVER_DATE = 'lastDailyRolloverDate'
 const DEFAULT_COMPLETED_AT_ROUNDING_MINUTES: AppSettings['completedAtRoundingMinutes'] = 5
 const SYNC_META_DEVICE_ID = 'deviceId'
 const SYNC_META_LAST_SYNCED_AT = 'lastSyncedAt'
@@ -95,31 +96,42 @@ const serializeJsonArray = <Item>(value: Item[]) => JSON.stringify(value)
 
 const LEGACY_SEGMENTED_ADVANCE_PATTERN = /^推进\s+(.+?)\s+(\d+)%\s*->\s*(\d+)%$/
 const LEGACY_SEGMENTED_PROGRESS_PATTERN = /^(.+?)\s+进度：(\d+)%$/
+const normalizeLogbookTime = (time: string) => {
+  const compact = time.replace(':', '').replace('：', '')
+
+  if (!/^\d{4}$/.test(compact)) {
+    return time
+  }
+
+  return `${compact.slice(0, 2)}:${compact.slice(2, 4)}`
+}
 
 const normalizeLogbookSnapshotItem = (item: LogbookSnapshotItem): LogbookSnapshotItem => {
-  const advanceMatch = item.titleSnapshot.match(LEGACY_SEGMENTED_ADVANCE_PATTERN)
+  const normalizedItem = item.time ? { ...item, time: normalizeLogbookTime(item.time) } : item
+
+  const advanceMatch = normalizedItem.titleSnapshot.match(LEGACY_SEGMENTED_ADVANCE_PATTERN)
 
   if (advanceMatch) {
     return {
-      ...item,
-      titleSnapshot: advanceMatch[1]?.trim() ?? item.titleSnapshot,
+      ...normalizedItem,
+      titleSnapshot: advanceMatch[1]?.trim() ?? normalizedItem.titleSnapshot,
       isSegmented: true,
       progressText: `已推进 ${advanceMatch[2]}%→${advanceMatch[3]}%`,
     }
   }
 
-  const progressMatch = item.titleSnapshot.match(LEGACY_SEGMENTED_PROGRESS_PATTERN)
+  const progressMatch = normalizedItem.titleSnapshot.match(LEGACY_SEGMENTED_PROGRESS_PATTERN)
 
   if (progressMatch) {
     return {
-      ...item,
-      titleSnapshot: progressMatch[1]?.trim() ?? item.titleSnapshot,
+      ...normalizedItem,
+      titleSnapshot: progressMatch[1]?.trim() ?? normalizedItem.titleSnapshot,
       isSegmented: true,
       progressText: `当前进度 ${progressMatch[2]}%`,
     }
   }
 
-  return item
+  return normalizedItem
 }
 
 const isLegacyLogbookCompletedItem = (value: unknown): value is {
@@ -877,7 +889,7 @@ const mapLogbookEntryRow = (row: Record<string, unknown>): LogbookEntry => ({
         id: item.id,
         status: 'completed' as const,
         titleSnapshot: item.titleSnapshot,
-        time: item.time.replace(':', '').replace('：', ''),
+        time: normalizeLogbookTime(item.time),
         isNecessary: item.isNecessary,
         isPicked: item.kind === 'picked',
         isSegmented: false,
@@ -941,7 +953,7 @@ const getPersistedSnapshotItems = (entry: LogbookEntry) => {
       id: item.id,
       status: 'completed' as const,
       titleSnapshot: item.titleSnapshot,
-      time: item.time.replace(':', '').replace('：', ''),
+      time: normalizeLogbookTime(item.time),
       isNecessary: item.isNecessary,
       isPicked: item.kind === 'picked',
       isSegmented: false,
@@ -1767,10 +1779,51 @@ export const replaceSqliteSnapshot = (
   }
 }
 
+export const upsertSqliteLogbookEntry = (dataPath: string, entry: LogbookEntry) => {
+  const database = getDatabase(dataPath)
+
+  runMutation(database, () => {
+    database
+      .prepare(`
+        INSERT INTO logbook_entries (
+          date_value, snapshot_items_json, completed_items_json, unfinished_items_json, deleted_items_json, remark, generated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(date_value) DO UPDATE SET
+          snapshot_items_json = excluded.snapshot_items_json,
+          remark = excluded.remark,
+          generated_at = excluded.generated_at
+      `)
+      .run(
+        entry.date,
+        serializeJsonArray(getPersistedSnapshotItems(entry)),
+        '[]',
+        '[]',
+        '[]',
+        entry.remark,
+        entry.generatedAt,
+      )
+
+    return true
+  })
+
+  return entry
+}
+
 export const getSqliteSettings = (dataPath: string) => {
   const appData = getSqliteSnapshot(dataPath).appData
 
   return appData?.settings ?? null
+}
+
+export const getSqliteLastDailyRolloverDate = (dataPath: string) => {
+  const database = getDatabase(dataPath)
+  return readMeta(database, META_LAST_DAILY_ROLLOVER_DATE)
+}
+
+export const setSqliteLastDailyRolloverDate = (dataPath: string, dateKey: string) => {
+  const database = getDatabase(dataPath)
+  writeMeta(database, META_LAST_DAILY_ROLLOVER_DATE, dateKey)
+  return readMeta(database, META_LAST_DAILY_ROLLOVER_DATE)
 }
 
 export const getSqliteLocalSyncState = (dataPath: string): LocalSyncState => {

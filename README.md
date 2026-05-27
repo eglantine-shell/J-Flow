@@ -217,21 +217,28 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 当前版本线：
 - `V1.4`：上一版稳定 macOS 自用包；
 - `V2.0`：主要更新为本地文件夹同步能力；
-- `V2.1`：在 V2.0 基础上增加必要事项 DDL。
+- `V2.1`：在 V2.0 基础上增加必要事项 DDL；
+- `V2.2`：主要修复日志 / 同步时序问题，并补强桌面常驻与 Windows 打包体验。
 
 当前桌面版产物：
-- macOS：`J-Flow-V2.1.dmg`
-- Windows：`J-Flow-V2.1-win-portable.exe`
+- macOS：`J-Flow-V2.2.dmg`
+- Windows：`J-Flow-V2.2-win-setup.exe`
+- Windows：`J-Flow-V2.2-win-portable.exe`
 
 平台状态：
 - macOS：已真机验证通过；
-- Windows：portable 已真机验证通过；
+- Windows：
+  - `portable` 已真机验证通过；
+  - `setup` 已产出，后续更适合作为推荐分发形态继续验证；
 - Web：V2 版本保留为在线参考版本；
 - iOS / Android：暂不支持。
 
 Releases：
 - GitHub Releases：<https://github.com/eglantine-shell/J-Flow/releases>
-- 当前建议通过 GitHub Releases 分发与下载 `.dmg` 和 `.exe`
+- 当前建议通过 GitHub Releases 分发与下载：
+  - `J-Flow-V2.2.dmg`
+  - `J-Flow-V2.2-win-setup.exe`
+  - `J-Flow-V2.2-win-portable.exe`
 
 ---
 
@@ -295,6 +302,7 @@ corepack pnpm run build:desktop
 ```bash
 corepack pnpm run package:mac
 corepack pnpm run package:win
+corepack pnpm run package:win:nsis
 ```
 
 更多开发资料见：

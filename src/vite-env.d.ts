@@ -68,6 +68,35 @@ type JFlowDesktopApi = {
     filePath: string | null
     backupInfo: DesktopAutoBackupInfo
   }>
+  prepareCurrentDayState: (selectedDateKey?: string) => Promise<{
+    logbookResult: {
+      created: boolean
+      date: string
+    } | null
+    rolloverResult:
+      | {
+          triggered: true
+          skippedReason: null
+          todayKey: string
+          logbookResult: {
+            created: boolean
+            date: string
+          }
+          selectedDateResult: {
+            updated: boolean
+            selectedDateKey: string
+          }
+        }
+      | {
+          triggered: false
+          skippedReason: 'already_prepared'
+          todayKey: string
+        }
+    selectedDateResult: {
+      updated: boolean
+      selectedDateKey: string
+    }
+  }>
   openBackupDirectory: () => Promise<{
     success: boolean
     path: string

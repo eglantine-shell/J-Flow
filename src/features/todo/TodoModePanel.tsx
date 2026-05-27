@@ -89,6 +89,9 @@ const pad = (value: number) => String(value).padStart(2, '0')
 const toDateString = (date: Date) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
+const isDesktopRuntime = () =>
+  typeof window !== 'undefined' && Boolean(window.jflowDesktop)
+
 const toDateTimeLocalValue = (iso?: string) => {
   if (!iso) {
     return ''
@@ -294,7 +297,18 @@ async function syncSelectedDateData(selectedDate: Date) {
 }
 
 async function syncSelectedDateDataWithLogbook(selectedDate: Date) {
-  await ensureDailyLogbookUpToDate()
+  if (isDesktopRuntime() && toDateString(selectedDate) === toDateString(new Date())) {
+    await appDataRepository.lifecycle.prepareCurrentDayState(toDateString(selectedDate))
+    return
+  }
+
+  if (isDesktopRuntime()) {
+    await appDataRepository.lifecycle.prepareCurrentDayState(toDateString(selectedDate))
+    return
+  } else {
+    await ensureDailyLogbookUpToDate()
+  }
+
   await syncSelectedDateData(selectedDate)
 }
 

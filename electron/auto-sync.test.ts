@@ -206,6 +206,43 @@ describe('electron/auto-sync createSyncCoordinator', () => {
     expect(second.triggered).toBe(true)
     expect(runManualSync).toHaveBeenCalledTimes(2)
   })
+
+  it('reuses the active sync promise for foreground refresh calls', async () => {
+    let resolveSync: ((value: SyncNowResult) => void) | null = null
+    const runManualSync = vi.fn(
+      () =>
+        new Promise<SyncNowResult>((resolve) => {
+          resolveSync = resolve
+        }),
+    )
+    const coordinator = createSyncCoordinator({
+      getLocalSyncState: vi.fn(() => createSyncState()),
+      runManualSync,
+      nowMs: vi.fn(() => 0),
+    })
+
+    const manualPromise = coordinator.runManualSync({
+      dataPath: '/tmp/j-flow-db',
+      appVersion: '0.1.0',
+    })
+    const foregroundPromise = coordinator.refreshForForeground({
+      dataPath: '/tmp/j-flow-db',
+      appVersion: '0.1.0',
+    })
+
+    resolveSync?.(createSyncResult())
+
+    const foregroundResult = await foregroundPromise
+    await manualPromise
+
+    expect(runManualSync).toHaveBeenCalledTimes(1)
+    expect(foregroundResult).toEqual({
+      triggered: true,
+      reusedActiveSync: true,
+      skippedReason: null,
+      result: createSyncResult(),
+    })
+  })
 })
 
 describe('electron/auto-sync registerAutoSyncTriggers', () => {

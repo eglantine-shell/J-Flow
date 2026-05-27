@@ -26,6 +26,19 @@ type SyncExecutionInput = {
   appVersion: string
 }
 
+export type ForegroundRefreshResult =
+  | {
+      triggered: true
+      reusedActiveSync: boolean
+      skippedReason: null
+      result: SyncNowResult
+    }
+  | {
+      triggered: false
+      reusedActiveSync: false
+      skippedReason: 'no_target' | 'cooldown'
+    }
+
 type SyncCoordinatorDependencies = {
   getLocalSyncState: (dataPath: string) => LocalSyncState
   runManualSync: (input: SyncExecutionInput) => Promise<SyncNowResult>
@@ -75,6 +88,50 @@ export const createSyncCoordinator = (
   return {
     isSyncInProgress: () => activeSyncPromise !== null,
     runManualSync: (input: SyncExecutionInput) => startSharedSync(input),
+    refreshForForeground: async (
+      input: SyncExecutionInput,
+    ): Promise<ForegroundRefreshResult> => {
+      const syncState = dependencies.getLocalSyncState(input.dataPath)
+
+      if (!hasConfiguredSyncTarget(syncState)) {
+        return {
+          triggered: false,
+          reusedActiveSync: false,
+          skippedReason: 'no_target',
+        }
+      }
+
+      if (activeSyncPromise) {
+        return {
+          triggered: true,
+          reusedActiveSync: true,
+          skippedReason: null,
+          result: await activeSyncPromise,
+        }
+      }
+
+      const nowMs = dependencies.nowMs()
+
+      if (
+        lastAutoTriggeredAtMs !== null &&
+        nowMs - lastAutoTriggeredAtMs < AUTO_SYNC_MIN_INTERVAL_MS
+      ) {
+        return {
+          triggered: false,
+          reusedActiveSync: false,
+          skippedReason: 'cooldown',
+        }
+      }
+
+      lastAutoTriggeredAtMs = nowMs
+
+      return {
+        triggered: true,
+        reusedActiveSync: false,
+        skippedReason: null,
+        result: await startSharedSync(input),
+      }
+    },
     maybeAutoSync: async (
       input: SyncExecutionInput & {
         reason: AutoSyncReason

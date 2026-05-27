@@ -55,7 +55,7 @@ describe('electron/sqlite', () => {
               id: 'completed-1',
               status: 'completed',
               titleSnapshot: '完成事项',
-              time: '1030',
+              time: '10:30',
               isNecessary: true,
               isPicked: false,
               isSegmented: false,
@@ -128,7 +128,7 @@ describe('electron/sqlite', () => {
       expect.objectContaining({
         id: 'legacy-completed-1',
         status: 'completed',
-        time: '1030',
+        time: '10:30',
       }),
     ])
   })

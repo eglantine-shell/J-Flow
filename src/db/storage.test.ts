@@ -167,7 +167,7 @@ describe('appDataRepository.taskTemplates.create', () => {
       ],
     })
 
-    expect(imported.logbookEntries[0]?.snapshotItems[0]?.time).toBe('1636')
+    expect(imported.logbookEntries[0]?.snapshotItems[0]?.time).toBe('16:36')
   })
 
   it('normalizes legacy segmented logbook text into title and progress details', async () => {

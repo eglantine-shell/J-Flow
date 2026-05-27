@@ -13,7 +13,10 @@
     "build:desktop:renderer": "vite build --base ./ --outDir dist-desktop/renderer",
     "build:desktop": "vite build --base ./ --outDir dist-desktop/renderer && tsc -p electron/tsconfig.json",
     "package:mac": "pnpm run sync:icon && pnpm run build:desktop && electron-builder --mac dmg -c.electronDist=node_modules/electron/dist",
-    "package:win": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win portable --config.npmRebuild=false",
+    "package:win": "pnpm run package:win:portable",
+    "package:win:portable": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win portable --config.npmRebuild=false",
+    "package:win:dir": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win dir --config.npmRebuild=false",
+    "package:win:nsis": "pnpm run sync:icon && pnpm run build:desktop && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --win nsis --config.npmRebuild=false",
     "dev:desktop": "tsc -p electron/tsconfig.json && concurrently -k \"vite --host localhost --port 4173 --strictPort\" \"wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js\"",
     "dev:desktop:web": "vite --host localhost --port 4173 --strictPort",
     "dev:desktop:electron": "wait-on http-get://localhost:4173/J-Flow/ && cross-env VITE_DEV_SERVER_URL=http://localhost:4173/J-Flow/ electron dist-electron/main.js",
@@ -28,6 +31,7 @@
     "directories": {
       "output": "release"
     },
+    "afterPack": "scripts/fix-win-exe-icon.mjs",
     "files": [
       "dist-desktop/renderer/**/*",
       "dist-electron/**/*.js",
@@ -48,19 +52,33 @@
     },
     "win": {
       "target": [
-        "portable"
+        "portable",
+        "nsis"
       ],
-      "artifactName": "J-Flow-V2.1-win-portable.${ext}",
+      "artifactName": "J-Flow-V2.2-win-portable.${ext}",
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "J-Flow-V2.2-win-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "J-Flow"
     },
     "toolsets": {
       "winCodeSign": "1.1.0"
     },
     "dmg": {
-      "artifactName": "J-Flow-V2.1.dmg"
+      "artifactName": "J-Flow-V2.2.dmg"
     },
     "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
       {
         "from": "build/icon.ico",
         "to": "icon.ico"

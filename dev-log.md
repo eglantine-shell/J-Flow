@@ -1,5 +1,330 @@
 # Dev Log
 
+## 2026-05-27（V2.2 Windows 真机打包结果并回主线）
+
+### 本轮目标
+- 将 Windows 真机侧的：
+  - 打包脚本拆分
+  - 内层 exe 图标修复
+  - `portable / dir / nsis` 产物结论
+  同步回 Mac 主工作区
+- 同时更新发布与 README 口径，为：
+  - git 提交
+  - release 更新
+  做准备
+
+### 本轮修改
+- 更新：
+  - `package.json`
+  - `README.md`
+  - `handoff.md`
+  - `dev-log.md`
+- 新增：
+  - `scripts/fix-win-exe-icon.mjs`
+- 当前 Windows 打包脚本已拆分为：
+  - `package:win`
+  - `package:win:portable`
+  - `package:win:dir`
+  - `package:win:nsis`
+- 当前新增 `afterPack`：
+  - `scripts/fix-win-exe-icon.mjs`
+  - 作用是对 Windows `win-unpacked/J-Flow.exe` 写入 `build/icon.ico`
+- 当前 `README` 的下载口径已同步到：
+  - `V2.2`
+  - macOS `dmg`
+  - Windows `setup`
+  - Windows `portable`
+
+### Windows 回传结论
+- 当前 Windows 真机已产出：
+  - `J-Flow-V2.2-win-portable.exe`
+  - `J-Flow-V2.2-win-setup.exe`
+  - `win-unpacked/`
+- 当前对“固定到任务栏后变回 Electron 图标”的判断：
+  - 根因在内层 `J-Flow.exe` 图标资源
+  - 不是 `BrowserWindow.icon`
+- 当前对“打开慢”的判断：
+  - 业务代码侧最明确的阻塞点已在上一轮处理
+  - 但 `portable` 仍然有自解包与杀软扫描成本
+  - 对外分发更推荐继续观察并倾向：
+    - `setup`
+
+### 当前结论
+- Windows 真机打包这轮的有效修复已经并回主线。
+- 当前仓库已具备同时描述：
+  - `V2.2` macOS `dmg`
+  - Windows `portable`
+  - Windows `setup`
+  的发布口径。
+
+## 2026-05-26（V2.2 macOS 自测包产出）
+
+### 本轮目标
+- 产出 `V2.2` 的 macOS 本地测试包
+- 用于验证：
+  - 桌面常驻
+  - 日志 / 同步时序修正
+  - 启动链路减阻
+
+### 本轮修改
+- 更新：
+  - `package.json`
+- 当前 `dmg.artifactName` 已从：
+  - `J-Flow-V2.1.dmg`
+  调整为：
+  - `J-Flow-V2.2.dmg`
+- 当前 `win.artifactName` 也已同步从：
+  - `J-Flow-V2.1-win-portable.exe`
+  调整为：
+  - `J-Flow-V2.2-win-portable.exe`
+
+### 验证结果
+- `corepack pnpm run package:mac`：通过
+- 当前已产出：
+  - `release/J-Flow-V2.2.dmg`
+  - `release/J-Flow-V2.2.dmg.blockmap`
+
+### 当前结论
+- `V2.2` macOS 本地测试包已可用于真机验证。
+- 这一轮仍属于本地验包阶段，暂未同步更新对外 release 口径。
+
+## 2026-05-26（V2.2 第四阶段：启动链路减阻与日志时间格式统一）
+
+### 本轮目标
+- 优先处理 Windows 打开慢里源码层最明确的阻塞点
+- 将日志中的完成时间格式从：
+  - `HHmm`
+  统一为：
+  - `HH:mm`
+
+### 本轮修改
+- 更新：
+  - `electron/main.ts`
+  - `electron/daily-logbook.ts`
+  - `electron/sqlite.ts`
+  - `src/features/logbook/logbook-service.ts`
+  - `src/db/storage.ts`
+  - `electron/daily-logbook.test.ts`
+  - `electron/sqlite.test.ts`
+  - `src/db/storage.test.ts`
+  - `src/features/logbook/logbook-service.test.ts`
+  - `handoff.md`
+- 当前启动自动备份已从：
+  - app ready 后、主窗口显示前同步执行
+  调整为：
+  - 主窗口先显示
+  - 然后异步尝试 `maybeCreateStartupAutoBackup`
+- 当前保持不变：
+  - 启动自动备份仍然每天最多一份
+  - 备份内容仍是完整 JSON 快照
+- 当前日志时间格式已统一到：
+  - `HH:mm`
+- 当前同步修改的路径包括：
+  - Electron 端日志快照生成
+  - renderer 端日志快照生成
+  - SQLite 兼容旧日志时间
+  - 存储层兼容旧日志时间
+
+### 验证结果
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm exec vitest run electron/daily-logbook.test.ts electron/sqlite.test.ts src/db/storage.test.ts src/features/logbook/logbook-service.test.ts`：
+  - 主工作区相关测试通过
+  - 但 `__handoff_v21/` 归档副本内仍保留旧时间断言，会被 Vitest 一并扫到
+
+### 当前结论
+- 当前源码层已经去掉了一个最明确的首屏阻塞点：
+  - 启动自动备份
+- 这能改善 Windows 首次打开时的等待体感，但不等于已经解决全部启动慢来源。
+
+### 当前剩余风险
+- Windows `portable` 形态自身仍可能贡献明显启动延迟，包括：
+  - 自解包
+  - 360 / Defender 扫描
+- 这部分更适合在下一阶段单独作为：
+  - Windows 打包专项
+  在真机上继续定位
+
+## 2026-05-26（V2.2 第三阶段：后台日切结算器接入主进程）
+
+### 本轮目标
+- 解决当前剩余风险：
+  - 日志补写仍主要依赖前台页面进入
+- 让桌面版在常驻后，即使用户不打开：
+  - Todo 页
+  - 日志页
+  也能在受控时机自动补昨天日志并准备今天状态
+
+### 本轮修改
+- 新增：
+  - `electron/daily-rollover.ts`
+  - `electron/daily-rollover.test.ts`
+- 更新：
+  - `electron/main.ts`
+  - `electron/runtime-state.ts`
+  - `electron/sqlite.ts`
+  - `electron/preload.cts`
+  - `src/vite-env.d.ts`
+  - `handoff.md`
+- 当前新增后台日切逻辑：
+  - `maybeRunDailyRollover(dataPath, referenceDate)`
+- 当前日切会在以下时机接入：
+  - app ready 后的最小自动刷新
+  - window focus
+  - 手动同步完成后
+- 当前后台刷新顺序为：
+  - 先同步导入（若已配置同步目标）
+  - 再补昨天日志
+  - 再准备今天状态：
+    - 今日重复事项生成
+    - 今日未完成事项顺延
+- 当前已新增本地元数据：
+  - `meta.lastDailyRolloverDate`
+  - 用于避免同一天重复整天结算
+- 当前前台进入 Todo / 日志页时：
+  - 仍会优先走主进程刷新
+  - 但若今天已经结算过，则只补选中日期自己的准备，不重复整天滚动
+
+### 验证结果
+- `corepack pnpm exec vitest run electron/daily-rollover.test.ts electron/selected-date-state.test.ts electron/daily-logbook.test.ts electron/auto-sync.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 当前桌面版的日志 / 顺延 / 重复生成已经从：
+  - “打开某个页面时才结算”
+  进一步收口为：
+  - “主进程在受控前后台切换点结算”
+- 这比上一阶段更符合常驻桌面应用的运行方式。
+
+### 当前剩余风险
+- 当前后台日切仍不是定时系统：
+  - 如果应用一直隐藏且没有重新 focus / 恢复前台
+  - 不会在午夜瞬间自动立刻结算
+- 但当前产品规则本身也还没有开放：
+  - 后台定时同步
+  - watcher 驱动同步
+- 因此现阶段更合理的下一步应转向：
+  - Windows 启动速度优化
+  - Windows 打包 / 图标 / 查杀专项定位
+
+## 2026-05-26（V2.2 第一阶段：桌面常驻能力开放）
+
+### 本轮目标
+- 为 `V2.2` 打开桌面常驻能力
+- 让“关闭窗口”与“退出应用”分离
+- 为后续同步 / 日志时序重排建立稳定运行前提
+
+### 本轮修改
+- 更新：
+  - `electron/main.ts`
+  - `package.json`
+  - `product-rules.md`
+  - `constraints.md`
+  - `app-structure.md`
+  - `handoff.md`
+- 当前主进程已新增：
+  - 显式退出状态控制
+  - 关闭窗口时默认改为隐藏，不再直接退出
+  - Windows 托盘入口：
+    - `打开 J-Flow`
+    - `退出`
+- 当前平台行为：
+  - Windows：
+    - 关闭窗口后隐藏到托盘常驻
+  - macOS：
+    - 关闭窗口后应用继续常驻
+    - 通过激活应用重新显示窗口
+- 当前没有新增：
+  - “关闭窗口不会退出应用”的提示文案
+- 当前打包配置已补：
+  - `build/icon.png`
+    - 作为额外资源带入 packaged app，供托盘 / 状态栏图标使用
+
+### 当前结论
+- 当前已正式放开：
+  - 桌面壳层常驻能力
+- 当前仍未放开：
+  - 后台定时同步
+  - watcher 驱动同步
+  - 用户自定义自动同步策略
+- 下一步应优先处理：
+  - 日志生成、同步导入、未完成顺延之间的时序问题
+
+## 2026-05-26（V2.2 第二阶段：前台刷新先同步后补日志）
+
+### 本轮目标
+- 修正桌面版中：
+  - 同步导入
+  - 日志补写
+  - 页面顺延
+  的触发先后顺序
+- 优先解决跨设备场景下“昨日日志先生成、远端变化后导入”的不合理情况
+
+### 本轮修改
+- 新增：
+  - `electron/daily-logbook.ts`
+  - `electron/runtime-state.ts`
+  - `electron/daily-logbook.test.ts`
+- 更新：
+  - `electron/main.ts`
+  - `electron/auto-sync.ts`
+  - `electron/auto-sync.test.ts`
+  - `electron/sqlite.ts`
+  - `electron/preload.cts`
+  - `src/vite-env.d.ts`
+  - `src/db/storage.ts`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/pages/logbook/LogbookPage.tsx`
+  - `handoff.md`
+- 当前新增的主进程入口：
+  - `app:prepare-current-day-state`
+- 当前桌面版在进入：
+  - 今日 Todo 页
+  - 日志页
+  时，会先调用主进程前台刷新，而不是由页面直接先补日志
+- 当前前台刷新策略为：
+  - 若已配置同步目标：
+    - 优先等待 / 执行一次前台同步
+  - 然后补前一天日志
+  - 然后由主进程准备选中日期的重复事项
+  - 若选中的是今天，再由主进程处理今日顺延
+  - 页面随后主要负责读取并展示结果
+- 当前额外补充：
+  - `SyncCoordinator.refreshForForeground()`
+    - 若同步正在进行，则直接复用当前同步 promise
+    - 避免页面层与后台同步互相抢时序
+- 当前补写日志仍保持：
+  - 只补前一天
+  - 仍为本地生成、本地保存
+  - 不进入同步协议
+- 当前新增的 Electron 日期准备模块：
+  - `electron/repeat-rule.ts`
+  - `electron/deadline.ts`
+  - `electron/selected-date-state.ts`
+  - 当前用于把 renderer 侧原有的：
+    - 重复生成
+    - 今日顺延
+    迁移到主进程协调层
+
+### 验证结果
+- `corepack pnpm exec vitest run electron/selected-date-state.test.ts electron/daily-logbook.test.ts electron/auto-sync.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+
+### 当前结论
+- 当前桌面版“打开今天页/日志页”时，日志补写顺序已经比之前更合理：
+  - 先同步
+  - 后补昨天日志
+  - 再进入页面自己的今日数据整理
+- 这能明显降低跨设备下昨日日志缺失另一台设备晚间变化的问题。
+
+### 当前剩余风险
+- 自动同步在纯后台触发时，仍不会单独负责补日志；现在主要依赖：
+  - 打开今天页
+  - 打开日志页
+  触发前台刷新。
+- 如果后续还要进一步提高一致性，下一步应继续把：
+  - 补日志
+  收口到更完整的后台日切协调层，而不是只在前台刷新时结算。
+
 ## 2026-05-24（V2.1 已正式发布）
 
 ### 本轮目标

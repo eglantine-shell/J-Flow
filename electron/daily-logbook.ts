@@ -1,39 +1,20 @@
-import { appDataRepository } from '@/db/storage'
-import type {
-  AppData,
-  DayPlanItem,
-  LogbookEntry,
-  LogbookSnapshotItem,
-} from '@/types'
+import { getSqliteAppData, upsertSqliteLogbookEntry } from './sqlite.js'
+import type { AppData, DayPlanItem, LogbookEntry, LogbookSnapshotItem } from './types.js'
 
 const pad = (value: number) => String(value).padStart(2, '0')
 
 const toDateKey = (date: Date) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
-const toCompactDateKey = (dateKey: string) => {
-  const [year, month, day] = dateKey.split('-')
-
-  return `${year.slice(-2)}${month}${day}`
-}
-
-const toCompactMonthDay = (dateKey: string) => {
-  const [, month, day] = dateKey.split('-')
-
-  return `${month ?? ''}${day ?? ''}`
+const getPreviousDay = (date: Date) => {
+  const previous = new Date(date)
+  previous.setDate(previous.getDate() - 1)
+  return previous
 }
 
 const toTimeLabel = (isoString: string) => {
   const date = new Date(isoString)
-
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-const getPreviousDay = (date: Date) => {
-  const previous = new Date(date)
-  previous.setDate(previous.getDate() - 1)
-
-  return previous
 }
 
 const buildSegmentedProgressLogMap = (appData: AppData, dateKey: string) =>
@@ -59,7 +40,12 @@ const resolveDeadlineStatus = (
 
 const buildCompletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSnapshotItem[] =>
   appData.dayPlanItems
-    .filter((item) => item.status === 'completed' && item.completedAt && item.completedAt.slice(0, 10) === dateKey)
+    .filter(
+      (item) =>
+        item.status === 'completed' &&
+        item.completedAt &&
+        item.completedAt.slice(0, 10) === dateKey,
+    )
     .sort((left, right) => {
       const completedAtCompare = (left.completedAt ?? '').localeCompare(right.completedAt ?? '')
 
@@ -71,7 +57,7 @@ const buildCompletedSnapshotItems = (appData: AppData, dateKey: string): Logbook
     })
     .map((item) => ({
       id: item.id,
-      status: 'completed',
+      status: 'completed' as const,
       titleSnapshot: item.title,
       time: toTimeLabel(item.completedAt as string),
       isNecessary: item.isNecessary,
@@ -130,7 +116,7 @@ const buildPendingSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
 
       return {
         id: item.id,
-        status: 'pending',
+        status: 'pending' as const,
         titleSnapshot: item.title,
         isNecessary: item.isNecessary,
         isPicked: item.source === 'decision_selected',
@@ -148,7 +134,12 @@ const buildPendingSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
 
 const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSnapshotItem[] =>
   appData.dayPlanItems
-    .filter((item) => item.status === 'deleted' && item.deletedAt && item.deletedAt.slice(0, 10) === dateKey)
+    .filter(
+      (item) =>
+        item.status === 'deleted' &&
+        item.deletedAt &&
+        item.deletedAt.slice(0, 10) === dateKey,
+    )
     .sort(
       (left, right) =>
         (left.deletedAt ?? '').localeCompare(right.deletedAt ?? '') ||
@@ -156,7 +147,7 @@ const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
     )
     .map((item) => ({
       id: item.id,
-      status: 'deleted',
+      status: 'deleted' as const,
       titleSnapshot: item.title,
       isNecessary: item.isNecessary,
       isPicked: item.source === 'decision_selected',
@@ -164,74 +155,6 @@ const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
       deadlineDate: item.isNecessary ? item.deadlineDate : undefined,
       deadlineStatus: resolveDeadlineStatus(item, dateKey),
     }))
-
-const wrapTitleMarkdown = (item: LogbookSnapshotItem) => {
-  const baseTitle = item.isNecessary ? `**${item.titleSnapshot}**` : item.titleSnapshot
-
-  return item.status === 'deleted' ? `~~${baseTitle}~~` : baseTitle
-}
-
-const getLogbookTags = (item: LogbookSnapshotItem) => {
-  const tags: string[] = []
-
-  if (item.deadlineStatus === 'overdue') {
-    tags.push('逾期')
-  }
-
-  if (item.isPicked) {
-    tags.push('拔草')
-  }
-
-  if (item.isSegmented) {
-    tags.push('分次')
-  }
-
-  return tags
-}
-
-const getLogbookDetails = (item: LogbookSnapshotItem) => {
-  const details: string[] = []
-
-  if (item.progressText) {
-    details.push(item.progressText)
-  }
-
-  if (item.status === 'pending' && item.isNecessary && item.deadlineDate) {
-    details.push(`DDL ${toCompactMonthDay(item.deadlineDate)}`)
-  }
-
-  return details
-}
-
-export const getLogbookSnapshotPresentation = (item: LogbookSnapshotItem) => ({
-  checkbox: item.status === 'pending' ? '[ ]' : '[x]',
-  time: item.status === 'completed' ? item.time ?? null : null,
-  titleMarkdown: wrapTitleMarkdown(item),
-  details: getLogbookDetails(item),
-  tags: getLogbookTags(item),
-  isNecessary: item.isNecessary,
-  isDeleted: item.status === 'deleted',
-  isOverdue: item.deadlineStatus === 'overdue',
-})
-
-export const buildLogbookSnapshotMarkdownLine = (item: LogbookSnapshotItem) => {
-  const presentation = getLogbookSnapshotPresentation(item)
-  const headlineSegments = [presentation.checkbox]
-
-  if (presentation.time) {
-    headlineSegments.push(presentation.time)
-  }
-
-  headlineSegments.push(presentation.titleMarkdown)
-
-  const lineSegments = [headlineSegments.join(' '), ...presentation.details]
-  const tagSuffix =
-    presentation.tags.length > 0
-      ? ` ${presentation.tags.map((tag) => `[${tag}]`).join(' ')}`
-      : ''
-
-  return `- ${lineSegments.join(' | ')}${tagSuffix}`
-}
 
 export const buildLogbookEntryForDate = (appData: AppData, dateKey: string): LogbookEntry => ({
   date: dateKey,
@@ -244,39 +167,33 @@ export const buildLogbookEntryForDate = (appData: AppData, dateKey: string): Log
   generatedAt: new Date().toISOString(),
 })
 
-export async function ensureDailyLogbookUpToDate(referenceDate = new Date()) {
+export const ensurePreviousDayLogbook = (
+  dataPath: string,
+  referenceDate = new Date(),
+) => {
   const targetDateKey = toDateKey(getPreviousDay(referenceDate))
+  const appData = getSqliteAppData(dataPath)
 
-  return appDataRepository.update((current) => {
-    if (current.logbookEntries.some((entry) => entry.date === targetDateKey)) {
-      return current
-    }
-
-    const entry = buildLogbookEntryForDate(current, targetDateKey)
-
+  if (!appData) {
     return {
-      ...current,
-      logbookEntries: [entry, ...current.logbookEntries].sort((left, right) =>
-        right.date.localeCompare(left.date),
-      ),
+      created: false,
+      date: targetDateKey,
     }
-  })
-}
-
-export const buildLogbookMarkdown = (entry: LogbookEntry) => {
-  const lines = [`## ${toCompactDateKey(entry.date)}`, '### 当日快照']
-
-  if (entry.snapshotItems.length === 0) {
-    lines.push('- 无')
-  } else {
-    lines.push(...entry.snapshotItems.map(buildLogbookSnapshotMarkdownLine))
   }
 
-  lines.push('### 备注')
-
-  if (entry.remark.trim().length > 0) {
-    lines.push(entry.remark)
+  if (appData.logbookEntries.some((entry) => entry.date === targetDateKey)) {
+    return {
+      created: false,
+      date: targetDateKey,
+    }
   }
 
-  return `${lines.join('\n')}\n`
+  const entry = buildLogbookEntryForDate(appData, targetDateKey)
+  upsertSqliteLogbookEntry(dataPath, entry)
+
+  return {
+    created: true,
+    date: targetDateKey,
+    entry,
+  }
 }

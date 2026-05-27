@@ -151,13 +151,13 @@ describe('buildLogbookEntryForDate', () => {
       expect.objectContaining({
         id: 'completed-overdue',
         status: 'completed',
-        time: '0920',
+        time: '09:20',
         deadlineStatus: 'overdue',
       }),
       expect.objectContaining({
         id: 'picked-completed',
         status: 'completed',
-        time: '1630',
+        time: '16:30',
         isPicked: true,
       }),
       expect.objectContaining({
@@ -193,7 +193,7 @@ describe('buildLogbookEntryForDate', () => {
           id: 'completed-overdue',
           status: 'completed',
           titleSnapshot: '逾期完成必要事项',
-          time: '1030',
+          time: '10:30',
           isNecessary: true,
           isPicked: false,
           isSegmented: false,
@@ -227,7 +227,7 @@ describe('buildLogbookEntryForDate', () => {
 
     expect(markdown).toContain('## 260514')
     expect(markdown).toContain('### 当日快照')
-    expect(markdown).toContain('- [x] 1030 **逾期完成必要事项** [逾期]')
+    expect(markdown).toContain('- [x] 10:30 **逾期完成必要事项** [逾期]')
     expect(markdown).toContain('- [ ] **未完成分次必要事项** | 已推进 30%→50% | DDL 0523 [分次]')
     expect(markdown).toContain('- [x] ~~已删除拔草事项~~ [拔草]')
     expect(markdown).toContain('### 备注')

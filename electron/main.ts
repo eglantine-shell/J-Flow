@@ -1,11 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createSyncCoordinator, registerAutoSyncTriggers } from './auto-sync.js'
+import {
+  createSyncCoordinator,
+  registerAutoSyncTriggers,
+} from './auto-sync.js'
 import {
   createAutoBackup,
   getAutoBackupInfo,
@@ -51,6 +54,8 @@ import {
   updateSqliteSettings,
   updateSqliteTaskTemplate,
 } from './sqlite.js'
+import { prepareCurrentDayState } from './runtime-state.js'
+import { prepareSelectedDateState } from './selected-date-state.js'
 import { exportLocalChangesToSyncFolder } from './sync-export.js'
 import { importRemoteChangesFromSyncFolder } from './sync-import.js'
 import { testSyncTargetDirectory } from './sync-folder.js'
@@ -81,6 +86,12 @@ const rendererDistPath = path.join(currentDir, '../dist-desktop/renderer/index.h
 const devServerUrl = process.env.VITE_DEV_SERVER_URL
 const syncCoordinator = createSyncCoordinator()
 const appUserModelId = 'com.jflow.desktop'
+let mainWindow: BrowserWindow | null = null
+let appTray: Tray | null = null
+let isQuitting = false
+let activeCurrentDayPreparationPromise:
+  | Promise<Awaited<ReturnType<typeof prepareCurrentDayState>>>
+  | null = null
 
 const getAppIconPath = () => {
   const iconPath = app.isPackaged
@@ -90,12 +101,66 @@ const getAppIconPath = () => {
   return process.platform === 'win32' && existsSync(iconPath) ? iconPath : undefined
 }
 
+const getTrayIconPath = () => {
+  const filename = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, filename)
+    : path.join(currentDir, `../build/${filename}`)
+
+  return existsSync(iconPath) ? iconPath : null
+}
+
 const ensureDataDirectory = async () => {
   const dataPath = app.getPath('userData')
 
   await mkdir(dataPath, { recursive: true })
 
   return dataPath
+}
+
+const runSharedCurrentDayPreparation = (
+  dataPath: string,
+  referenceDate = new Date(),
+) => {
+  if (activeCurrentDayPreparationPromise) {
+    return activeCurrentDayPreparationPromise
+  }
+
+  const preparationPromise = prepareCurrentDayState(dataPath, referenceDate).finally(() => {
+    if (activeCurrentDayPreparationPromise === preparationPromise) {
+      activeCurrentDayPreparationPromise = null
+    }
+  })
+
+  activeCurrentDayPreparationPromise = preparationPromise
+  return preparationPromise
+}
+
+const runBackgroundRefresh = async (
+  dataPath: string,
+  reason: 'startup' | 'window-focus',
+) => {
+  const syncResult = await syncCoordinator.refreshForForeground({
+    dataPath,
+    appVersion: app.getVersion(),
+  })
+
+  await runSharedCurrentDayPreparation(dataPath)
+
+  if (syncResult.triggered) {
+    return {
+      triggered: true as const,
+      reason,
+      skippedReason: null,
+      result: syncResult.result,
+    }
+  }
+
+  return {
+    triggered: false as const,
+    reason,
+    skippedReason: syncResult.skippedReason,
+  }
 }
 
 const createMainWindow = async (dataPath: string) => {
@@ -133,12 +198,7 @@ const createMainWindow = async (dataPath: string) => {
         appVersion: app.getVersion(),
       },
       {
-        invokeAutoSync: (reason) =>
-          syncCoordinator.maybeAutoSync({
-            dataPath,
-            appVersion: app.getVersion(),
-            reason,
-          }),
+        invokeAutoSync: (reason) => runBackgroundRefresh(dataPath, reason),
         log: (message, payload) => console.info(message, payload),
         setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
       },
@@ -154,17 +214,92 @@ const createMainWindow = async (dataPath: string) => {
       appVersion: app.getVersion(),
     },
     {
-      invokeAutoSync: (reason) =>
-        syncCoordinator.maybeAutoSync({
-          dataPath,
-          appVersion: app.getVersion(),
-          reason,
-        }),
+      invokeAutoSync: (reason) => runBackgroundRefresh(dataPath, reason),
       log: (message, payload) => console.info(message, payload),
       setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
     },
   )
   return window
+}
+
+const showMainWindow = async (dataPath: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore()
+    }
+
+    mainWindow.show()
+    mainWindow.focus()
+    return mainWindow
+  }
+
+  const window = await createMainWindow(dataPath)
+  mainWindow = window
+  attachMainWindowLifecycle(window)
+  return window
+}
+
+const attachMainWindowLifecycle = (window: BrowserWindow) => {
+  window.on('close', (event) => {
+    if (isQuitting) {
+      return
+    }
+
+    event.preventDefault()
+    window.hide()
+  })
+
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null
+    }
+  })
+}
+
+const createAppTray = (dataPath: string) => {
+  if (appTray) {
+    return appTray
+  }
+
+  const trayIconPath = getTrayIconPath()
+
+  if (!trayIconPath) {
+    return null
+  }
+
+  const trayImage = nativeImage.createFromPath(trayIconPath)
+
+  if (trayImage.isEmpty()) {
+    return null
+  }
+
+  appTray = new Tray(trayImage)
+  appTray.setToolTip('J-Flow')
+  appTray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: '打开 J-Flow',
+        click: () => {
+          void showMainWindow(dataPath)
+        },
+      },
+      {
+        type: 'separator',
+      },
+      {
+        label: '退出',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
+  appTray.on('click', () => {
+    void showMainWindow(dataPath)
+  })
+
+  return appTray
 }
 
 const registerAppIpc = () => {
@@ -277,6 +412,34 @@ const registerAppIpc = () => {
     const dataPath = await ensureDataDirectory()
 
     return createAutoBackup(dataPath)
+  })
+
+  ipcMain.handle('app:prepare-current-day-state', async (_event, selectedDateKey?: string) => {
+    const dataPath = await ensureDataDirectory()
+    const referenceDate = new Date()
+
+    await syncCoordinator.refreshForForeground({
+      dataPath,
+      appVersion: app.getVersion(),
+    })
+
+    const runtimeState = await runSharedCurrentDayPreparation(dataPath, referenceDate)
+    const effectiveSelectedDateKey =
+      selectedDateKey ??
+      `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`
+    const todayKey =
+      `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`
+    const selectedDateResult =
+      effectiveSelectedDateKey === todayKey && runtimeState.rolloverResult.triggered
+        ? runtimeState.rolloverResult.selectedDateResult
+        : await prepareSelectedDateState(dataPath, effectiveSelectedDateKey, {
+            includeCarryovers: effectiveSelectedDateKey === todayKey,
+          })
+
+    return {
+      ...runtimeState,
+      selectedDateResult,
+    }
   })
 
   ipcMain.handle('app:open-backup-directory', async () => {
@@ -497,10 +660,14 @@ const registerAppIpc = () => {
   ipcMain.handle('db:sync:sync-now', async (): Promise<SyncNowResult> => {
     const dataPath = await ensureDataDirectory()
 
-    return syncCoordinator.runManualSync({
+    const result = await syncCoordinator.runManualSync({
       dataPath,
       appVersion: app.getVersion(),
     })
+
+    await runSharedCurrentDayPreparation(dataPath)
+
+    return result
   })
 
   ipcMain.handle('db:settings:update', async (_event, payload: AppSettingsUpdateInput) => {
@@ -692,19 +859,29 @@ app.whenReady().then(async () => {
   registerAppIpc()
   const dataPath = await ensureDataDirectory()
 
-  try {
-    await maybeCreateStartupAutoBackup(dataPath)
-  } catch (error: unknown) {
-    console.error('[J-Flow Desktop] Startup auto backup failed', error)
-  }
-
-  await createMainWindow(dataPath)
+  await showMainWindow(dataPath)
+  createAppTray(dataPath)
+  // Keep startup backup semantics, but do not block the first window on it.
+  setTimeout(() => {
+    void maybeCreateStartupAutoBackup(dataPath).catch((error: unknown) => {
+      console.error('[J-Flow Desktop] Startup auto backup failed', error)
+    })
+  }, 0)
 
   app.on('activate', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      void showMainWindow(dataPath)
+      return
+    }
+
     if (BrowserWindow.getAllWindows().length === 0) {
-      void createMainWindow(dataPath)
+      void showMainWindow(dataPath)
     }
   })
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('window-all-closed', () => {
