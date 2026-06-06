@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Ellipsis,
+  GripVertical,
   Copy,
   Moon,
   NotebookText,
@@ -69,6 +70,10 @@ export function ExpandIcon(props: IconProps) {
 
 export function ListIcon(props: IconProps) {
   return <Rows3 {...defaultProps} {...props} />
+}
+
+export function DragHandleIcon(props: IconProps) {
+  return <GripVertical {...defaultProps} {...props} />
 }
 
 export function MoreIcon(props: IconProps) {

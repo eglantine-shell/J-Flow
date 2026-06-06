@@ -244,6 +244,29 @@ export const buildLogbookEntryForDate = (appData: AppData, dateKey: string): Log
   generatedAt: new Date().toISOString(),
 })
 
+export const refreshExistingLogbookEntryForDate = (appData: AppData, dateKey: string): AppData => {
+  const existingEntry = appData.logbookEntries.find((entry) => entry.date === dateKey)
+
+  if (!existingEntry) {
+    return appData
+  }
+
+  const refreshedEntry = buildLogbookEntryForDate(appData, dateKey)
+
+  return {
+    ...appData,
+    logbookEntries: appData.logbookEntries.map((entry) =>
+      entry.date === dateKey
+        ? {
+            ...refreshedEntry,
+            remark: existingEntry.remark,
+            generatedAt: existingEntry.generatedAt,
+          }
+        : entry,
+    ),
+  }
+}
+
 export async function ensureDailyLogbookUpToDate(referenceDate = new Date()) {
   const targetDateKey = toDateKey(getPreviousDay(referenceDate))
 

@@ -13,9 +13,41 @@ import type { DayPlanItem, InterestLevel, TaskTemplate } from '@/types'
 
 const INTEREST_LEVEL_MIN = 1
 const INTEREST_LEVEL_MAX = 3
+type InterestSortMode = 'updatedAt' | 'interestDesc' | 'interestAsc'
 
 const clampInterestLevel = (value: number): InterestLevel =>
   Math.min(INTEREST_LEVEL_MAX, Math.max(INTEREST_LEVEL_MIN, value)) as InterestLevel
+
+const interestSortModeLabels: Record<InterestSortMode, string> = {
+  updatedAt: '更新时间排序',
+  interestDesc: '高兴趣优先',
+  interestAsc: '低兴趣优先',
+}
+
+const getNextInterestSortMode = (current: InterestSortMode): InterestSortMode => {
+  if (current === 'updatedAt') {
+    return 'interestDesc'
+  }
+
+  if (current === 'interestDesc') {
+    return 'interestAsc'
+  }
+
+  return 'updatedAt'
+}
+
+const sortTemplatesByMode = (templates: TaskTemplate[], sortMode: InterestSortMode) =>
+  [...templates].sort((left, right) => {
+    if (sortMode === 'interestDesc' && left.interestLevel !== right.interestLevel) {
+      return right.interestLevel - left.interestLevel
+    }
+
+    if (sortMode === 'interestAsc' && left.interestLevel !== right.interestLevel) {
+      return left.interestLevel - right.interestLevel
+    }
+
+    return right.updatedAt.localeCompare(left.updatedAt)
+  })
 
 export function TemplateManagerPanel() {
   const [loadState, setLoadState] = useState<TaskTemplateFormLoadState>({
@@ -35,6 +67,7 @@ export function TemplateManagerPanel() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [dayPlanItems, setDayPlanItems] = useState<DayPlanItem[]>([])
+  const [interestSortMode, setInterestSortMode] = useState<InterestSortMode>('updatedAt')
 
   const todayKey = toDateString(new Date())
 
@@ -88,7 +121,7 @@ export function TemplateManagerPanel() {
   }, [loadState.activityTypes, selectedActivityTypeId])
 
   const filteredTemplates = useMemo(() => {
-    return templates.filter((template) => {
+    const nextFilteredTemplates = templates.filter((template) => {
       if (!shouldDisplayTemplateInManager(template, dayPlanItems, todayKey)) {
         return false
       }
@@ -107,7 +140,9 @@ export function TemplateManagerPanel() {
 
       return template.sceneTagIds.some((sceneTagId) => selectedSceneTagIds.includes(sceneTagId))
     })
-  }, [dayPlanItems, selectedActivityTypeId, selectedSceneTagIds, templates, todayKey])
+
+    return sortTemplatesByMode(nextFilteredTemplates, interestSortMode)
+  }, [dayPlanItems, interestSortMode, selectedActivityTypeId, selectedSceneTagIds, templates, todayKey])
 
   const toggleSceneTag = (sceneTagId: string) => {
     setSelectedSceneTagIds((current) =>
@@ -305,6 +340,16 @@ export function TemplateManagerPanel() {
       <div className="template-manager__controls">
         <div className="template-manager__topbar">
           <span className="template-manager__count">未完成 {filteredTemplates.length} 条</span>
+          <button
+            className="template-manager__count template-manager__sort-button"
+            type="button"
+            onClick={() => {
+              setInterestSortMode((current) => getNextInterestSortMode(current))
+            }}
+            aria-label={`当前${interestSortModeLabels[interestSortMode]}，点击切换种草排序`}
+          >
+            {interestSortModeLabels[interestSortMode]}
+          </button>
         </div>
 
         <div className="template-manager__filters">

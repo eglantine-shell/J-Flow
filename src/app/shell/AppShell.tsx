@@ -46,6 +46,12 @@ const addMonths = (date: Date, months: number) => {
   return next
 }
 
+const getStartOfToday = () => {
+  const now = new Date()
+
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
 const buildMonthMatrix = (monthDate: Date) => {
   const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
   const startWeekday = (start.getDay() + 6) % 7
@@ -56,15 +62,16 @@ const buildMonthMatrix = (monthDate: Date) => {
 
 function CalendarSidebar({
   selectedDate,
+  today,
   onSelectDate,
 }: {
   selectedDate: Date
+  today: Date
   onSelectDate: (date: Date) => void
 }) {
   const [visibleMonth, setVisibleMonth] = useState(
     () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
   )
-  const today = useMemo(() => new Date(), [])
 
   useEffect(() => {
     setVisibleMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1))
@@ -155,6 +162,37 @@ export function AppShell() {
   const location = useLocation()
   const showPrimaryNavigation = location.pathname !== '/setup'
   const [selectedDate, setSelectedDate] = useState(() => new Date())
+  const [today, setToday] = useState(getStartOfToday)
+
+  useEffect(() => {
+    const refreshToday = () => {
+      const nextToday = getStartOfToday()
+
+      setToday((currentToday) => {
+        if (sameDay(currentToday, nextToday)) {
+          return currentToday
+        }
+
+        setSelectedDate((currentSelectedDate) =>
+          sameDay(currentSelectedDate, currentToday) ? nextToday : currentSelectedDate,
+        )
+
+        return nextToday
+      })
+    }
+
+    const intervalId = window.setInterval(refreshToday, 60 * 1000)
+
+    window.addEventListener('focus', refreshToday)
+    document.addEventListener('visibilitychange', refreshToday)
+    refreshToday()
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refreshToday)
+      document.removeEventListener('visibilitychange', refreshToday)
+    }
+  }, [])
 
   const contextValue = useMemo<AppShellContextValue>(
     () => ({
@@ -178,7 +216,7 @@ export function AppShell() {
               <section className="sidebar-today">
                 <div className="sidebar-today__toolbar">
                   <button
-                    className="icon-button icon-button--toolbar"
+                    className="icon-button icon-button--toolbar sidebar-today__nav-button"
                     type="button"
                     aria-label="前一天"
                     onClick={() => {
@@ -194,7 +232,7 @@ export function AppShell() {
                   </div>
 
                   <button
-                    className="icon-button icon-button--toolbar"
+                    className="icon-button icon-button--toolbar sidebar-today__nav-button"
                     type="button"
                     aria-label="后一天"
                     onClick={() => {
@@ -208,6 +246,7 @@ export function AppShell() {
 
               <CalendarSidebar
                 selectedDate={selectedDate}
+                today={today}
                 onSelectDate={(date) => {
                   setSelectedDate(date)
                 }}

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLogbookEntryForDate,
   buildLogbookMarkdown,
+  refreshExistingLogbookEntryForDate,
 } from '@/features/logbook/logbook-service'
 import { mockSeedAppData } from '@/mocks'
 
@@ -181,6 +182,79 @@ describe('buildLogbookEntryForDate', () => {
         id: 'deleted-segmented',
         status: 'deleted',
         isSegmented: true,
+      }),
+    ])
+  })
+
+  it('refreshes an existing logbook snapshot after segmented completion is rolled back', () => {
+    const appData = {
+      ...mockSeedAppData,
+      dayPlanItems: [
+        {
+          id: 'segmented-rollback',
+          date: '2026-05-14',
+          originDate: '2026-05-14',
+          timeBlock: 'day',
+          timeBlockSource: 'default_day',
+          sortOrder: 1,
+          source: 'manual_temporary',
+          title: '回退后的分次事项',
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          isSegmented: true,
+          progressState: 'in_progress',
+          progressPercent: 90,
+          status: 'pending',
+          createdAt: '2026-05-14T09:00:00.000Z',
+          updatedAt: '2026-05-15T08:00:00.000Z',
+        },
+      ],
+      segmentedProgressLogs: [
+        {
+          date: '2026-05-14',
+          itemId: 'segmented-rollback',
+          titleSnapshot: '回退后的分次事项',
+          isNecessary: false,
+          fromProgress: 20,
+          toProgress: 90,
+        },
+      ],
+      logbookEntries: [
+        {
+          date: '2026-05-14',
+          snapshotItems: [
+            {
+              id: 'segmented-rollback',
+              status: 'completed',
+              titleSnapshot: '回退后的分次事项',
+              time: '23:55',
+              isNecessary: false,
+              isPicked: false,
+              isSegmented: true,
+              deadlineStatus: 'none',
+            },
+          ],
+          remark: '保留这句备注',
+          generatedAt: '2026-05-15T00:05:00.000Z',
+        },
+      ],
+    }
+
+    const refreshed = refreshExistingLogbookEntryForDate(appData, '2026-05-14')
+
+    expect(refreshed.logbookEntries[0]).toEqual(
+      expect.objectContaining({
+        date: '2026-05-14',
+        remark: '保留这句备注',
+        generatedAt: '2026-05-15T00:05:00.000Z',
+      }),
+    )
+    expect(refreshed.logbookEntries[0]?.snapshotItems).toEqual([
+      expect.objectContaining({
+        id: 'segmented-rollback',
+        status: 'pending',
+        progressText: '已推进 20%→90%',
       }),
     ])
   })

@@ -1,5 +1,165 @@
 # Dev Log
 
+## 2026-06-06（V2.3.2：Todo 筛选、24 小时完成时间与拖动排序）
+
+### 本轮目标
+- 为 `V2.3.2` 补充并实现：
+  - `只看必要`
+  - 完成时间编辑统一 24 小时制
+  - Todo 拖动排序
+
+### 本轮修改
+- 更新：
+  - `product-rules.md`
+  - `task-list.md`
+  - `manual-test-checklist.md`
+  - `handoff.md`
+  - `dev-log.md`
+  - `src/components/ui/Icons.tsx`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/features/todo/completed-at-editor.ts`
+  - `src/features/todo/completed-at-editor.test.ts`
+  - `src/styles/globals.css`
+  - `package.json`
+  - `pnpm-lock.yaml`
+- `只看必要` 已确认：
+  - 位于 `调整顺序` 左侧
+  - 对所有日期生效
+  - 同时包含未完成与已完成必要事项
+  - 只改变显示，不修改数据、排序、完成状态或日志
+  - 开启后文案改为 `全部事项`
+  - 开启后禁用 `调整顺序`
+  - 排序模式中禁用 `只看必要`
+- 完成时间编辑已确认：
+  - 静态展示与编辑统一使用 `24` 小时制
+  - 时间格式为 `HH:mm`
+  - 已将原生 `datetime-local` 替换为日期输入与受控 `HH:mm` 文本输入
+  - 打开编辑时自动聚焦时间输入，并选中 `HH` 小时位
+  - 保存时继续转换为本地时间对应的 ISO 字符串
+- 拖动排序已实现：
+  - 继续复用 `sortOrder`
+  - 使用明确拖动把手
+  - 支持跨日夜分隔线
+  - 采用 `dnd-kit`，支持指针、键盘与滚动容器
+  - 已完成事项不参与拖动
+  - 已移除旧上移 / 下移按钮
+  - 拖放结束后统一保存当前日期未完成事项的：
+    - `sortOrder`
+    - `timeBlock`
+    - `timeBlockSource`
+
+### 当前验证
+- `corepack pnpm run lint`：通过
+- `corepack pnpm exec vitest run src/features/todo/completed-at-editor.test.ts src/features/logbook/logbook-service.test.ts`：通过，共 `6` 项
+- `corepack pnpm run build:desktop`：通过
+- Electron 开发版已由用户完成人工测试。
+- `corepack pnpm run package:mac`：通过
+- `hdiutil verify release/J-Flow-V2.3.2.dmg`：通过
+- 当前正式 macOS 产物：
+  - `release/J-Flow-V2.3.2.dmg`
+  - `release/J-Flow-V2.3.2.dmg.blockmap`
+- DMG SHA-256：
+  - `a220b49b098cd21cbe6bbd70492789345506edd65ea127c15221129d47195bb7`
+- Windows 产物名已同步为：
+  - `J-Flow-V2.3.2-win-portable.exe`
+  - `J-Flow-V2.3.2-win-setup.exe`
+- Windows 移交说明：
+  - `windows-handoff-v2.3.2.md`
+- Windows 源码移交包：
+  - `J-Flow-V2.3.2-win-handoff-source-20260606.zip`
+- 移交包已通过：
+  - `unzip -t`
+  - 敏感文件与构建目录排除检查
+
+## 2026-05-30（V2.3.1：bug 修复、种草排序、输入控件压缩与 macOS 打包）
+
+### 本轮目标
+- 修复 macOS 常驻后跨天打开时：
+  - 主进程已完成日切顺延
+  - 但 renderer 仍停留在前一天页面
+- 修复分次事项完成后再回退时：
+  - 已生成日志快照可能继续显示为已完成
+- 优化主页左侧 `THIS DAY` 的左右箭头视觉，使其与月历箭头区分。
+- 在种草清单顶部增加三态排序按钮。
+- 压缩必要 / 重复展开区的数字输入与单位选择控件视觉。
+- 记录待设计方向：
+  - 考虑实现进度条 UI 优化和“分步”概念。
+- 准备导出 `V2.3.1` macOS dmg。
+
+### 本轮修改
+- 更新：
+  - `src/app/shell/AppShell.tsx`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/features/templates/TemplateManagerPanel.tsx`
+  - `src/features/logbook/logbook-service.ts`
+  - `src/features/logbook/logbook-service.test.ts`
+  - `src/styles/globals.css`
+  - `handoff.md`
+  - `dev-log.md`
+  - `package.json`
+- 当前 `AppShell` 已新增跨午夜刷新：
+  - 每分钟检查一次本地今日日期
+  - window focus 时检查
+  - visibilitychange 时检查
+  - 若用户当前仍停在“旧的今天”，自动推进到新的今天
+  - 若用户正在查看历史 / 未来日期，不强行打断
+- 当前月历的 today 标记也不再只在组件首次挂载时取 `new Date()`。
+- 当前分次事项从完成回退到 90% 时：
+  - 清空 `completedAt`
+  - 恢复 `pending`
+  - 同步修正当天已有 `segmentedProgressLogs` 的结束进度
+  - 若当天日志快照已经存在，则用当前数据重建该天快照，同时保留备注与原生成时间
+- 当前 `THIS DAY` 左右箭头已改为黄色按钮。
+- 当前种草清单顶部 `未完成 xx 条` 右侧新增同样式按钮：
+  - 初始显示：`更新时间排序`
+  - 点击一次：`高兴趣优先`
+  - 点击两次：`低兴趣优先`
+  - 点击三次：回到 `更新时间排序`
+- 当前排序逻辑为：
+  - 先应用清单 / 场景筛选
+  - 再按当前排序状态排序
+  - 兴趣相同时回落到更新时间倒序
+- 当前必要 / 重复展开区控件已调整：
+  - 控件内文字字号：`0.8rem`
+  - 数字输入宽度：`50px`
+  - 单位 select 宽度：`50px`
+  - 控件 `min-height`：`28px`
+  - 背景：`transparent`
+- 当前必要选项下 DDL 日期按钮也已压缩到：
+  - `min-height: 28px`
+- 当前进度条后续方向仅记录为待设计：
+  - 考虑实现进度条 UI 优化和“分步”概念
+  - 尚未定义“步骤”与圆点 / 标签 / 备注之间的产品规则
+  - 本轮不实现，避免擅自新增产品规则
+- 当前 macOS dmg 产物名已切到：
+  - `J-Flow-V2.3.1.dmg`
+
+### 验证结果
+- `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts src/features/todo/completed-at-rounding.test.ts`：通过
+- `corepack pnpm run build:desktop`：通过
+- `corepack pnpm run dev:desktop`：已拉起 Electron 开发版，Vite 地址为 `http://localhost:4173/J-Flow/`
+- `corepack pnpm run package:mac`：通过
+- `hdiutil verify release/J-Flow-V2.3.1.dmg`：通过
+- 当前已产出：
+  - `release/J-Flow-V2.3.1.dmg`
+  - `release/J-Flow-V2.3.1.dmg.blockmap`
+- 本次 macOS 打包日志仍提示：
+  - `build/icon.ico` 不存在
+  - 该文件属于 Windows extraResources 口径，对本次 macOS dmg 未形成阻断
+
+### 当前结论
+- 这轮修复解决的是 renderer 页面日期不随日切推进的问题；主进程日切顺延逻辑本身未改。
+- 分次回退日志修复采用“只刷新已存在日志”的最小策略：
+  - 不会因为回退主动创建新日志
+  - 会修正已经生成但与当前事项状态不一致的当天快照
+- `V2.3.1` macOS 本地测试包已可用于真机验证。
+
+### 当前待评估优化
+- 分次事项进度条当前是原生 `input[type="range"]`：
+  - 只显示滑条，不显示实时数值
+  - 现有 `segmented-progress-panel__bar` 与数字输入样式残留，但当前 JSX 未使用
+  - 进度取整设置与“分步备注”需要先补产品规则，再进入实现
+
 ## 2026-05-27（V2.2 Windows 真机打包结果并回主线）
 
 ### 本轮目标

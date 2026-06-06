@@ -1,5 +1,138 @@
 # 项目交接摘要
 
+## 最新状态（2026-06-06，V2.3.2：代码实现完成，等待 Electron 人工测试，优先参考）
+- 当前已进入：
+  - `V2.3.2`
+- 已更新：
+  - `product-rules.md`
+  - `task-list.md`
+  - `manual-test-checklist.md`
+  - `dev-log.md`
+  - `src/components/ui/Icons.tsx`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/features/todo/completed-at-editor.ts`
+  - `src/features/todo/completed-at-editor.test.ts`
+  - `src/styles/globals.css`
+  - `package.json`
+  - `pnpm-lock.yaml`
+- 当前 `只看必要` 已实现：
+  - 按钮位于 `调整顺序` 左侧
+  - 支持今天、历史日期与未来日期
+  - 同时筛选未完成与已完成必要事项
+  - 只改变页面显示，不修改 Todo 数据与日志
+  - 开启后文案为 `全部事项`
+  - 开启后禁用 `调整顺序`
+  - 排序模式中禁用 `只看必要`
+- 当前完成时间编辑已实现：
+  - 静态展示与编辑统一使用 24 小时制
+  - 格式为 `HH:mm`
+  - 不再使用会受 macOS / Chromium 本地化影响的 `datetime-local`
+  - 当前编辑 UI 为日期输入与受控 `HH:mm` 时间输入
+  - 打开编辑时默认聚焦并选中 `HH` 小时位
+- 当前拖动排序已实现：
+  - 继续复用 `sortOrder / timeBlock / timeBlockSource`
+  - 排序模式显示拖动把手
+  - 支持跨白天 / 晚上分隔线
+  - 支持列表内滚动
+  - 支持键盘排序
+  - 已完成事项不参与
+  - 已移除旧上移 / 下移按钮
+- 已新增依赖：
+  - `@dnd-kit/core`
+  - `@dnd-kit/sortable`
+  - `@dnd-kit/utilities`
+- 当前验证：
+  - `corepack pnpm run lint`：通过
+  - 完成时间与日志相关测试共 `6` 项通过
+  - `corepack pnpm run build:desktop`：通过
+  - Electron 开发版已由用户完成人工测试
+  - `corepack pnpm run package:mac`：通过
+  - `hdiutil verify release/J-Flow-V2.3.2.dmg`：通过
+- 当前正式 macOS 产物：
+  - `release/J-Flow-V2.3.2.dmg`
+  - `release/J-Flow-V2.3.2.dmg.blockmap`
+- DMG SHA-256：
+  - `a220b49b098cd21cbe6bbd70492789345506edd65ea127c15221129d47195bb7`
+- Windows 移交将同时包含：
+  - V2.3.1 全部改动
+  - V2.3.2 全部改动
+- Windows 移交说明：
+  - `windows-handoff-v2.3.2.md`
+- Windows 源码移交包：
+  - `J-Flow-V2.3.2-win-handoff-source-20260606.zip`
+- 该源码包已确认不包含：
+  - `.env.local`
+  - `node_modules`
+  - macOS DMG / release 目录
+  - 本地数据库
+  - 旧版本移交 ZIP
+- Windows 预期产物名已更新为：
+  - `J-Flow-V2.3.2-win-portable.exe`
+  - `J-Flow-V2.3.2-win-setup.exe`
+
+## 最新状态（2026-05-30，V2.3.1：bug 修复、种草排序、控件压缩与 macOS 打包，优先参考）
+- 当前已开始进入：
+  - `V2.3.1`
+  - 以使用体验优化与小 bug 修复为主
+- 当前已修复 macOS 常驻跨天后：
+  - 数据已由主进程完成日切顺延
+  - 页面仍停在前一天的问题
+- 当前 renderer 日期刷新策略为：
+  - 每分钟检查一次本地日期
+  - window focus 时检查
+  - visibilitychange 时检查
+  - 若当前选中日期仍是“旧的今天”，自动推进到新的今天
+  - 若用户正在查看历史 / 未来日期，不自动跳走
+- 当前已修复分次事项完成后回退时：
+  - 已有日志快照继续显示为已完成的问题
+- 当前回退处理为：
+  - 分次完成事项点击取消完成后回到：
+    - `pending`
+    - `progressPercent = 90`
+    - `completedAt = undefined`
+  - 若对应日期的日志快照已经生成，则刷新该日期快照
+  - 刷新快照时保留原日志备注与原 `generatedAt`
+  - 不主动创建尚不存在的日志
+- 当前主页左侧 `THIS DAY` 的左右箭头已改为黄色按钮，用于和月历箭头区分。
+- 当前种草清单顶部已新增三态排序按钮：
+  - 位于 `未完成 xx 条` 右侧
+  - 与数量 tag 样式一致但可点击
+  - 状态循环为：
+    - `更新时间排序`
+    - `高兴趣优先`
+    - `低兴趣优先`
+    - 回到 `更新时间排序`
+  - 排序发生在清单 / 场景筛选之后
+  - 兴趣相同时回落到更新时间倒序
+- 当前必要 / 重复展开区的 stepper/select 控件已按用户指定压缩：
+  - 控件内文字字号：`0.8rem`
+  - 数字输入宽度：`50px`
+  - 单位 select 宽度：`50px`
+  - 控件 `min-height`：`28px`
+  - 背景：`transparent`
+- 当前必要选项下 DDL 日期按钮也已压缩到：
+  - `min-height: 28px`
+- 当前已记录但尚未实现的待设计方向：
+  - 考虑实现进度条 UI 优化和“分步”概念
+  - 目前不要把圆点、空白标签、步骤备注之间的关系写死为产品规则
+  - 后续需要用户确认规则后再实现
+- 当前 macOS 打包名已切到：
+  - `J-Flow-V2.3.1.dmg`
+- 当前已产出：
+  - `release/J-Flow-V2.3.1.dmg`
+  - `release/J-Flow-V2.3.1.dmg.blockmap`
+- 本轮验证：
+  - `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts src/features/todo/completed-at-rounding.test.ts`：通过
+  - `corepack pnpm run build:desktop`：通过
+  - `corepack pnpm run dev:desktop`：已拉起 Electron 开发版，Vite 地址为 `http://localhost:4173/J-Flow/`
+  - `corepack pnpm run package:mac`：通过
+  - `hdiutil verify release/J-Flow-V2.3.1.dmg`：通过
+- 本次 macOS 打包日志仍提示：
+  - `build/icon.ico` 不存在
+  - 该文件属于 Windows extraResources 口径，对本次 macOS dmg 未形成阻断
+- 当前待评估优化结论：
+  - 分次进度条：当前为原生 range，未显示实时数值；进度取整和分步备注需要先补产品规则
+
 ## 最新状态（2026-05-27，V2.2 Windows 真机打包结果已并回，优先参考）
 - 当前 Windows 真机已产出：
   - `release/J-Flow-V2.2-win-portable.exe`
