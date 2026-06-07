@@ -228,7 +228,11 @@
 - 已完成基于 `dnd-kit` 的拖动排序
 - 已通过桌面构建与 Electron 人工测试
 - 已产出并校验 `J-Flow-V2.3.2.dmg`
-- 正在准备 Git 命令与 Windows 源码移交包
+- 已完成 Windows 源码移交与真机打包回并
+- 已同步：
+  - `J-Flow-V2.3.2-win-portable.exe`
+  - `J-Flow-V2.3.2-win-setup.exe`
+- V2.3.2 已完成收尾
 
 ---
 

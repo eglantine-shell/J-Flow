@@ -1,5 +1,48 @@
 # Dev Log
 
+## 2026-06-07（V2.3.2 Windows 真机结果回并与收尾）
+
+### 本轮并回
+- Windows 侧未修改业务逻辑或数据模型。
+- 更新 `package.json`：
+  - `package:win:portable`
+  - `package:win:dir`
+  - `package:win:nsis`
+- 三条 Windows 打包命令均显式使用：
+  - `-c.electronDist=node_modules/electron/dist`
+- 这样会直接复用项目已安装的 Electron runtime，避免受限环境下回读用户缓存或重复下载。
+
+### Windows 真机结果
+- 已生成并同步回 Mac：
+  - `release/J-Flow-V2.3.2-win-portable.exe`
+  - `release/J-Flow-V2.3.2-win-setup.exe`
+- Windows 侧同时生成：
+  - `release/J-Flow-V2.3.2-win-setup.exe.blockmap`
+  - 该文件本次未同步回 Mac。
+- Mac 侧复核 SHA-256：
+  - portable：`6c9eaafa4e480bece34987b20d6b05f569bc42e586c996642e008a6d458ba7fd`
+  - setup：`7c7f845702ccd39ce9bbb26f05dd5be0cdd06af9e3d2559ea24b5b8d4bb37ca8`
+- Windows 侧记录的 blockmap SHA-256：
+  - `0738a855ea461667cd8160676c2e05ba983390a4b7ca1d468a17d6f890ea5025`
+- portable、setup 与 `win-unpacked/J-Flow.exe` 的图标静态验证一致，均为 J-Flow 图标。
+- 启动耗时：
+  - portable 首次启动约 `9.35s`
+  - unpacked 启动约 `0.80s`
+  - 常驻后再次启动 portable 约 `0.33s` 恢复原实例
+- 当前 EXE 均未签名。
+- 仍待用户专项实测：
+  - 托盘菜单“打开 / 退出”
+  - 任务栏取消固定后重新固定的图标缓存
+  - Defender / 360 拦截表现
+
+### 清理
+- Windows 回传内容已逐项并回，不整文件覆盖 Mac 主线。
+- 删除历次临时 handoff ZIP、旧交接解包目录及已完成使命的 Windows handoff 说明。
+- 保留：
+  - 正式 macOS DMG
+  - 正式 Windows EXE
+  - 主线 `handoff.md`
+
 ## 2026-06-06（V2.3.2：Todo 筛选、24 小时完成时间与拖动排序）
 
 ### 本轮目标

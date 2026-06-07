@@ -1,5 +1,31 @@
 # 项目交接摘要
 
+## 最新状态（2026-06-07，V2.3.2 Windows 真机结果已回并，优先参考）
+- V2.3.2 的 macOS 与 Windows 产物均已完成。
+- Windows 回传未修改业务逻辑或数据模型。
+- Windows 打包命令已统一补充：
+  - `-c.electronDist=node_modules/electron/dist`
+- 当前正式 Windows 产物：
+  - `release/J-Flow-V2.3.2-win-portable.exe`
+  - `release/J-Flow-V2.3.2-win-setup.exe`
+- Mac 侧已复核 SHA-256：
+  - portable：`6c9eaafa4e480bece34987b20d6b05f569bc42e586c996642e008a6d458ba7fd`
+  - setup：`7c7f845702ccd39ce9bbb26f05dd5be0cdd06af9e3d2559ea24b5b8d4bb37ca8`
+- Windows 侧曾生成 setup blockmap，但本次未同步回 Mac：
+  - SHA-256：`0738a855ea461667cd8160676c2e05ba983390a4b7ca1d468a17d6f890ea5025`
+- Windows 图标静态验证：
+  - portable、setup、`win-unpacked/J-Flow.exe` 均为 J-Flow 图标
+- Windows 启动耗时：
+  - portable 首次启动约 `9.35s`
+  - unpacked 启动约 `0.80s`
+  - 常驻后再次启动 portable 约 `0.33s` 恢复原实例
+- 当前 EXE 均未签名。
+- 仍待用户专项实测：
+  - 托盘菜单“打开 / 退出”
+  - 任务栏取消固定后重新固定
+  - Defender / 360 拦截表现
+- 临时 Windows 往返 handoff 已完成使命并清理；后续继续以本文件和 `dev-log.md` 为交接依据。
+
 ## 最新状态（2026-06-06，V2.3.2：代码实现完成，等待 Electron 人工测试，优先参考）
 - 当前已进入：
   - `V2.3.2`
