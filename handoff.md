@@ -1,5 +1,20 @@
 # 项目交接摘要
 
+## 最新状态（2026-06-08，V2.3 Release 准备，优先参考）
+- README 已从 V2.2 下载口径更新到 V2.3。
+- GitHub Release 建议：
+  - tag：`v2.3`
+  - title：`J-Flow V2.3`
+- 最终上传附件：
+  - `J-Flow-V2.3.2.dmg`
+  - `J-Flow-V2.3.2-win-setup.exe`
+  - `J-Flow-V2.3.2-win-portable.exe`
+- Release 文案应同时覆盖 V2.3.1 与 V2.3.2。
+- README 已注明：
+  - Windows 普通用户优先使用 setup
+  - portable 首次启动更慢
+  - 当前 macOS / Windows 产物均未正式签名
+
 ## 最新状态（2026-06-07，V2.3.2 Windows 真机结果已回并，优先参考）
 - V2.3.2 的 macOS 与 Windows 产物均已完成。
 - Windows 回传未修改业务逻辑或数据模型。

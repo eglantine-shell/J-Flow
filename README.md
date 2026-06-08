@@ -68,7 +68,9 @@ J-Flow 的思路是：
 
 进入主页面后，主要区域是 Todo。
 你可以把今天要做的事直接加进去，也可以切换日期，查看或安排别的日期。
-Todo 会区分白天和晚上。你可以把事项放到更适合的时间段里，也可以进入排序模式调整顺序。
+Todo 会区分白天和晚上。你可以把事项放到更适合的时间段里，也可以进入排序模式，通过拖动把手调整顺序或跨越白天 / 晚上分隔线。
+
+如果当天事项较多，可以点击“只看必要”，同时筛选未完成和已完成的必要事项。筛选开启时排序模式会暂时禁用，恢复“全部事项”后即可继续排序。
 
 ---
 
@@ -167,6 +169,7 @@ J-Flow 当前支持两类重复事项：
 
 你可以在这里修改种草内容和兴趣程度，也可以通过 `TODO` 按钮把它加入今日待办。
 如果某条种草已经排进某一天的 Todo，列表里会显示它已经排在哪一天。
+列表顶部还可以在“更新时间排序”“高兴趣优先”“低兴趣优先”之间循环切换。
 
 ---
 
@@ -218,27 +221,31 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 - `V1.4`：上一版稳定 macOS 自用包；
 - `V2.0`：主要更新为本地文件夹同步能力；
 - `V2.1`：在 V2.0 基础上增加必要事项 DDL；
-- `V2.2`：主要修复日志 / 同步时序问题，并补强桌面常驻与 Windows 打包体验。
+- `V2.2`：主要修复日志 / 同步时序问题，并补强桌面常驻与 Windows 打包体验；
+- `V2.3`：集中优化 Todo 与种草清单体验，包含跨日刷新、日志修复、兴趣排序、必要事项筛选、24 小时完成时间编辑和拖动排序。
 
 当前桌面版产物：
-- macOS：`J-Flow-V2.2.dmg`
-- Windows：`J-Flow-V2.2-win-setup.exe`
-- Windows：`J-Flow-V2.2-win-portable.exe`
+- macOS：`J-Flow-V2.3.2.dmg`
+- Windows：`J-Flow-V2.3.2-win-setup.exe`
+- Windows：`J-Flow-V2.3.2-win-portable.exe`
 
 平台状态：
 - macOS：已真机验证通过；
 - Windows：
-  - `portable` 已真机验证通过；
-  - `setup` 已产出，后续更适合作为推荐分发形态继续验证；
+  - `portable` 与 `setup` 均已完成真机打包；
+  - 推荐普通用户优先下载 `setup`；
+  - `portable` 首次启动需要自解包，启动时间通常更长；
 - Web：V2 版本保留为在线参考版本；
 - iOS / Android：暂不支持。
 
 Releases：
 - GitHub Releases：<https://github.com/eglantine-shell/J-Flow/releases>
 - 当前建议通过 GitHub Releases 分发与下载：
-  - `J-Flow-V2.2.dmg`
-  - `J-Flow-V2.2-win-setup.exe`
-  - `J-Flow-V2.2-win-portable.exe`
+  - `J-Flow-V2.3.2.dmg`
+  - `J-Flow-V2.3.2-win-setup.exe`
+  - `J-Flow-V2.3.2-win-portable.exe`
+
+> 当前 macOS 与 Windows 安装包均未进行正式代码签名。首次打开时，系统或安全软件可能显示风险提示，请确认文件来自本仓库 Releases。
 
 ---
 

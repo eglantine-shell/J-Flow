@@ -1,5 +1,25 @@
 # Dev Log
 
+## 2026-06-08（V2.3 Release 文案与 README 更新）
+
+### 本轮修改
+- 更新 `README.md` 的公开版本口径：
+  - 当前 Release 主版本为 `V2.3`
+  - 实际最终附件版本为 `V2.3.2`
+- 更新下载文件名：
+  - `J-Flow-V2.3.2.dmg`
+  - `J-Flow-V2.3.2-win-setup.exe`
+  - `J-Flow-V2.3.2-win-portable.exe`
+- README 补充：
+  - `只看必要`
+  - Todo 拖动排序
+  - 种草清单三态兴趣排序
+  - Windows 优先推荐 setup
+  - 当前安装包未正式签名的提示
+- Release 文案覆盖：
+  - V2.3.1 bug 修复与 UI 优化
+  - V2.3.2 筛选、时间编辑和拖动排序
+
 ## 2026-06-07（V2.3.2 Windows 真机结果回并与收尾）
 
 ### 本轮并回
