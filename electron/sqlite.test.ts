@@ -150,6 +150,9 @@ describe('electron/sqlite', () => {
       preparationNotes: '',
       recurrence: 'none',
       isSegmented: false,
+      isStepped: true,
+      currentStep: '第一章',
+      nextStep: '第二章',
       createdAt: '2026-05-01T08:00:00.000Z',
       updatedAt: '2026-05-01T08:00:00.000Z',
       grassStatus: 'active',
@@ -158,6 +161,7 @@ describe('electron/sqlite', () => {
 
     expect(createdTemplate.title).toBe('SQLite 条目')
     expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.title).toBe('SQLite 条目')
+    expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.currentStep).toBe('第一章')
 
     createSqliteDayPlanItem(dataPath, {
       id: 'day-plan-item-sqlite-test',
@@ -173,6 +177,10 @@ describe('electron/sqlite', () => {
       requiresPreparation: false,
       preparationNotes: '',
       isSegmented: false,
+      isStepped: true,
+      currentStep: '第一章',
+      nextStep: '第二章',
+      stepRootItemId: 'day-plan-item-sqlite-test',
       progressState: 'not_started',
       progressPercent: 0,
       status: 'pending',
@@ -181,11 +189,13 @@ describe('electron/sqlite', () => {
 
     const updatedDayPlanItem = updateSqliteDayPlanItem(dataPath, {
       id: 'day-plan-item-sqlite-test',
+      nextStep: '第三章',
       status: 'deleted',
       deletedAt: '2026-05-01T09:00:00.000Z',
     })
 
     expect(updatedDayPlanItem?.status).toBe('deleted')
+    expect(updatedDayPlanItem?.nextStep).toBe('第三章')
     expect(updatedDayPlanItem?.deletedAt).toBe('2026-05-01T09:00:00.000Z')
     expect(
       listSqliteDayPlanItems(dataPath).some(

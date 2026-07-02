@@ -1,5 +1,763 @@
 # Dev Log
 
+## 2026-07-02（V2.4：确认完成但未经实际使用测试）
+
+### 本轮目标
+- 在设置页最下方右下角添加制作署名小字，不新增卡片。
+- 更新文档，说明 V2.4 已确认完成，但尚未经过持续真实使用测试。
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - 在设置页内容末尾新增署名：`制作：葉汀芷（微博/小红书：@也停止）`
+- 更新 `src/styles/globals.css`：
+  - 新增右对齐弱化小字样式，不添加边框、背景或卡片容器
+- 更新 `handoff.md`、`task-list.md`：
+  - 将 V2.4 状态标记为确认完成
+  - 明确当前未经持续真实使用测试，后续需在真实数据下观察风险
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断
+
+## 2026-07-02（V2.4D：删除完成区 Guide）
+
+### 本轮目标
+- 删除当前 Guide 8 的 Todo 完成区导览。
+- 原 Guide 9-10 顺延为新的 Guide 8-9。
+
+### 本轮修改
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 删除 `completion` step
+  - 教学总步数从 10 步变为 9 步
+  - 同步功能成为 Guide 8
+  - 种草清单、日志和其他设置成为 Guide 9
+- 更新 `product-rules.md`、`task-list.md`、`manual-test-checklist.md`、`handoff.md`：
+  - 删除教学流程中的 Todo 完成区导览项
+  - 将当前功能教学描述同步为 9 步
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断
+- 浏览器烟测：
+  - Guide 7 仍为 `重复事项`，显示 `7 / 9`
+  - Guide 8 为 `同步：利用本地文件夹同步`，显示 `8 / 9`
+  - Guide 9 为 `种草清单、日志和其他设置`，显示 `9 / 9`
+  - 页面中不再出现 `完成后：进入已完成区和日志`
+  - 访问旧 `step=9` 会被 clamp 到新的最后一步 `step=8`
+
+## 2026-07-02（V2.4D：Guide 2 种草输入区高亮修正）
+
+### 本轮目标
+- 修正 Guide 2 高亮框偏小、偏上，只框住首页底部种草栏顶部的问题。
+- 将 Guide 2 文案替换为最新确认版本。
+
+### 本轮修改
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - Guide 2 标题改为 `种草：点击+号，收纳“有空再做”`
+  - Guide 2 说明改为 tag、兴趣程度、批量添加的使用说明
+  - Guide 2 进入时触发展开真实首页种草输入区
+  - Guide 3 进入前收起首页种草输入区，避免影响 Todo 输入面板教学
+  - 高亮避让底部教学栏时改为读取真实 guide bar 位置，减少提前截断
+- 更新 `src/pages/home/HomePage.tsx`：
+  - 支持教学事件展开 / 收起首页种草输入区
+  - 将 Guide 2 高亮锚点从 sticky 外层移到真实种草卡片本体
+- 更新 `product-rules.md`、`task-list.md`、`manual-test-checklist.md`、`handoff.md`：
+  - 记录 Guide 2 应展开真实种草输入区，并覆盖 tag、兴趣程度、批量添加说明
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1&step=1`：通过
+  - Guide 2 标题与说明文案已更新
+  - 首页种草输入区会自动展开
+  - 高亮目标为真实种草卡片本体，覆盖输入区与相关控件
+  - 高亮底部按真实 guide bar 位置避让，不再提前截断为顶部窄条
+
+## 2026-07-02（V2.4D：Guide 10 步细节校准）
+
+### 本轮目标
+- 按最新确认调整真实 UI 教学的 10 步文案、页面切换与高亮目标。
+- 修复直达任意教学 step 时演示日期可能未切换，导致完成区 step 找不到目标的问题。
+
+### 本轮修改
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - Guide 1 高亮目标改为侧栏 `THIS DAY` + 日历整体区域
+  - Guide 2 保持在首页，高亮下方 `种草` 入口
+  - Guide 3 文案改为 `Todo ：普通/拔草条目`，并预置为拔草模式 + 分次勾选
+  - Guide 4-7 按确认文案更新日夜、必要 + DDL、分步分次、重复说明
+  - Guide 8 改为先关闭 Todo 输入面板，再高亮已完成区
+  - Guide 9 更新本地文件夹同步说明
+  - Guide 10 改为显示种草清单页，并高亮侧栏下方 `种草清单 / 日志 / 设置` 导航区
+  - 教学态演示日期改为短延迟多次派发，保证直达任意 step 时也能稳定切到 demo 日期
+- 更新 `src/app/shell/AppShell.tsx`：
+  - 新增 `sidebar-date-zone` 高亮锚点
+  - 新增 `sidebar-secondary-nav` 高亮锚点
+- 更新 `src/pages/home/HomePage.tsx`：
+  - 为首页下方种草入口新增 `home-grass-dock` 高亮锚点
+- 更新 `src/features/todo/TodoModePanel.tsx`：
+  - 扩展教学打开 Todo 输入面板事件，支持 `mode: grass` 与 `focus: segmented`
+  - 新增教学关闭 Todo 输入面板事件
+  - 为已完成区新增 `todo-completed-area` 高亮锚点
+- 更新 `src/styles/globals.css`：
+  - 补充侧栏日期区与侧栏下方导航区分组样式
+- 更新 `product-rules.md`、`task-list.md`、`manual-test-checklist.md`、`handoff.md`：
+  - 记录最新 10 步教学流程与人工验证重点
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1`：通过
+  - 10 个步骤均找到目标 `data-tutorial-id` 并显示高亮
+  - 10 个步骤标题与确认文案一致
+  - Guide 2 停留首页并高亮下方种草入口
+  - Guide 3 显示拔草模式，且 `分次` 已勾选
+  - Guide 8 会关闭 Todo 输入面板，并高亮已完成区
+  - Guide 10 显示种草清单页，并高亮侧栏下方导航区
+
+## 2026-07-02（V2.4D：底部 rail 空白与教学退出真实数据恢复）
+
+### 本轮目标
+- 修复教学态真实 UI 工作区与底部 rail 之间空白过多。
+- 修复跳过 / 完成教学后仍显示 demo 数据的问题。
+
+### 本轮修改
+- 更新 `src/styles/globals.css`：
+  - 将教学态底部预留从过大的 `232px / 260px` 收紧为 `178px / 190px`
+  - 保留底部 rail 上方约一小段安全间距，减少中间空白
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 退出教学时派发 `jflow:tutorial-exit`
+  - 事件内带上真实今天日期
+- 更新 `src/app/shell/AppShell.tsx`：
+  - 监听 `jflow:tutorial-exit`
+  - 退出教学后将 `today / selectedDate` 恢复为真实今天，触发 Todo 首页重新读取真实数据
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- 浏览器烟测：
+  - 底部 rail 与真实 UI 工作区间隙约 `24px`
+  - 点击 `跳过` 后 URL 回到 `/J-Flow`
+  - 教学栏消失，`jflow-tutorial-active` 移除
+  - demo 专属条目不再出现在页面文本中
+
+## 2026-07-02（V2.4D：教学态兼容旧 preload 的窗口扩高调用）
+
+### 本轮目标
+- 修复 Electron dev 窗口未重启时，旧 preload 中不存在 `expandWindowForTutorial` 导致教学页崩溃的问题。
+
+### 本轮修改
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 调用前先检查 `window.jflowDesktop?.expandWindowForTutorial` 是否为函数
+  - 若旧 preload 或 Web 环境没有该方法，则静默跳过窗口扩高
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run build:desktop`：通过
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1&step=0`：通过
+  - 不再出现 `Unexpected Application Error`
+  - 教学栏与高亮正常显示
+
+## 2026-07-02（V2.4D：教学栏改为底部独立 rail，并扩高桌面窗口）
+
+### 本轮目标
+- 将教学栏从右侧 rail 改为底部独立 rail。
+- Electron 桌面端进入教学态时，尽量将窗口高度调整到当前屏幕可用最大高度。
+
+### 本轮修改
+- 更新 `src/styles/globals.css`：
+  - 教学栏改为底部独立 rail
+  - 教学态下真实 UI 内容区预留底部空间
+  - 教学态下桌面工作区高度同步扣除底部 rail，避免内容钻到教学栏下方
+  - 移除右侧 rail 的布局让位与响应式逻辑
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 进入教学态时调用 `window.jflowDesktop.expandWindowForTutorial()`
+  - 高亮框与滚动避让改为面向底部 rail
+- 更新 `electron/main.ts`、`electron/preload.cts`、`src/vite-env.d.ts`：
+  - 新增受控 IPC `window:expand-for-tutorial`
+  - preload 暴露 `expandWindowForTutorial()`
+  - main process 使用当前屏幕 `workArea` 调整窗口高度，不进入全屏
+- 更新 `product-rules.md`、`app-structure.md`、`task-list.md`、`manual-test-checklist.md`、`handoff.md`：
+  - 将右侧 rail 规则改为底部独立 rail
+  - 记录桌面端教学态扩高窗口规则
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- 残留搜索：主文档和源码中无旧 `右侧 rail` 教学规则残留
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1`：通过
+  - 教学栏位于底部独立 rail
+  - 真实 UI 工作区在底部 rail 上方独立滚动
+  - 10 个步骤均显示高亮
+  - 10 个步骤高亮框均不与底部 rail 重叠
+
+## 2026-07-02（V2.4D：设置页 GUIDE 卡片去除内层套框）
+
+### 本轮目标
+- 修正设置页 `初始化与使用教学` 区域“大框套小框”的视觉问题。
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - 删除内层 `初始化与教学入口` 文案块
+  - 保留 section 标题、说明文案
+  - 说明文案下方直接显示 `重置应用` 与 `使用教学` 按钮
+- 更新 `src/styles/globals.css`：
+  - 移除 `settings-guide-card` 内层卡片样式
+  - 新增 `settings-guide-actions` 作为按钮行
+  - 移动端按钮行改为纵向排列
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- 浏览器烟测 `http://localhost:4173/J-Flow/settings?tutorial=1&step=8`：通过
+  - `settings-guide-card` 内层卡片不存在
+  - `初始化与教学入口` 旧内层标题不存在
+  - `重置应用 / 使用教学` 两个按钮直接位于说明文案下方
+
+## 2026-07-02（V2.4D：教学 UI 精度与设置页 GUIDE 卡片优化）
+
+### 本轮目标
+- 在保留“真实 UI + demo 数据源”框架的前提下，优化教学呈现与设置页层级：
+  - 设置页重构为 `初始化与使用教学` 卡片
+  - 提高高亮区域亮度、压暗框外区域
+  - 将桌面教学栏移到真实 UI 之外的右侧教学 rail，减少遮挡
+
+### 本轮修改
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - 将原“重置应用”区改为 `初始化与使用教学`
+  - 写入确认文案：`重置应用后会清空当前本地应用数据，并回到第一次打开应用的初始化流程；也可以在此重看使用教学。`
+  - 将按钮调整为同级的 `重置应用` 与 `使用教学`
+- 更新 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 教学态在 `body` 上标记 `jflow-tutorial-active`
+  - 桌面教学态按右侧 rail 重新计算滚动避让
+  - 高亮框在桌面 rail 模式下裁切右边界，避免穿过教学栏
+- 更新 `src/styles/globals.css`：
+  - 桌面教学态为真实 UI 内容区预留右侧教学 rail
+  - 教学栏改为右侧固定 rail；窗口不足时回到底部停靠
+  - 高亮框改为 spotlight：框内增亮、框外压暗
+  - 新增 `settings-guide-card` 样式
+- 更新 `product-rules.md`、`app-structure.md`、`task-list.md`、`manual-test-checklist.md`：
+  - 将旧“底部中央教学栏”规则调整为桌面右侧 rail + 窄屏底部 fallback
+  - 将设置页入口规则调整为 `初始化与使用教学` 卡片
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1`：通过
+  - 10 个步骤均显示高亮
+  - 桌面宽度下教学栏位于右侧 rail
+  - 10 个步骤高亮框均不与右侧教学栏重叠
+  - 设置页 GUIDE 卡片文案与 `重置应用 / 使用教学` 按钮显示正确
+
+### 未解决问题
+- 仍需 Electron 人工视觉验收不同窗口尺寸下的观感。
+
+## 2026-07-02（V2.4D：撤掉自造演示 UI，改为真实 UI + demo 数据源）
+
+### 本轮目标
+- 修正上一版错误方向：
+  - 撤掉自造教学演示 UI
+  - 保留 J-Flow 真实页面、真实组件、真实样式
+  - 仅在教学态切换为 demo 数据源
+
+### 本轮修改
+- 重写 `src/features/tutorial/tutorial-demo-data.ts`：
+  - 改为完整 `AppData` seed
+  - 覆盖日期、种草、Todo、备注、日夜、必要、分步、分次、重复、完成区、日志等演示数据
+- 更新 `src/db/storage.ts`：
+  - `?tutorial=1` 时使用内存 demo AppData
+  - 教学态不调用 Desktop SQLite bridge
+  - 教学态的 `get / update / replace / import / export / reset` 都只作用于内存 demo 数据
+  - 教学态 lifecycle prepare no-op 并返回 demo 数据
+- 重写 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 撤掉自造 demo stage
+  - 改为真实 DOM 高亮
+  - 教学栏固定在底部中央
+  - 通过真实路由 `/ /grass-list /settings /logbook` 展示真实页面
+  - 当前步骤按 `data-tutorial-id` 高亮真实 UI 区域
+  - 进入教学时将 AppShell 当前日期切到 demo 日期 `2026-07-05`
+  - 延迟触发真实 Todo 输入面板的教学展开事件，避免路由刚切回首页时组件尚未挂载导致第 3-7 步无高亮
+- 更新 `src/app/shell/AppShell.tsx`：
+  - 响应 `jflow:tutorial-select-date`，让真实日历和 Todo 页展示 demo 日期
+- 更新 `src/features/todo/TodoModePanel.tsx`：
+  - 教学打开真实 Todo 输入面板时填入 demo 草稿
+  - 可按步骤自动展开必要、分步、重复等真实控件
+  - 补充必要、DDL、分步 / 分次、重复等教学锚点
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - 教学态不读取真实 desktop 同步 / 备份信息
+  - 教学态提供假的同步状态用于展示真实同步卡片
+  - 补充同步教学锚点
+- 更新 `src/pages/logbook/LogbookPage.tsx`：
+  - 补充日志页教学锚点
+- 更新 `src/styles/globals.css`：
+  - 删除自造 demo stage 样式
+  - 保留真实 UI 高亮框与底部固定教学栏样式
+
+### 关键决策
+- “换数据”不等于“换 UI”：教学态必须继续渲染 J-Flow 真实 UI。
+- “教学演示模式”在本轮收紧为“真实 UI 教学态 + 独立 demo AppData”，不得再做独立演示舞台。
+- 教学态 demo 数据只存在 renderer 内存中，不写入 SQLite / IndexedDB。
+- 设置页教学态不得读取真实同步目标、备份信息或触发真实同步。
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断
+- 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1`：通过
+  - 10 个步骤均渲染真实 J-Flow 页面
+  - 10 个步骤均找到对应 `data-tutorial-id` 目标并显示高亮
+  - 第 3-7 步能正确展开真实 Todo 输入面板及必要 / DDL / 分步 / 分次 / 重复控件
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- 需要重点验证教学栏在不同窗口尺寸下是否遮挡关键区域。
+
+## 2026-07-02（V2.4D：教学演示模式重做实现）
+
+### 本轮目标
+- 按最新文档重做功能教学：
+  - 使用独立 demo 数据
+  - 教学栏固定在底部中央
+  - 当前介绍区域显示高亮框
+  - 覆盖 10 步教学流程
+  - 不触碰用户真实数据
+
+### 本轮修改
+- 新增 `src/features/tutorial/tutorial-demo-data.ts`：
+  - 提供独立前端 demo 数据
+  - 覆盖日期、种草、Todo、备注、日夜、必要、分步、分次、重复、完成区、同步、日志和设置示例
+  - 不接入 repository，不写 SQLite / IndexedDB
+- 重写 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 撤掉真实 DOM 定位导览逻辑
+  - 改为全屏教学演示舞台
+  - 使用 `?tutorial=1&step=n` 控制步骤
+  - 底部中央固定教学栏
+  - 当前步骤对应 demo 区域显示高亮框
+  - 教学完成或跳过后回到真实首页
+- 更新 `src/styles/globals.css`：
+  - 新增教学演示舞台、demo 日历、demo Todo、demo 种草、demo 设置、demo 日志样式
+  - 新增底部固定教学栏样式
+  - 移除旧漂浮气泡定位样式
+
+### 关键决策
+- 教学期间不再渲染用户真实数据上的导览目标。
+- 教学演示按钮仅用于展示，不执行保存、删除、同步、导入或导出。
+- 仍不新增持久化字段，不做 schema migration。
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- 需要重点检查底部教学栏是否遮挡高亮区域，以及 10 步文案是否符合实际教学感受。
+
+## 2026-07-02（V2.4D 文档调整：教学演示模式与 demo 数据）
+
+### 本轮目标
+- 仅修改文档，不改业务代码。
+- 将功能教学目标从“真实 UI 导览”进一步调整为“教学演示模式”。
+- 明确教学必须使用独立 demo 数据，不使用用户当前真实数据。
+
+### 本轮修改
+- 更新 `product-rules.md`：
+  - 明确教学演示模式使用独立 demo 数据
+  - 明确 demo 数据不得写入 SQLite / IndexedDB、不得进入备份或同步
+  - 明确教学栏固定在底部中央
+  - 明确当前介绍区域显示高亮框
+  - 写入用户确认的 10 步教学流程
+- 更新 `data-model.md`：
+  - 新增教学演示数据说明
+  - 明确 demo 数据是前端只读 fixture / view model，不新增持久化 schema
+- 更新 `app-structure.md`：
+  - 补充教学演示模式属于 renderer 侧 UI 能力
+  - 明确不应调用真实 repository 写入路径
+- 更新 `task-list.md`：
+  - 将任务组 D 的实现目标改为教学演示模式
+  - 写入 10 步教学流程
+- 更新 `manual-test-checklist.md`：
+  - 补充底部固定教学栏、高亮框、独立 demo 数据和不触碰真实数据的验收
+- 更新 `handoff.md`：
+  - 将最新状态调整为“文档已改，代码待重做”
+
+### 关键决策
+- 现有“真实 UI 导览”逻辑方向仍保留高亮思路，但需要改为演示数据承载。
+- 教学期间不得展示或操作用户当前真实数据。
+- 教学结束或跳过后必须回到真实应用数据。
+- 第一版不新增持久化字段，不做 schema migration。
+
+### 当前验证
+- 本轮仅修改 Markdown 文档，未运行代码测试。
+
+### 未解决问题
+- V2.4D 代码尚未按教学演示模式重做。
+- 需要后续实现独立 demo 数据、底部固定教学栏和 10 步演示流程。
+
+## 2026-07-02（V2.4D：功能教学改为真实 UI 导览）
+
+### 本轮目标
+- 撤掉与实际使用 UI 脱节的独立教学页。
+- 将功能教学重做为真实页面上的 overlay 导览。
+
+### 本轮修改
+- 删除 `src/pages/tutorial/TutorialPage.tsx`。
+- 更新 `src/app/router.tsx`：
+  - 移除 `/tutorial` 路由。
+- 新增 `src/features/tutorial/TutorialOverlay.tsx`：
+  - 通过 `?tutorial=1` 启动教学。
+  - 根据真实 DOM 上的 `data-tutorial-id` 定位并高亮控件。
+  - 支持上一步、下一步、跳过、完成。
+  - 支持跨页导览：首页、种草清单、设置页。
+  - 讲到 Todo 输入时自动打开真实新增面板。
+- 更新 `src/app/shell/AppShell.tsx`：
+  - 全局挂载 `TutorialOverlay`。
+  - 为侧栏日历与导航增加教学锚点。
+- 更新 `src/features/todo/TodoModePanel.tsx`：
+  - 为真实 Todo 新增入口、模式切换、属性区、列表区增加教学锚点。
+  - 响应 `jflow:tutorial-open-todo-composer` 事件，自动打开真实 Todo 输入面板。
+  - 教学 overlay 点击不会触发 Todo 输入浮层的外部点击关闭逻辑。
+- 更新 `src/pages/setup/SetupPage.tsx`：
+  - 首次初始化保存后跳转 `/?tutorial=1`。
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - `重看功能教学` 跳转 `/?tutorial=1`，不清空数据。
+  - 为数据导入 / 导出区域增加教学锚点。
+- 更新 `src/pages/grass-list/GrassListPage.tsx`：
+  - 为种草清单页面增加教学锚点。
+- 更新 `src/styles/globals.css`：
+  - 移除独立教学页样式。
+  - 新增 overlay 遮罩、高亮框、提示气泡与移动端样式。
+
+### 关键决策
+- 功能教学必须贴住真实 UI，不再使用抽象模拟卡片。
+- 不新增持久化字段，教学是否启动继续由 URL 参数表达。
+- 设置页重看教学仍然是不破坏数据的动作，不复用重置逻辑。
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- 需要重点验证 `/?tutorial=1` 的跨页导览与 Todo 面板自动打开。
+
+## 2026-07-02（V2.4D：初始化页与功能教学实现）
+
+### 本轮目标
+- 实现 V2.4D：
+  - 首次初始化完成后进入功能教学
+  - 已初始化用户可在设置页重看功能教学
+  - 重看教学不清空或改写本地数据
+
+### 本轮修改
+- 新增 `src/pages/tutorial/TutorialPage.tsx`：
+  - 新增 6 步轻量功能教学
+  - 覆盖种草 / TODO 分层、白天晚上、必要 / 分次 / 分步 / 备注、完成顺延日志、拔草返回 / 删除、本地数据安全
+  - 支持上一步、下一步、跳过、进度点跳转
+  - 从设置进入时完成按钮返回设置页
+  - 首次初始化进入时完成按钮进入首页
+- 更新 `src/app/router.tsx`：
+  - 新增 `/tutorial` 路由
+  - 使用 `RequireInitialized` 守卫，避免未初始化用户绕过 `/setup`
+- 更新 `src/pages/setup/SetupPage.tsx`：
+  - 首次初始化保存成功后跳转 `/tutorial`
+  - 不改变既有种草清单 / 有空就做配置保存逻辑
+- 更新 `src/features/settings/SettingsPanel.tsx`：
+  - 在“重置应用”区域新增“重看功能教学”
+  - 点击进入 `/tutorial?from=settings`
+  - 不弹清空确认，不调用 reset，不修改本地数据
+- 更新 `src/app/shell/AppShell.tsx`：
+  - `/tutorial` 与 `/setup` 一样隐藏主导航，避免教学过程被侧栏打断
+- 更新 `src/styles/globals.css`：
+  - 新增教学页布局、进度条、内容卡片和设置页重看入口样式
+  - 补充移动端单列布局
+
+### 关键决策
+- 教学页作为独立 `/tutorial` 页面实现，不复用会写初始化配置的 `/setup`。
+- 第一版仍不新增持久化字段，不记录教学完成时间或观看次数。
+- 设置页“重看功能教学”是非破坏性动作，因此不复用“重置应用”的确认弹窗。
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- 首次初始化流程需要在干净数据环境下手动验证 `/setup -> /tutorial -> /`。
+- 设置页重看入口需要手动验证不会清空 Todo、种草、日志、设置、同步目标或自动备份信息。
+
+## 2026-07-02（V2.4D 文档设计：初始化页与功能教学）
+
+### 本轮目标
+- 仅修改文档，不改业务代码。
+- 将初始化页优化正式计入 `V2.4D`。
+- 明确：
+  - 首次初始化页需要承担开局配置与功能教学
+  - 设置页 `重置应用` 区域需要新增 `重看功能教学`
+  - 重看教学不得清空当前本地数据
+
+### 本轮修改
+- 更新 `product-rules.md`：
+  - 新增 V2.4 初始化页与功能教学规则
+  - 明确 `/setup` 继续服务首次初始化
+  - 建议新增 `/tutorial` 服务已初始化用户重看教学
+  - 明确重看教学不清空 Todo、种草、日志、设置、同步目标或自动备份信息
+  - 明确第一版不新增持久化字段记录教学完成时间
+- 更新 `task-list.md`：
+  - V2.4 标题纳入初始化教学
+  - 新增任务组 D：初始化页与功能教学
+  - 当前状态标记为 D 文档设计完成，代码待实现
+- 更新 `manual-test-checklist.md`：
+  - 新增 `10G. 初始化页与功能教学`
+  - 补充设置页 `重看功能教学` 的不清数据验收
+  - 补充 `重看功能教学` 不需要清空数据确认
+- 更新 `data-model.md`：
+  - 说明 V2.4D 第一版不新增持久化字段
+  - `initialized` 仍只表示是否完成首次初始化
+- 更新 `handoff.md`：
+  - 记录 V2.4D 文档设计完成、代码未实现
+
+### 关键决策
+- 不通过重置 `settings.initialized` 来实现重看教学。
+- 不复用会保存初始化配置的首次 `/setup` 流程给已初始化用户。
+- 第一版使用独立 `/tutorial` 路由承载重看教学更清晰。
+- 第一版不新增 `onboardingCompletedAt` 等未使用字段，避免无意义 migration。
+
+### 当前验证
+- 本轮仅修改 Markdown 文档，未运行代码测试。
+
+### 未解决问题
+- V2.4D 代码尚未实现。
+- 教学页最终文案、步骤数和视觉细节仍待实现时落地确认。
+
+## 2026-07-01（V2.4C：分步 Todo）
+
+### 本轮目标
+- 实现 V2.4C：
+  - 新增分步 Todo
+  - 分步与分次互斥
+  - 完成当前步骤后自动创建下一步 Todo
+
+### 本轮修改
+- 数据模型：
+  - `DayPlanItem` 新增 `isStepped / currentStep / nextStep / stepRootItemId / previousStepItemId`
+  - `TaskTemplate` 新增 `isStepped / currentStep / nextStep`
+  - JSON app data schema version 升到 `12`
+  - SQLite schema version 升到 `6`
+  - SQLite 为 `task_templates` 和 `day_plan_items` 补分步相关列
+  - 旧 JSON / SQLite 数据默认补为非分步
+  - 若导入数据同时标记分次与分步，则按分步优先，关闭分次
+- Todo 表单：
+  - 在 `必要 / 分次` 控件组中新增 `分步`
+  - `分步` 与 `分次` 互斥
+  - 开启分步后显示 `当前` 与 `下一步` 输入
+  - 人工验证后，将分步输入 UI 调整为同一行显示：`当前步骤：输入框` / `下一步：输入框`
+  - `当前` 必填，`下一步` 可空
+- Todo 展示：
+  - 分步 Todo 列表标题按 `事项内容：当前步骤` 派生显示
+  - 基础 `title` 不反写拼接标题
+  - 日志快照使用派生显示标题
+- 完成逻辑：
+  - 完成分步 Todo 时，当前 Todo 正常完成
+  - 若 `下一步` 非空，自动创建新的 pending Todo
+  - 新 Todo 沿用基础标题，`当前` 取上一条 `下一步`
+  - 新 Todo 的 `下一步` 初始为空
+  - 新 Todo 不继承 `deadlineDate`
+  - 新 Todo 不继承必要状态
+  - 新 Todo 记录 `previousStepItemId`，并沿用 / 初始化 `stepRootItemId`
+  - 已加防重复生成保护：同一上一步已有未删除下一步时，不再重复创建
+- 桌面日切 / 重复生成：
+  - `electron/selected-date-state.ts` 同步补充分步字段，避免后台准备今日状态时丢步骤
+- SQLite 测试：
+  - 在现有 CRUD 测试中补充分步字段写入、读取、更新断言。
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts`：通过，`19` 项
+- `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts`：通过，`3` 项
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断。
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- 取消完成当前步骤时，第一版不自动删除已经生成的下一步；这是本轮确认后的保守策略。
+
+## 2026-07-01（V2.4B：拔草删除语义重构）
+
+### 本轮目标
+- 实现 V2.4B：
+  - 拔草 Todo 删除不再自动回到种草清单
+  - 新增独立“回到种草清单”动作
+  - 调整 Todo 条目操作区布局
+
+### 本轮修改
+- 更新 Todo 操作语义：
+  - 删除来自种草的拔草 Todo 时，只删除当前 Todo，不恢复原种草模板
+  - 删除拔草 Todo 前增加二次确认
+  - 人工验证后，将彻底删除确认文案调整为：“这是一条来自种草清单的todo，彻底删除后不会返回种草清单，确定要删除吗？”
+  - “回到种草清单”动作不做二次确认，也不弹额外成功反馈
+  - 点击“回到种草清单”后，将当前 Todo 标记为 deleted，并把对应种草模板恢复为 `grassStatus: active`、`isArchived: false`
+- 更新 Todo 条目布局：
+  - 编辑按钮从右侧操作区移动到事项标题后方
+  - 未完成拔草 Todo 的右侧显示返回箭头按钮
+  - 普通 Todo 不显示返回箭头按钮
+  - 已完成拔草 Todo 不显示返回箭头按钮
+- 更新图标：
+  - 新增 `ReturnIcon`，用于“回到种草清单”
+- 更新样式：
+  - 标题旁编辑按钮尺寸压缩
+  - 返回按钮 hover 使用成功色
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断。
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- C：分步 Todo 仍未实现。
+
+## 2026-06-30（V2.4A：备注替代准备 + 夜间新增默认）
+
+### 本轮目标
+- 实现 V2.4A：
+  - 备注替代准备
+  - 夜间新增 Todo 默认归属晚上，含起止小时配置
+- 本轮不实现：
+  - B：拔草删除语义重构
+  - C：分步 Todo
+
+### 本轮修改
+- 更新 settings 数据模型：
+  - `defaultNightTodoByTimeEnabled`
+  - `defaultNightTodoStartHour`
+  - `defaultNightTodoEndHour`
+- 更新：
+  - `src/types/models.ts`
+  - `electron/types.ts`
+  - `src/db/schema.ts`
+  - `src/db/storage.ts`
+  - `electron/sqlite.ts`
+  - `src/mocks/app-data.ts`
+  - `electron/test-fixtures.ts`
+- SQLite schema version 升到 `5`。
+- JSON app data schema version 升到 `11`。
+- SQLite 启动迁移会为旧 settings 表补齐夜间默认相关列。
+- JSON 旧备份导入会为缺失夜间默认字段补默认值：
+  - 关闭
+  - `17`
+  - `23`
+- 设置页新增“新增 Todo 默认时段”区：
+  - 开启 / 关闭
+  - 开始小时
+  - 结束小时
+- Todo 新增表单：
+  - 移除 `准备` 开关
+  - 新增常驻单行 `备注` 输入
+  - 备注可空，不阻止提交
+  - 有备注时继续写入 `preparationNotes`
+  - `requiresPreparation` 作为兼容派生布尔：备注非空时为 true
+- Todo 列表：
+  - 旧 `前置准备内容：...` 改为 `备注：...`
+  - 旧数据只要有 `preparationNotes`，即可按备注展示
+- Todo 新增默认时段：
+  - 设置关闭时默认白天
+  - 设置开启且当前小时命中夜间区间时默认晚上
+  - 支持跨午夜区间
+  - 编辑已有 Todo 不受默认规则影响
+- 更新样式：
+  - 备注单行输入
+  - 设置页小时选择控件
+- 新增测试：
+  - 旧备份缺夜间默认设置时补默认值
+- 追加 UI 微调：
+  - 备注输入框从附加设置区中移出
+  - 现在位于 Todo 内容输入框下方、`必要 / 分次` 控件上方
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts`：通过，`19` 项
+- `corepack pnpm run lint`：通过
+- `corepack pnpm run build:desktop`：通过
+- `build:desktop` 仍有 Vite 大 chunk warning，不阻断。
+
+### 未解决问题
+- 尚未进行 Electron 人工交互验证。
+- B / C 仍未实现。
+
+## 2026-06-30（V2.4 文档规划：备注、夜间默认、拔草语义、分步）
+
+### 本轮目标
+- 先按用户要求只修改文档，不改业务代码。
+- 明确 V2.4 实施顺序：
+  - A：备注替代准备 + 夜间新增 Todo 默认归属晚上
+  - B：拔草删除语义重构
+  - C：分步 Todo
+- 工作日 Todo 因缺少可靠节假日 / 调休日历来源，暂缓不做。
+
+### 本轮修改
+- 更新 `product-rules.md`：
+  - 新增 V2.4 备注替代准备规则
+  - 新增夜间新增默认归属规则
+  - 新增分步 Todo 规则
+  - 明确工作日 Todo 暂缓
+  - 修改拔草 Todo 删除语义：删除不再恢复种草，新增独立“回到种草清单”动作
+- 更新 `data-model.md`：
+  - 为 TodoItem 补充分步字段建议
+  - 明确 `requiresPreparation / preparationNotes` 的 V2.4 兼容语义
+  - 为 AppSettings 补充夜间默认相关字段建议
+- 更新 `task-list.md`：
+  - 新增 V2.4 任务章节
+  - 按 A / B / C 拆分实现顺序
+- 更新 `manual-test-checklist.md`：
+  - 新增 V2.4 验收口径
+  - 将 `普通条目 / 拔草条目` 的目标文案收口为 `TODO / 拔草`
+  - 增加备注、夜间默认、拔草返回、分步 Todo 的手测项
+  - 移除“删除拔草 Todo 自动恢复种草”的旧验收口径
+- 更新 `handoff.md`：
+  - 记录 V2.4 当前只完成文档规划，尚未代码实现
+
+### 关键决策
+- 暂不实现工作日 Todo，避免只做“跳过周末”而无法满足节假日 / 调休语义。
+- 备注替代准备时保留旧字段兼容，不要求立刻删除 `requiresPreparation`。
+- 拔草 Todo 的删除与“回到种草清单”拆成两个明确动作。
+- 分步 Todo 与分次 Todo 第一版互斥。
+- 分步 Todo 自动创建下一步时不继承 DDL，DDL 只属于当前这一步。
+- “回到种草清单”不需要二次确认，也不需要额外成功反馈。
+- 彻底删除拔草 Todo 需要二次确认。
+
+### 当前验证
+- 本轮仅修改 Markdown 文档，未运行代码测试。
+
+### 未解决问题
+- 暂无新增未解决规则点。
+
 ## 2026-06-08（V2.3 Release 文案与 README 更新）
 
 ### 本轮修改

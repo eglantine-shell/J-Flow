@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, screen, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
@@ -310,6 +310,42 @@ const registerAppIpc = () => {
   }))
 
   ipcMain.handle('app:get-data-path', async () => ensureDataDirectory())
+
+  ipcMain.handle('window:expand-for-tutorial', (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender) ?? mainWindow
+
+    if (!window || window.isDestroyed()) {
+      return {
+        adjusted: false,
+        bounds: null,
+      }
+    }
+
+    if (window.isMinimized()) {
+      window.restore()
+    }
+
+    const currentBounds = window.getBounds()
+    const workArea = screen.getDisplayMatching(currentBounds).workArea
+    const width = Math.min(currentBounds.width, workArea.width)
+    const x = Math.min(
+      Math.max(currentBounds.x, workArea.x),
+      workArea.x + workArea.width - width,
+    )
+    const nextBounds = {
+      x,
+      y: workArea.y,
+      width,
+      height: workArea.height,
+    }
+
+    window.setBounds(nextBounds, true)
+
+    return {
+      adjusted: true,
+      bounds: nextBounds,
+    }
+  })
 
   ipcMain.handle('app:get-storage-info', async () => {
     const dataPath = await ensureDataDirectory()

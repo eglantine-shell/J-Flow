@@ -61,6 +61,9 @@ export const taskTemplateSchema = z.object({
   repeatIntervalUnit: repeatIntervalUnitSchema.optional(),
   repeatIntervalValue: repeatIntervalValueSchema.optional(),
   isSegmented: z.boolean(),
+  isStepped: z.boolean(),
+  currentStep: z.string(),
+  nextStep: z.string(),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
   grassStatus: grassStatusSchema.optional(),
@@ -128,6 +131,11 @@ export const dayPlanItemSchema = z.object({
   requiresPreparation: z.boolean(),
   preparationNotes: z.string(),
   isSegmented: z.boolean(),
+  isStepped: z.boolean(),
+  currentStep: z.string(),
+  nextStep: z.string(),
+  stepRootItemId: z.string().min(1).optional(),
+  previousStepItemId: z.string().min(1).optional(),
   progressState: z.enum(['not_started', 'in_progress', 'completed']),
   progressPercent: progressPercentSchema,
   status: z.enum(['pending', 'completed', 'deleted']),
@@ -272,6 +280,9 @@ export const appSettingsSchema = z.object({
     z.literal(10),
     z.literal(30),
   ]),
+  defaultNightTodoByTimeEnabled: z.boolean(),
+  defaultNightTodoStartHour: z.number().int().min(0).max(23),
+  defaultNightTodoEndHour: z.number().int().min(0).max(23),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
 }) satisfies z.ZodType<AppSettings>
@@ -288,7 +299,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 10
+export const APP_DATA_SCHEMA_VERSION = 12
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

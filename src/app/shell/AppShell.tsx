@@ -7,6 +7,7 @@ import {
   LogbookIcon,
   SettingsIcon,
 } from '@/components/ui/Icons'
+import { TutorialOverlay } from '@/features/tutorial/TutorialOverlay'
 
 type AppShellContextValue = {
   selectedDate: Date
@@ -90,7 +91,7 @@ function CalendarSidebar({
   }, [monthDays])
 
   return (
-    <section className="sidebar-calendar">
+    <section className="sidebar-calendar" data-tutorial-id="sidebar-calendar">
       <div className="sidebar-calendar__toolbar">
         <button
           className="icon-button icon-button--toolbar"
@@ -187,10 +188,54 @@ export function AppShell() {
     document.addEventListener('visibilitychange', refreshToday)
     refreshToday()
 
+    const handleTutorialSelectDate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ date?: string }>
+      const date = customEvent.detail?.date
+
+      if (!date) {
+        return
+      }
+
+      const [year, month, day] = date.split('-').map(Number)
+
+      if (!year || !month || !day) {
+        return
+      }
+
+      setSelectedDate(new Date(year, month - 1, day))
+    }
+
+    const handleTutorialExit = (event: Event) => {
+      const customEvent = event as CustomEvent<{ date?: string }>
+      const date = customEvent.detail?.date
+
+      if (date) {
+        const [year, month, day] = date.split('-').map(Number)
+
+        if (year && month && day) {
+          const nextToday = new Date(year, month - 1, day)
+
+          setToday(nextToday)
+          setSelectedDate(nextToday)
+          return
+        }
+      }
+
+      const nextToday = getStartOfToday()
+
+      setToday(nextToday)
+      setSelectedDate(nextToday)
+    }
+
+    window.addEventListener('jflow:tutorial-select-date', handleTutorialSelectDate)
+    window.addEventListener('jflow:tutorial-exit', handleTutorialExit)
+
     return () => {
       window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshToday)
       document.removeEventListener('visibilitychange', refreshToday)
+      window.removeEventListener('jflow:tutorial-select-date', handleTutorialSelectDate)
+      window.removeEventListener('jflow:tutorial-exit', handleTutorialExit)
     }
   }, [])
 
@@ -213,74 +258,81 @@ export function AppShell() {
 
           {showPrimaryNavigation ? (
             <>
-              <section className="sidebar-today">
-                <div className="sidebar-today__toolbar">
-                  <button
-                    className="icon-button icon-button--toolbar sidebar-today__nav-button"
-                    type="button"
-                    aria-label="前一天"
-                    onClick={() => {
-                      setSelectedDate((current) => addDays(current, -1))
-                    }}
-                  >
-                    ‹
-                  </button>
+              <div className="sidebar-date-zone" data-tutorial-id="sidebar-date-zone">
+                <section className="sidebar-today">
+                  <div className="sidebar-today__toolbar">
+                    <button
+                      className="icon-button icon-button--toolbar sidebar-today__nav-button"
+                      type="button"
+                      aria-label="前一天"
+                      onClick={() => {
+                        setSelectedDate((current) => addDays(current, -1))
+                      }}
+                    >
+                      ‹
+                    </button>
 
-                  <div className="sidebar-today__label-group">
-                    <span className="sidebar-today__eyebrow">This Day</span>
-                    <strong>{formatTodayLabel(selectedDate)}</strong>
+                    <div className="sidebar-today__label-group">
+                      <span className="sidebar-today__eyebrow">This Day</span>
+                      <strong>{formatTodayLabel(selectedDate)}</strong>
+                    </div>
+
+                    <button
+                      className="icon-button icon-button--toolbar sidebar-today__nav-button"
+                      type="button"
+                      aria-label="后一天"
+                      onClick={() => {
+                        setSelectedDate((current) => addDays(current, 1))
+                      }}
+                    >
+                      ›
+                    </button>
                   </div>
+                </section>
 
-                  <button
-                    className="icon-button icon-button--toolbar sidebar-today__nav-button"
-                    type="button"
-                    aria-label="后一天"
-                    onClick={() => {
-                      setSelectedDate((current) => addDays(current, 1))
-                    }}
-                  >
-                    ›
-                  </button>
-                </div>
-              </section>
-
-              <CalendarSidebar
-                selectedDate={selectedDate}
-                today={today}
-                onSelectDate={(date) => {
-                  setSelectedDate(date)
-                }}
-              />
+                <CalendarSidebar
+                  selectedDate={selectedDate}
+                  today={today}
+                  onSelectDate={(date) => {
+                    setSelectedDate(date)
+                  }}
+                />
+              </div>
 
               <nav className="sidebar-nav" aria-label="主导航">
                 <Link
+                  data-tutorial-id="todo-nav"
                   className={location.pathname === '/' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
                   to="/"
                 >
                   <CalendarIcon className="sidebar-nav__icon" />
                   <span>TODO</span>
                 </Link>
-                <Link
-                  className={location.pathname === '/grass-list' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
-                  to="/grass-list"
-                >
-                  <ListIcon className="sidebar-nav__icon" />
-                  <span>种草清单</span>
-                </Link>
-                <Link
-                  className={location.pathname === '/logbook' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
-                  to="/logbook"
-                >
-                  <LogbookIcon className="sidebar-nav__icon" />
-                  <span>日志</span>
-                </Link>
-                <Link
-                  className={location.pathname === '/settings' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
-                  to="/settings"
-                >
-                  <SettingsIcon className="sidebar-nav__icon" />
-                  <span>设置</span>
-                </Link>
+                <div className="sidebar-nav__secondary" data-tutorial-id="sidebar-secondary-nav">
+                  <Link
+                    data-tutorial-id="grass-nav"
+                    className={location.pathname === '/grass-list' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
+                    to="/grass-list"
+                  >
+                    <ListIcon className="sidebar-nav__icon" />
+                    <span>种草清单</span>
+                  </Link>
+                  <Link
+                    className={location.pathname === '/logbook' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
+                    to="/logbook"
+                  >
+                    <LogbookIcon className="sidebar-nav__icon" />
+                    <span>日志</span>
+                  </Link>
+                  <Link
+                    data-tutorial-id="settings-nav"
+                    className={location.pathname === '/settings' ? 'sidebar-nav__item sidebar-nav__item--active' : 'sidebar-nav__item'}
+                    to="/settings"
+                  >
+                    <SettingsIcon className="sidebar-nav__icon" />
+                    <span>设置</span>
+                  </Link>
+                </div>
               </nav>
             </>
           ) : null}
@@ -292,6 +344,7 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      <TutorialOverlay />
     </div>
   )
 }

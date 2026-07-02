@@ -135,6 +135,9 @@ type DecisionSelectedOptions = {
   requiresPreparation: boolean
   preparationNotes: string
   isSegmented: boolean
+  isStepped: boolean
+  currentStep: string
+  nextStep: string
 }
 
 export async function createDecisionSelectedDayPlanItem({
@@ -191,7 +194,10 @@ export async function createDecisionSelectedDayPlanItem({
     deadlineDate: options.deadlineDate,
     requiresPreparation: options.requiresPreparation,
     preparationNotes: options.preparationNotes,
-    isSegmented: options.isSegmented,
+    isSegmented: options.isStepped ? false : options.isSegmented,
+    isStepped: options.isStepped,
+    currentStep: options.isStepped ? options.currentStep : '',
+    nextStep: options.isStepped ? options.nextStep : '',
     progressState: carryover && carryover.progressPercent > 0 ? 'in_progress' : 'not_started',
     progressPercent: carryover?.progressPercent ?? 0,
     status: 'pending',
@@ -213,6 +219,7 @@ export async function createDecisionSelectedDayPlanItem({
   const updatedItem = await appDataRepository.dayPlanItems.update({
     id: createdItem.id,
     rootItemId: createdItem.id,
+    stepRootItemId: options.isStepped ? createdItem.id : undefined,
   })
 
   await appDataRepository.taskTemplates.update({

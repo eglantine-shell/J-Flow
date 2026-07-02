@@ -35,6 +35,16 @@ J-Flow 接下来采用“一套业务 UI，两种运行壳”的结构：
 - 备份
 - 桌面系统能力
 
+### 1.1 V2.4D 真实 UI 教学态结构
+- 真实 UI 教学态属于 renderer 侧 UI 能力，不属于 Electron main / preload 桌面能力。
+- 教学态应由前端 fixture / view model 提供独立 demo 数据。
+- 教学态必须复用真实页面视觉与组件，不应调用真实 repository 写入路径。
+- 教学栏放在底部独立 rail 中，真实 UI 内容区为 rail 让位。
+- 桌面端进入教学态时，renderer 通过受控 preload bridge 请求 main process 将窗口高度调整到当前屏幕可用最大高度。
+- 窗口扩高不进入全屏，不直接暴露窗口对象给 renderer。
+- 当前步骤控制高亮目标区域，高亮框内亮度提高，框外区域压暗。
+- 教学步骤可展示首页、种草清单、设置页、日志等关键区域，但展示数据应来自 demo 数据而非用户真实数据。
+
 ---
 
 ## 二、Electron 分层

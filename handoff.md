@@ -1,5 +1,223 @@
 # 项目交接摘要
 
+## 最新状态（2026-07-02，V2.4 确认完成但未经实际使用测试，优先参考）
+- V2.4 已确认完成：
+  - A：备注替代准备 + 夜间新增 Todo 默认归属晚上
+  - B：拔草删除语义重构
+  - C：分步 Todo
+  - D：初始化页与真实 UI 使用教学
+- 当前状态说明：
+  - 已完成代码实现、文档更新与基础自动化验证
+  - 已完成浏览器 / 构建层面的烟测
+  - 尚未经过持续真实使用测试
+  - 后续正式使用中仍需重点观察数据迁移、日常新增 / 编辑 / 删除、教学流程与同步设置在真实数据下的表现
+- 本轮已实现：
+  - 备注替代准备
+  - 夜间新增 Todo 默认归属晚上，含起止小时配置
+  - 拔草删除语义重构
+  - 分步 Todo
+- D：初始化页与功能教学已按“真实 J-Flow UI + 独立 demo 数据源”重做。
+- 本轮进一步优化 D 的教学呈现：
+  - 设置页原“重置应用”卡片改为 `初始化与使用教学`
+  - GUIDE 卡片说明文案为：`重置应用后会清空当前本地应用数据，并回到第一次打开应用的初始化流程；也可以在此重看使用教学。`
+  - GUIDE 卡片按钮为同级的 `重置应用` 与 `使用教学`
+  - GUIDE 区域不再使用内层说明卡片，说明文案下方直接显示按钮
+  - 教学栏改为真实 UI 之外的底部独立 rail
+  - Electron 桌面端进入教学态时，会通过受控 bridge 尽量将窗口高度调整到当前屏幕可用最大高度
+  - 教学态底部 rail 与真实 UI 工作区之间的空白已收紧
+  - 跳过 / 完成教学后会恢复真实今天并触发真实数据重新加载
+  - 高亮框内亮度提高，框外区域压暗
+  - Guide 1 高亮侧栏 `THIS DAY` 与日历整体区域
+  - Guide 2 保持在首页，展开下方真实 `种草` 输入区，并高亮完整种草卡片
+  - Guide 3 使用拔草模式并勾选分次，同时展示备注输入区
+  - 原 Guide 8 完成区导览已删除，后续同步与更多页面说明顺延
+  - 当前最后一步显示种草清单页面，同时高亮侧栏下方 `种草清单 / 日志 / 设置` 导航区
+- 已更新：
+  - `product-rules.md`
+  - `data-model.md`
+  - `task-list.md`
+  - `manual-test-checklist.md`
+  - `dev-log.md`
+  - `handoff.md`
+- V2.4 A/B/C 代码实现涉及：
+  - `src/types/models.ts`
+  - `electron/types.ts`
+  - `src/db/schema.ts`
+  - `src/db/storage.ts`
+  - `electron/sqlite.ts`
+  - `electron/selected-date-state.ts`
+  - `src/mocks/app-data.ts`
+  - `electron/test-fixtures.ts`
+  - `src/features/settings/SettingsPanel.tsx`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/features/todo/todo-view-model.ts`
+  - `src/components/ui/Icons.tsx`
+  - `src/styles/globals.css`
+  - `src/db/storage.test.ts`
+  - `src/features/logbook/logbook-service.ts`
+  - `src/features/recurrence/auto-generated.ts`
+  - `src/features/decision/recommendation.ts`
+  - `electron/sqlite.test.ts`
+- V2.4 D 代码实现涉及：
+  - `src/features/tutorial/TutorialOverlay.tsx`
+  - `src/features/tutorial/tutorial-demo-data.ts`
+  - `src/db/storage.ts`
+  - `src/app/router.tsx`
+  - `src/app/shell/AppShell.tsx`
+  - `src/pages/logbook/LogbookPage.tsx`
+  - `src/pages/setup/SetupPage.tsx`
+  - `src/pages/grass-list/GrassListPage.tsx`
+  - `src/features/settings/SettingsPanel.tsx`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `src/styles/globals.css`
+  - `electron/main.ts`
+  - `electron/preload.cts`
+  - `src/vite-env.d.ts`
+- 数据模型变化：
+  - `AppSettings` 新增：
+    - `defaultNightTodoByTimeEnabled`
+    - `defaultNightTodoStartHour`
+    - `defaultNightTodoEndHour`
+  - JSON app data schema version：`12`
+  - SQLite schema version：`6`
+  - `TaskTemplate` 新增：
+    - `isStepped`
+    - `currentStep`
+    - `nextStep`
+  - `DayPlanItem` 新增：
+    - `isStepped`
+    - `currentStep`
+    - `nextStep`
+    - `stepRootItemId`
+    - `previousStepItemId`
+- 兼容策略：
+  - 旧 SQLite settings 表启动时补齐夜间默认列
+  - 旧 SQLite task_templates / day_plan_items 表启动时补齐分步列
+  - 旧 JSON 备份导入时补齐夜间默认字段
+  - 旧 JSON 备份导入时补齐分步默认字段
+  - 旧 `preparationNotes` 继续展示为 `备注：...`
+  - `requiresPreparation` 作为兼容派生布尔保留
+  - 若导入数据同时标记分次与分步，则按分步优先并关闭分次
+- 当前行为：
+  - Todo 表单不再显示 `准备` 开关
+  - Todo 表单显示常驻单行 `备注` 输入
+  - 备注输入位于 Todo 内容输入框下方、`必要 / 分次` 控件上方
+  - 备注可空，不阻止提交
+  - 有备注时保存到当前 Todo
+  - 设置页新增“新增 Todo 默认时段”
+  - 默认关闭，默认小时为 `17-23`
+  - 开启后新增表单按当前本地小时默认白天 / 晚上
+  - 编辑已有 Todo 不受该默认设置影响
+  - 删除拔草 Todo 不再自动恢复种草
+  - 未完成拔草 Todo 右侧显示“回到种草清单”返回箭头
+  - 点击返回箭头时无二次确认、无额外成功反馈，并恢复对应种草模板
+  - 彻底删除拔草 Todo 需要二次确认，确认后永久删除当前 Todo
+  - 编辑按钮已移动到 Todo 标题后方，右侧操作区保留来源动作、完成勾选和删除
+  - Todo 表单新增 `分步`
+  - `分步` 与 `分次` 互斥
+  - 开启分步后显示 `当前` 与 `下一步` 输入
+  - 分步 Todo 显示为 `事项内容：当前步骤`
+  - 完成分步 Todo 时，若 `下一步` 非空，自动创建新的 pending Todo
+  - 自动创建的下一步不继承 DDL，也不继承必要状态
+  - 取消完成当前步骤时，不自动删除已经生成的下一步
+- V2.4D 最新确认规则：
+  - 初始化页需承担首次开局配置与核心功能教学
+  - `/setup` 继续服务首次初始化
+  - 功能教学应为真实 UI 教学态，不能再做脱离 J-Flow 真实界面的独立演示舞台
+  - 真实 UI 教学态使用独立 demo 数据，不展示或操作用户当前真实数据
+  - demo 数据不得写入 SQLite / IndexedDB
+  - demo 数据不得进入 JSON 导出 / 导入 / 自动备份 / 同步协议
+  - 教学栏位于底部独立 rail，真实 UI 内容区为底部 rail 让位
+  - Electron 桌面端进入教学态时，窗口高度尽量调整到当前屏幕可用最大高度
+  - 当前介绍区域显示高亮框
+  - 高亮框内亮度应高于周围，框外区域压暗
+  - 教学栏不应遮挡被介绍的关键 UI
+  - 使用 `?tutorial=1` 启动教学演示模式
+  - 设置页提供 `初始化与使用教学` 卡片
+  - `使用教学` 不清空当前本地数据
+  - `使用教学` 不重置 Todo、种草、日志、设置、同步目标或自动备份信息
+  - 第一版不新增持久化字段记录教学完成时间
+- V2.4D 当前代码状态：
+  - 首次 `/setup` 保存初始化配置后跳转 `/?tutorial=1`
+  - 设置页 `使用教学` 跳转 `/?tutorial=1`
+  - `?tutorial=1` 时 `storage.ts` 切换到内存 demo AppData
+  - 教学态不调用 Desktop SQLite bridge
+  - 教学态不读取真实同步目标或备份信息
+  - `TutorialOverlay` 只负责底部教学栏、步骤切换和真实 DOM 高亮
+  - 教学继续渲染 J-Flow 真实页面、真实组件、真实样式
+  - 第 3-7 步会延迟触发真实 Todo 输入面板展开，确保必要 / DDL / 分步 / 分次 / 重复控件可被高亮
+  - 教学栏位于底部独立 rail，真实 UI 内容区会让位
+  - `TutorialOverlay` 进入教学态时调用 `window.jflowDesktop.expandWindowForTutorial()`
+  - Electron main process 通过 `window:expand-for-tutorial` IPC 调整窗口高度，不进入全屏
+  - 当前介绍区域显示高亮框
+  - 高亮框滚动避让底部教学 rail
+  - 教学完成或跳过后回到真实首页，并派发 `jflow:tutorial-exit`
+  - AppShell 收到 `jflow:tutorial-exit` 后将 `today / selectedDate` 恢复为真实今天
+  - 旧独立 `/tutorial` 页面已撤掉
+- V2.4D 目标教学流程：
+  - 日期：高亮 `THIS DAY` 与侧栏日历区，说明当前查看日期与今天的不同高亮
+  - 首页下方种草入口：不切换到种草清单页，展开真实种草输入区，说明 tag、兴趣程度与批量添加
+  - Todo 输入面板：展示 `TODO / 拔草` 切换、拔草条目语境、分次勾选和备注输入区
+  - 日夜切换，并介绍设置页可开启夜间新增默认归属晚上
+  - 必要按钮 + DDL 区，说明分步事项的 DDL 只属于当前这一步
+  - 分步和分次
+  - 重复，说明按日历重复与完成后重复的差异
+  - 同步功能，说明本地文件夹同步与外部同步目录配合
+  - 种草清单、日志和其他设置：显示种草清单页并高亮侧栏下方导航区
+- 当前验证：
+  - `corepack pnpm exec tsc --noEmit`：通过
+  - `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts`：通过，`19` 项
+  - `corepack pnpm exec vitest run src/features/logbook/logbook-service.test.ts`：通过，`3` 项
+  - `corepack pnpm run lint`：通过
+  - `corepack pnpm run build:desktop`：通过
+  - `build:desktop` 仍有 Vite 大 chunk warning，不阻断
+  - 浏览器烟测 `http://localhost:4173/J-Flow/?tutorial=1`：通过
+    - 9 个步骤均在真实 J-Flow 页面中展示
+    - 9 个步骤均找到真实 `data-tutorial-id` 目标并显示高亮
+    - 9 个步骤标题与最新确认文案一致
+    - 第 3-7 步均能正确展开真实 Todo 输入面板
+    - 第 3 步显示拔草模式，且 `分次` 已勾选
+    - 第 8 步显示同步功能
+    - 第 9 步显示种草清单页面，并高亮侧栏下方 `种草清单 / 日志 / 设置` 导航区
+    - 教学栏位于底部独立 rail
+    - 真实 UI 工作区在底部 rail 上方独立滚动
+    - 9 个步骤高亮框均不与底部 rail 重叠
+    - 点击 `跳过` 后 demo 专属条目不再出现在页面文本中
+    - 设置页 GUIDE 卡片文案与 `重置应用 / 使用教学` 按钮显示正确
+- 下一步：
+  - 进入正式自用前，进行一轮真实数据使用测试
+  - 重点观察备注、夜间默认、拔草删除 / 返回、分步 Todo、教学模式和同步设置在真实日常数据下的表现
+
+## 最新状态（2026-06-30，V2.4 文档规划完成，优先参考）
+- 本轮仅修改文档，尚未改业务代码。
+- V2.4 实施顺序已确认：
+  - A：备注替代准备 + 夜间新增 Todo 默认归属晚上，含起止小时配置
+  - B：拔草删除语义重构
+  - C：分步 Todo
+- 工作日 Todo 暂缓：
+  - 原因是若不能可靠导入或维护节假日 / 调休日历，仅跳过周末意义不足
+  - 后续重启前需先定义节假日数据来源、调休工作日处理和用户自定义 / 导入方案
+- 已更新：
+  - `product-rules.md`
+  - `data-model.md`
+  - `task-list.md`
+  - `manual-test-checklist.md`
+  - `dev-log.md`
+- 关键规则变化：
+  - `准备` 不再作为用户需要勾选的 Todo 属性
+  - Todo 内容输入框下方新增常驻单行备注输入
+  - 旧 `preparationNotes` 兼容展示为 `备注：...`
+  - 设置页将新增“夜间新增 Todo 默认归属晚上”开关与起止小时
+  - 来自种草的一次性 Todo 删除后，不再自动恢复原种草
+  - 未完成拔草 Todo 将新增显式“回到种草清单”动作
+  - 分步 Todo 与分次 Todo 第一版互斥
+  - 分步 Todo 显示为 `事项内容：当前步骤`
+  - 分步 Todo 完成后，若下一步非空，自动创建下一步 Todo
+  - 分步 Todo 自动创建下一步时不继承 DDL，DDL 只属于当前这一步
+  - “回到种草清单”不需要二次确认，也不需要额外成功反馈
+  - 彻底删除拔草 Todo 需要二次确认
+- 本轮未运行代码测试，因为没有修改源码。
+
 ## 最新状态（2026-06-08，V2.3 Release 准备，优先参考）
 - README 已从 V2.2 下载口径更新到 V2.3。
 - GitHub Release 建议：

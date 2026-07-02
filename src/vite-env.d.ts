@@ -39,6 +39,15 @@ type DesktopStorageInfo = {
 type JFlowDesktopApi = {
   getAppInfo: () => Promise<DesktopAppInfo>
   getDataPath: () => Promise<string>
+  expandWindowForTutorial: () => Promise<{
+    adjusted: boolean
+    bounds: {
+      x: number
+      y: number
+      width: number
+      height: number
+    } | null
+  }>
   getStorageInfo: () => Promise<DesktopStorageInfo>
   saveJsonBackup: (payload: {
     suggestedFilename: string

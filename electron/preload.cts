@@ -30,6 +30,15 @@ type TaskTemplateUpdateInput = unknown
 contextBridge.exposeInMainWorld('jflowDesktop', {
   getAppInfo: () => ipcRenderer.invoke('app:get-info'),
   getDataPath: () => ipcRenderer.invoke('app:get-data-path'),
+  expandWindowForTutorial: () => ipcRenderer.invoke('window:expand-for-tutorial') as Promise<{
+    adjusted: boolean
+    bounds: {
+      x: number
+      y: number
+      width: number
+      height: number
+    } | null
+  }>,
   getStorageInfo: () => ipcRenderer.invoke('app:get-storage-info') as Promise<{
     dataPath: string
     databasePath: string

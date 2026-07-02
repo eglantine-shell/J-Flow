@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 
 import type { AppShellContextValue } from '@/app/shell/AppShell'
@@ -12,6 +12,24 @@ export function HomePage() {
   const [canSaveGrass, setCanSaveGrass] = useState(false)
   const [isSavingGrass, setIsSavingGrass] = useState(false)
 
+  useEffect(() => {
+    const handleTutorialOpenGrassComposer = () => {
+      setShowComposer(true)
+    }
+
+    const handleTutorialCloseGrassComposer = () => {
+      setShowComposer(false)
+    }
+
+    window.addEventListener('jflow:tutorial-open-grass-composer', handleTutorialOpenGrassComposer)
+    window.addEventListener('jflow:tutorial-close-grass-composer', handleTutorialCloseGrassComposer)
+
+    return () => {
+      window.removeEventListener('jflow:tutorial-open-grass-composer', handleTutorialOpenGrassComposer)
+      window.removeEventListener('jflow:tutorial-close-grass-composer', handleTutorialCloseGrassComposer)
+    }
+  }, [])
+
   return (
     <div className="home-layout home-layout--desktop">
       <section className="home-main home-main--workspace">
@@ -19,7 +37,10 @@ export function HomePage() {
       </section>
 
       <section className="home-layout__composer">
-        <div className="surface-card surface-card--compact home-dock-card home-dock-card--sheet">
+        <div
+          className="surface-card surface-card--compact home-dock-card home-dock-card--sheet"
+          data-tutorial-id="home-grass-dock"
+        >
           <div className="composer-entry composer-entry--toolbar">
             <div className="composer-entry__summary">
               <p className="eyebrow">Grass</p>

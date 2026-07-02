@@ -7,6 +7,7 @@ import {
 } from '@/db/schema'
 import { normalizeCompletedAtRoundingMinutes } from '@/features/todo/completed-at-rounding'
 import { resolveRepeatRule, serializeRepeatRule } from '@/features/recurrence/repeat-rule'
+import { tutorialDemoAppData } from '@/features/tutorial/tutorial-demo-data'
 import { mockSeedAppData } from '@/mocks'
 import type {
   ActivityType,
@@ -34,16 +35,41 @@ type SceneTagCreateInput = Omit<SceneTag, 'id' | 'createdAt' | 'updatedAt'> &
 type ActivityTypeCreateInput = Omit<ActivityType, 'id' | 'createdAt' | 'updatedAt'> &
   Partial<Pick<ActivityType, 'id' | 'createdAt' | 'updatedAt'>>
 
-type TaskTemplateCreateInput = Omit<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date'> &
-  Partial<Pick<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date'>>
+type TaskTemplateCreateInput = Omit<
+  TaskTemplate,
+  'id' | 'createdAt' | 'updatedAt' | 'date' | 'isStepped' | 'currentStep' | 'nextStep'
+> &
+  Partial<Pick<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date' | 'isStepped' | 'currentStep' | 'nextStep'>>
 
 type RecurringTaskInstanceCreateInput = Omit<
   RecurringTaskInstance,
   'id' | 'generatedAt' | 'updatedAt'
 > & Partial<Pick<RecurringTaskInstance, 'id' | 'generatedAt' | 'updatedAt'>>
 
-type DayPlanItemCreateInput = Omit<DayPlanItem, 'id' | 'createdAt' | 'updatedAt'> &
-  Partial<Pick<DayPlanItem, 'id' | 'createdAt' | 'updatedAt'>>
+type DayPlanItemCreateInput = Omit<
+  DayPlanItem,
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'isStepped'
+  | 'currentStep'
+  | 'nextStep'
+  | 'stepRootItemId'
+  | 'previousStepItemId'
+> &
+  Partial<
+    Pick<
+      DayPlanItem,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'isStepped'
+      | 'currentStep'
+      | 'nextStep'
+      | 'stepRootItemId'
+      | 'previousStepItemId'
+    >
+  >
 
 type SceneTagUpdateInput = Partial<Omit<SceneTag, 'id'>> & Pick<SceneTag, 'id'>
 type ActivityTypeUpdateInput = Partial<Omit<ActivityType, 'id'>> & Pick<ActivityType, 'id'>
@@ -55,6 +81,30 @@ const STORAGE_META_KEY = 'app_data_schema_version'
 type AppSettingsUpdateInput = Partial<Omit<AppSettings, 'createdAt' | 'updatedAt'>>
 
 const cloneAppData = (appData: AppData): AppData => structuredClone(appData)
+
+let tutorialMemoryAppData: AppData | null = null
+
+const isTutorialStorageMode = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return new URLSearchParams(window.location.search).get('tutorial') === '1'
+}
+
+const getTutorialMemoryAppData = () => {
+  if (!tutorialMemoryAppData) {
+    tutorialMemoryAppData = appDataSchema.parse(tutorialDemoAppData)
+  }
+
+  return cloneAppData(tutorialMemoryAppData)
+}
+
+const replaceTutorialMemoryAppData = (appData: AppData) => {
+  tutorialMemoryAppData = appDataSchema.parse(appData)
+
+  return cloneAppData(tutorialMemoryAppData)
+}
 
 const nowIso = () => new Date().toISOString()
 
@@ -216,6 +266,12 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
     completedAtRoundingMinutes: normalizeCompletedAtRoundingMinutes(
       appData.settings.completedAtRoundingMinutes,
     ),
+    defaultNightTodoByTimeEnabled:
+      appData.settings.defaultNightTodoByTimeEnabled ?? false,
+    defaultNightTodoStartHour:
+      appData.settings.defaultNightTodoStartHour ?? 17,
+    defaultNightTodoEndHour:
+      appData.settings.defaultNightTodoEndHour ?? 23,
   },
   sceneTags: appData.sceneTags.map((sceneTag) => ({
     ...sceneTag,
@@ -229,6 +285,10 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
     ...template,
     deadlineDate: template.isNecessary ? template.deadlineDate ?? (template.date || undefined) : undefined,
     ...serializeRepeatRule(resolveRepeatRule(template)),
+    isStepped: template.isStepped ?? false,
+    currentStep: template.currentStep ?? '',
+    nextStep: template.nextStep ?? '',
+    isSegmented: template.isStepped ? false : template.isSegmented,
     grassStatus: resolveGrassStatus(template),
     isArchived:
       template.templateKind === 'grass'
@@ -260,6 +320,12 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
     ...item,
     originDate: resolveDayPlanItemOriginDate(item),
     deadlineDate: item.isNecessary ? item.deadlineDate ?? item.date : undefined,
+    isStepped: item.isStepped ?? false,
+    currentStep: item.currentStep ?? '',
+    nextStep: item.nextStep ?? '',
+    isSegmented: item.isStepped ? false : item.isSegmented,
+    stepRootItemId: item.stepRootItemId,
+    previousStepItemId: item.previousStepItemId,
     updatedAt: resolveDayPlanItemUpdatedAt(item),
     deletedAt: item.deletedAt,
   })),
@@ -291,6 +357,10 @@ async function getWebDb() {
 }
 
 const getDesktopStorageApi = () => {
+  if (isTutorialStorageMode()) {
+    return null
+  }
+
   if (typeof window === 'undefined' || !window.jflowDesktop) {
     return null
   }
@@ -463,6 +533,10 @@ async function runDesktopManualSync(): Promise<SyncNowResult> {
 }
 
 async function prepareDesktopCurrentDayState(selectedDateKey?: string) {
+  if (isTutorialStorageMode()) {
+    return getTutorialMemoryAppData()
+  }
+
   const desktopApi = getDesktopStorageApi()
 
   if (!desktopApi?.prepareCurrentDayState) {
@@ -622,6 +696,7 @@ function normalizeActivityType(input: ActivityTypeCreateInput): ActivityType {
 function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
   const timestamp = nowIso()
   const templateKind = input.templateKind ?? 'grass'
+  const isStepped = input.isStepped ?? false
   const grassStatus =
     templateKind === 'grass'
       ? resolveGrassStatus({
@@ -647,7 +722,10 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     repeatType: input.repeatType,
     repeatIntervalUnit: input.repeatIntervalUnit,
     repeatIntervalValue: input.repeatIntervalValue,
-    isSegmented: input.isSegmented,
+    isSegmented: isStepped ? false : input.isSegmented,
+    isStepped,
+    currentStep: isStepped ? input.currentStep?.trim() ?? '' : '',
+    nextStep: isStepped ? input.nextStep?.trim() ?? '' : '',
     createdAt: input.createdAt ?? timestamp,
     updatedAt: input.updatedAt ?? timestamp,
     grassStatus,
@@ -684,6 +762,7 @@ function normalizeRecurringTaskInstance(
 
 function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
   const createdAt = input.createdAt ?? nowIso()
+  const isStepped = input.isStepped ?? false
 
   return {
     id: input.id ?? createId('day-plan-item'),
@@ -706,7 +785,12 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     isNecessary: input.isNecessary,
     requiresPreparation: input.requiresPreparation,
     preparationNotes: input.preparationNotes,
-    isSegmented: input.isSegmented,
+    isSegmented: isStepped ? false : input.isSegmented,
+    isStepped,
+    currentStep: isStepped ? input.currentStep?.trim() ?? '' : '',
+    nextStep: isStepped ? input.nextStep?.trim() ?? '' : '',
+    stepRootItemId: input.stepRootItemId,
+    previousStepItemId: input.previousStepItemId,
     progressState: input.progressState,
     progressPercent: input.progressPercent,
     status: input.status,
@@ -718,6 +802,10 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
 }
 
 export async function initializeAppData(seed: AppData = mockSeedAppData) {
+  if (isTutorialStorageMode()) {
+    return getTutorialMemoryAppData()
+  }
+
   if (isDesktopStorageEnabled()) {
     const appData = await getDesktopAppData()
 
@@ -745,6 +833,10 @@ export async function initializeAppData(seed: AppData = mockSeedAppData) {
 }
 
 export async function getAppData() {
+  if (isTutorialStorageMode()) {
+    return getTutorialMemoryAppData()
+  }
+
   if (isDesktopStorageEnabled()) {
     const appData = await getDesktopAppData()
 
@@ -765,6 +857,10 @@ export async function getAppData() {
 }
 
 export async function exportAppDataSnapshot() {
+  if (isTutorialStorageMode()) {
+    return getTutorialMemoryAppData()
+  }
+
   if (isDesktopStorageEnabled()) {
     return cloneAppData(await exportDesktopAppData())
   }
@@ -773,6 +869,10 @@ export async function exportAppDataSnapshot() {
 }
 
 export async function replaceAppData(appData: AppData) {
+  if (isTutorialStorageMode()) {
+    return replaceTutorialMemoryAppData(appData)
+  }
+
   if (isDesktopStorageEnabled()) {
     return cloneAppData(await replaceDesktopAppData(appData))
   }
@@ -781,6 +881,10 @@ export async function replaceAppData(appData: AppData) {
 }
 
 export async function importAppDataSnapshot(appData: AppData) {
+  if (isTutorialStorageMode()) {
+    return replaceTutorialMemoryAppData(appData)
+  }
+
   if (isDesktopStorageEnabled()) {
     return cloneAppData(await importDesktopAppData(appData))
   }
@@ -789,6 +893,10 @@ export async function importAppDataSnapshot(appData: AppData) {
 }
 
 export async function updateAppData(updater: AppDataUpdater) {
+  if (isTutorialStorageMode()) {
+    return replaceTutorialMemoryAppData(updater(getTutorialMemoryAppData()))
+  }
+
   if (isDesktopStorageEnabled()) {
     const current = (await getDesktopAppData()) ?? parseAppData(mockSeedAppData)
     const next = parseAppData(updater(cloneAppData(current)))
@@ -800,6 +908,10 @@ export async function updateAppData(updater: AppDataUpdater) {
 }
 
 export async function resetAppData(seed: AppData = mockSeedAppData) {
+  if (isTutorialStorageMode()) {
+    return replaceTutorialMemoryAppData(seed)
+  }
+
   if (isDesktopStorageEnabled()) {
     return cloneAppData(await resetDesktopAppData(seed))
   }

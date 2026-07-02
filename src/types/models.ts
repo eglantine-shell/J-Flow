@@ -90,6 +90,9 @@ export interface TaskTemplate {
   repeatIntervalUnit?: RepeatIntervalUnit
   repeatIntervalValue?: number
   isSegmented: boolean
+  isStepped: boolean
+  currentStep: string
+  nextStep: string
   createdAt: string
   updatedAt: string
   grassStatus?: GrassStatus
@@ -136,6 +139,11 @@ export interface DayPlanItem {
   requiresPreparation: boolean
   preparationNotes: string
   isSegmented: boolean
+  isStepped: boolean
+  currentStep: string
+  nextStep: string
+  stepRootItemId?: string
+  previousStepItemId?: string
   progressState: ProgressState
   progressPercent: ProgressPercent
   status: DayPlanItemStatus
@@ -179,6 +187,9 @@ export interface AppSettings {
   tieBreakerOrder: TieBreakerOrder
   weatherEnabled: boolean
   completedAtRoundingMinutes: CompletedAtRoundingMinutes
+  defaultNightTodoByTimeEnabled: boolean
+  defaultNightTodoStartHour: number
+  defaultNightTodoEndHour: number
   createdAt: string
   updatedAt: string
 }

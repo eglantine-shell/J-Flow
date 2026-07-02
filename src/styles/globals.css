@@ -262,6 +262,121 @@ button:hover:not(:disabled) {
   letter-spacing: -0.04em;
 }
 
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.tutorial-overlay__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(33, 28, 21, 0.12);
+}
+
+.tutorial-overlay__highlight {
+  position: fixed;
+  z-index: 1001;
+  border: 2px solid rgba(251, 189, 65, 0.96);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: brightness(1.18) saturate(1.08);
+  box-shadow:
+    0 0 0 9999px rgba(33, 28, 21, 0.42),
+    0 0 0 6px rgba(251, 189, 65, 0.2),
+    inset 0 0 0 9999px rgba(255, 255, 255, 0.08),
+    0 22px 48px rgba(33, 28, 21, 0.24);
+  pointer-events: none;
+}
+
+.tutorial-guide-bar__body,
+.tutorial-guide-bar__meta,
+.tutorial-guide-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tutorial-guide-bar h2 {
+  margin: 0;
+}
+
+.tutorial-guide-bar {
+  position: fixed;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  max-height: 206px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(246, 241, 232, 0.97));
+  box-shadow:
+    0 18px 52px rgba(33, 28, 21, 0.18),
+    var(--shadow);
+  pointer-events: auto;
+}
+
+.tutorial-guide-bar__progress {
+  height: 5px;
+  background: rgba(218, 212, 200, 0.72);
+}
+
+.tutorial-guide-bar__progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.tutorial-guide-bar__body {
+  align-items: flex-end;
+  flex: 1 1 auto;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 16px 18px 18px;
+}
+
+.tutorial-guide-bar__copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tutorial-guide-bar__meta {
+  justify-content: flex-start;
+}
+
+.tutorial-guide-bar__meta span {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tutorial-guide-bar p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.58;
+}
+
+.tutorial-guide-bar__actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.tutorial-guide-bar__actions .ghost-button,
+.tutorial-guide-bar__actions .primary-button {
+  flex: 0 0 auto;
+  min-width: 82px;
+}
+
 .editor-stack,
 .template-form,
 .advanced-stack {
@@ -325,6 +440,8 @@ button:hover:not(:disabled) {
 .editor-field select,
 .editor-field textarea,
 .temporary-composer__input,
+.temporary-composer__note-input,
+.temporary-composer__step-field input,
 .segmented-progress-panel__number,
 .inline-creator__input,
 .template-form__content-input,
@@ -363,6 +480,8 @@ button:hover:not(:disabled) {
 .editor-field select:focus,
 .editor-field textarea:focus,
 .temporary-composer__input:focus,
+.temporary-composer__note-input:focus,
+.temporary-composer__step-field input:focus,
 .segmented-progress-panel__number:focus,
 .inline-creator__input:focus,
 .template-form__content-input:focus,
@@ -1139,7 +1258,7 @@ button:hover:not(:disabled) {
 
 .temporary-composer__option-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1155,6 +1274,51 @@ button:hover:not(:disabled) {
 .temporary-composer__option-chip {
   justify-content: center;
   gap: 6px;
+}
+
+.temporary-composer__note-input {
+  min-height: 30px;
+  padding: 7px 10px;
+  border-color: var(--border-soft);
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.temporary-composer__note-input::placeholder {
+  color: var(--text-soft);
+}
+
+.temporary-composer__step-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.temporary-composer__step-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: min(100%, 210px);
+  flex: 1 1 210px;
+}
+
+.temporary-composer__step-field span {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.temporary-composer__step-field input {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 30px;
+  padding: 7px 10px;
+  border-color: var(--border-soft);
+  background: transparent;
+  font-size: 0.82rem;
 }
 
 .temporary-composer__settings-row--manual .toggle-chip.temporary-composer__option-chip,
@@ -1493,6 +1657,13 @@ button:hover:not(:disabled) {
   min-width: 0;
 }
 
+.todo-item-card__title-edit-button {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
+}
+
 .todo-item-card__title-input {
   width: 100%;
   min-height: 34px;
@@ -1538,6 +1709,10 @@ button:hover:not(:disabled) {
 
 .todo-item-card__delete:hover:not(:disabled) {
   color: var(--danger);
+}
+
+.todo-item-card__return-button:hover:not(:disabled) {
+  color: var(--success);
 }
 
 .todo-item-card__actions {
@@ -2335,6 +2510,7 @@ button:hover:not(:disabled) {
 .settings-panel,
 .settings-toolbar,
 .settings-choice-row,
+.settings-guide-actions,
 .settings-danger-zone {
   display: grid;
   gap: 12px;
@@ -2376,8 +2552,49 @@ button:hover:not(:disabled) {
   line-height: 1.5;
 }
 
+.settings-panel__credit {
+  justify-self: end;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
 .settings-choice-row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-hour-window {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-hour-window__field {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-hour-window__field span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.settings-hour-window__field select {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.settings-guide-actions {
+  grid-auto-flow: column;
+  justify-content: start;
+  width: fit-content;
 }
 
 .settings-data-path-card {
@@ -3200,8 +3417,13 @@ button:hover:not(:disabled) {
   .inline-creator__controls,
   .template-manager__layout,
   .editor-row,
-  .settings-sync-card__config-grid {
+  .settings-sync-card__config-grid,
+  .settings-guide-actions {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-guide-actions {
+    grid-auto-flow: row;
   }
 
   .todo-item-card__layout {
@@ -3348,12 +3570,56 @@ button:hover:not(:disabled) {
   .setup-tag-section__header h2 {
     font-size: 1.28rem;
   }
+
+  .tutorial-guide-bar {
+    bottom: 12px;
+    border-radius: 18px;
+  }
+
+  .tutorial-guide-bar__body {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tutorial-guide-bar__actions {
+    justify-content: space-between;
+  }
+
+  .tutorial-guide-bar__actions .ghost-button,
+  .tutorial-guide-bar__actions .primary-button {
+    flex: 1 1 0;
+  }
 }
 
 /* V3 Desktop UI Pass 01 - Sidebar layout refinement */
 
 .app-shell {
   padding: 14px;
+}
+
+body.jflow-tutorial-active .app-shell {
+  padding-bottom: 178px;
+}
+
+body.jflow-tutorial-active .app-shell__desktop-frame,
+body.jflow-tutorial-active .app-shell__sidebar,
+body.jflow-tutorial-active .app-shell__workspace {
+  min-height: 0;
+}
+
+body.jflow-tutorial-active .app-shell__desktop-frame {
+  height: calc(100vh - 190px);
+  overflow-y: auto;
+}
+
+body.jflow-tutorial-active .app-shell__sidebar,
+body.jflow-tutorial-active .app-shell__workspace {
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+}
+
+body.jflow-tutorial-active .home-layout--desktop {
+  height: calc(100vh - 190px);
 }
 
 .app-shell__desktop-frame {
@@ -3397,6 +3663,11 @@ button:hover:not(:disabled) {
 .app-shell__brand {
   text-align: right;
   width: 100%;
+}
+
+.sidebar-date-zone {
+  display: grid;
+  gap: 12px;
 }
 
 .sidebar-today,
@@ -3502,6 +3773,11 @@ button:hover:not(:disabled) {
   display: grid;
   gap: 8px;
   margin-top: auto;
+}
+
+.sidebar-nav__secondary {
+  display: grid;
+  gap: 8px;
 }
 
 .sidebar-nav__item {
@@ -4074,6 +4350,10 @@ button:hover:not(:disabled) {
 @media (max-width: 640px) {
   .app-shell {
     padding: 12px;
+  }
+
+  body.jflow-tutorial-active .app-shell {
+    padding-bottom: 178px;
   }
 
   .app-shell__desktop-frame {

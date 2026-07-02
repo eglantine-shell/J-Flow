@@ -31,6 +31,7 @@ import {
   MoreIcon,
   PlusIcon,
   RepeatIcon,
+  ReturnIcon,
   SaveIcon,
   SunIcon,
 } from '@/components/ui/Icons'
@@ -74,6 +75,7 @@ import {
 } from '@/features/todo/todo-view-model'
 import type {
   ActivityType,
+  AppSettings,
   DayPlanItem,
   RepeatIntervalUnit,
   RepeatRule,
@@ -113,6 +115,25 @@ type ComposerAnchorPosition = {
 }
 
 const DAY_NIGHT_DIVIDER_ID = 'todo-day-night-divider'
+const DEFAULT_NIGHT_TODO_START_HOUR = 17
+const DEFAULT_NIGHT_TODO_END_HOUR = 23
+
+function isGrassTodo(viewModel: TodoViewModel) {
+  const { item, templateKind } = viewModel.internalRef
+
+  return item.source === 'decision_selected' && templateKind === 'grass' && Boolean(item.templateId)
+}
+
+function canReturnGrassTodoToList(viewModel: TodoViewModel) {
+  const { template } = viewModel.internalRef
+
+  return (
+    !viewModel.isCompleted &&
+    viewModel.canDelete &&
+    isGrassTodo(viewModel) &&
+    template?.grassStatus === 'picked'
+  )
+}
 
 function SortableTodoItem({
   id,
@@ -258,6 +279,39 @@ const getDisplayDateKeyForItem = (item: Pick<DayPlanItem, 'date' | 'status' | 'c
   }
 
   return item.date
+}
+
+const isHourInWindow = (hour: number, startHour: number, endHour: number) => {
+  if (startHour === endHour) {
+    return hour === startHour
+  }
+
+  if (startHour < endHour) {
+    return hour >= startHour && hour < endHour
+  }
+
+  return hour >= startHour || hour < endHour
+}
+
+const resolveDefaultTemporaryTimeBlock = (
+  settings?: Pick<
+    AppSettings,
+    'defaultNightTodoByTimeEnabled' | 'defaultNightTodoStartHour' | 'defaultNightTodoEndHour'
+  >,
+): TemporaryTimeBlock => {
+  if (!settings?.defaultNightTodoByTimeEnabled) {
+    return 'day'
+  }
+
+  const currentHour = new Date().getHours()
+
+  return isHourInWindow(
+    currentHour,
+    settings.defaultNightTodoStartHour,
+    settings.defaultNightTodoEndHour,
+  )
+    ? 'night'
+    : 'day'
 }
 
 const isVisibleOnSelectedDate = (
@@ -567,9 +621,13 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const [repeatTypeDraft, setRepeatTypeDraft] = useState<RepeatType>('none')
   const [repeatIntervalValueDraft, setRepeatIntervalValueDraft] = useState('1')
   const [repeatIntervalUnitDraft, setRepeatIntervalUnitDraft] = useState<RepeatIntervalUnit>('day')
-  const [requiresPreparationDraft, setRequiresPreparationDraft] = useState(false)
   const [preparationNotesDraft, setPreparationNotesDraft] = useState('')
   const [isSegmentedDraft, setIsSegmentedDraft] = useState(false)
+  const [isSteppedDraft, setIsSteppedDraft] = useState(false)
+  const [currentStepDraft, setCurrentStepDraft] = useState('')
+  const [nextStepDraft, setNextStepDraft] = useState('')
+  const [defaultTemporaryTimeBlock, setDefaultTemporaryTimeBlock] =
+    useState<TemporaryTimeBlock>('day')
   const [recommendationPanel, setRecommendationPanel] = useState<RecommendationPanelState | null>(null)
   const [editingComposerItemId, setEditingComposerItemId] = useState<string | null>(null)
   const [editingCompletedAtItemId, setEditingCompletedAtItemId] = useState<string | null>(null)
@@ -585,7 +643,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const temporaryInputRef = useRef<HTMLInputElement | null>(null)
   const temporaryDateInputRef = useRef<HTMLInputElement | null>(null)
   const deadlineDateInputRef = useRef<HTMLInputElement | null>(null)
-  const preparationNotesInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const preparationNotesInputRef = useRef<HTMLInputElement | null>(null)
   const quickAddCardRef = useRef<HTMLDivElement | null>(null)
   const editingCompletedTimeInputRef = useRef<HTMLInputElement | null>(null)
   const itemCardRefs = useRef<Record<string, HTMLElement | null>>({})
@@ -625,7 +683,9 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         }
 
         const items = buildVisibleTodoViewModels(appData, selectedDateKey)
+        const nextDefaultTemporaryTimeBlock = resolveDefaultTemporaryTimeBlock(appData.settings)
 
+        setDefaultTemporaryTimeBlock(nextDefaultTemporaryTimeBlock)
         setViewState({
           isLoading: false,
           errorMessage: null,
@@ -667,14 +727,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }, [isQuickAddOpen])
 
   useEffect(() => {
-    if (!isQuickAddOpen || !requiresPreparationDraft) {
-      return
-    }
-
-    preparationNotesInputRef.current?.focus()
-  }, [isQuickAddOpen, requiresPreparationDraft])
-
-  useEffect(() => {
     if (!editingCompletedAtItemId) {
       return
     }
@@ -702,6 +754,13 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       }
 
       if (quickAddCardRef.current?.contains(target)) {
+        return
+      }
+
+      if (
+        target instanceof Element &&
+        (target.closest('.tutorial-overlay') || target.closest('[data-tutorial-id]'))
+      ) {
         return
       }
 
@@ -760,13 +819,15 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     [editingComposerItemId, viewState.items],
   )
   const normalizedPreparationNotesDraft = preparationNotesDraft.trim()
-  const isPreparationNotesMissing = requiresPreparationDraft && normalizedPreparationNotesDraft.length === 0
+  const normalizedCurrentStepDraft = currentStepDraft.trim()
+  const normalizedNextStepDraft = nextStepDraft.trim()
   const normalizedDeadlineDateDraft = deadlineDateDraft || ''
   const parsedDeadlineWithinDaysDraft = parseDeadlineWithinDaysInput(deadlineWithinDaysDraft)
   const isDeadlineMissing = isNecessaryDraft && normalizedDeadlineDateDraft.length === 0
+  const isCurrentStepMissing = isSteppedDraft && normalizedCurrentStepDraft.length === 0
   const isComposerSubmitDisabled =
-    isPreparationNotesMissing ||
     isDeadlineMissing ||
+    isCurrentStepMissing ||
     (composerMode === 'manual' && temporaryTitle.trim().length === 0)
 
   const resolveRepeatRuleDraft = (): RepeatRule | null => {
@@ -797,9 +858,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setRepeatTypeDraft('none')
     setRepeatIntervalValueDraft('1')
     setRepeatIntervalUnitDraft('day')
-    setRequiresPreparationDraft(false)
     setPreparationNotesDraft('')
     setIsSegmentedDraft(false)
+    setIsSteppedDraft(false)
+    setCurrentStepDraft('')
+    setNextStepDraft('')
     setRecommendationPanel(null)
   }
 
@@ -809,7 +872,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setComposerMode('manual')
     setTemporaryTitle('')
     setTemporaryDateDraft(selectedDateKey)
-    setTemporaryTimeBlock('day')
+    setTemporaryTimeBlock(defaultTemporaryTimeBlock)
     setComposerErrorMessage(null)
     resetExpandedComposerState()
   }
@@ -840,6 +903,64 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setShowMoreOptions(true)
     setIsQuickAddOpen(true)
   }
+
+  useEffect(() => {
+    const handleTutorialOpenComposer = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        focus?: 'necessary' | 'segmented' | 'stepped' | 'repeat'
+        mode?: ComposerMode
+      }>
+      const nextComposerMode = customEvent.detail?.mode ?? 'manual'
+
+      resetComposerState()
+      setComposerMode(nextComposerMode)
+      setTemporaryTitle('读《夜航西飞》')
+      setPreparationNotesDraft('先读 20 分钟，不追求读完')
+      setComposerAnchorPosition(resolveComposerAnchorPosition(quickAddTriggerRef.current))
+      setShowMoreOptions(true)
+      setIsQuickAddOpen(true)
+
+      if (nextComposerMode === 'grass') {
+        void openRecommendationPanel()
+      }
+
+      if (customEvent.detail?.focus === 'necessary') {
+        setIsNecessaryDraft(true)
+        setDeadlineDateDraft(temporaryDateDraft || selectedDateKey)
+        setDeadlineWithinDaysDraft('1')
+      }
+
+      if (customEvent.detail?.focus === 'segmented') {
+        setIsSegmentedDraft(true)
+        setIsSteppedDraft(false)
+      }
+
+      if (customEvent.detail?.focus === 'stepped') {
+        setIsSteppedDraft(true)
+        setIsSegmentedDraft(false)
+        setCurrentStepDraft('第一章')
+        setNextStepDraft('第二章')
+      }
+
+      if (customEvent.detail?.focus === 'repeat') {
+        setRepeatTypeDraft('calendar')
+        setRepeatIntervalValueDraft('1')
+        setRepeatIntervalUnitDraft('week')
+      }
+    }
+
+    const handleTutorialCloseComposer = () => {
+      closeQuickAdd()
+    }
+
+    window.addEventListener('jflow:tutorial-open-todo-composer', handleTutorialOpenComposer)
+    window.addEventListener('jflow:tutorial-close-todo-composer', handleTutorialCloseComposer)
+
+    return () => {
+      window.removeEventListener('jflow:tutorial-open-todo-composer', handleTutorialOpenComposer)
+      window.removeEventListener('jflow:tutorial-close-todo-composer', handleTutorialCloseComposer)
+    }
+  }, [defaultTemporaryTimeBlock, selectedDateKey])
 
   const openTemporaryDatePicker = () => {
     const input = temporaryDateInputRef.current
@@ -931,9 +1052,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         ? String(getDeadlineWithinDays(item.date, item.deadlineDate) ?? '')
         : '',
     )
-    setRequiresPreparationDraft(item.requiresPreparation)
-    setPreparationNotesDraft(item.requiresPreparation ? item.preparationNotes : '')
+    setPreparationNotesDraft(item.preparationNotes)
     setIsSegmentedDraft(item.isSegmented)
+    setIsSteppedDraft(item.isStepped)
+    setCurrentStepDraft(item.currentStep)
+    setNextStepDraft(item.nextStep)
     setRecommendationPanel(null)
 
     const repeatRuleSource =
@@ -1058,7 +1181,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
     const nextComposerMode = resolveComposerModeForItem(activeEditingComposerItem)
     const nextTitle =
-      nextComposerMode === 'manual' ? temporaryTitle.trim() : activeEditingComposerItem.title
+      nextComposerMode === 'manual' ? temporaryTitle.trim() : item.title
     const nextDateKey = temporaryDateKey
 
     if (!nextTitle) {
@@ -1079,16 +1202,19 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     }
 
     const nextTimeBlockSource = resolveEditedTimeBlockSource(temporaryTimeBlock)
-    const nextPreparationNotes = requiresPreparationDraft ? normalizedPreparationNotesDraft : ''
+    const nextPreparationNotes = normalizedPreparationNotesDraft
+    const nextRequiresPreparation = nextPreparationNotes.length > 0
     const nextDeadlineDate = isNecessaryDraft ? normalizedDeadlineDateDraft : undefined
-
-    if (requiresPreparationDraft && !nextPreparationNotes) {
-      setComposerErrorMessage('准备内容不能为空。')
-      return
-    }
+    const nextIsStepped = isSteppedDraft
+    const nextIsSegmented = nextIsStepped ? false : isSegmentedDraft
 
     if (isNecessaryDraft && !nextDeadlineDate) {
       setComposerErrorMessage('必要事项必须设置 DDL。')
+      return
+    }
+
+    if (nextIsStepped && !normalizedCurrentStepDraft) {
+      setComposerErrorMessage('分步 Todo 必须填写当前步骤。')
       return
     }
 
@@ -1100,9 +1226,12 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       timeBlockSource: nextTimeBlockSource,
       isNecessary: isNecessaryDraft,
       deadlineDate: nextDeadlineDate,
-      requiresPreparation: requiresPreparationDraft,
+      requiresPreparation: nextRequiresPreparation,
       preparationNotes: nextPreparationNotes,
-      isSegmented: isSegmentedDraft,
+      isSegmented: nextIsSegmented,
+      isStepped: nextIsStepped,
+      currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+      nextStep: nextIsStepped ? normalizedNextStepDraft : '',
     } satisfies Partial<DayPlanItem> & Pick<DayPlanItem, 'id'>
     const isRecurringItem = templateKind === 'todo_recurring' && Boolean(item.templateId)
 
@@ -1151,7 +1280,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             sceneTagIds: recurringSceneTagIds,
             isNecessary: isNecessaryDraft,
             deadlineDate: nextDeadlineDate,
-            requiresPreparation: requiresPreparationDraft,
+            requiresPreparation: nextRequiresPreparation,
             preparationNotes: nextPreparationNotes,
             recurrence: serializedRepeatRule.recurrence,
             repeatType:
@@ -1160,7 +1289,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 : serializedRepeatRule.repeatType,
             repeatIntervalUnit: serializedRepeatRule.repeatIntervalUnit,
             repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
-            isSegmented: isSegmentedDraft,
+            isSegmented: nextIsSegmented,
+            isStepped: nextIsStepped,
+            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
             isArchived: false,
           })
 
@@ -1196,7 +1328,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             interestLevel: 2,
             isNecessary: isNecessaryDraft,
             deadlineDate: nextDeadlineDate,
-            requiresPreparation: requiresPreparationDraft,
+            requiresPreparation: nextRequiresPreparation,
             preparationNotes: nextPreparationNotes,
             recurrence: serializedRepeatRule.recurrence,
             repeatType:
@@ -1205,7 +1337,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 : serializedRepeatRule.repeatType,
             repeatIntervalUnit: serializedRepeatRule.repeatIntervalUnit,
             repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
-            isSegmented: isSegmentedDraft,
+            isSegmented: nextIsSegmented,
+            isStepped: nextIsStepped,
+            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
             isArchived: false,
           })
 
@@ -1251,15 +1386,18 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           ? 1
           : Math.max(...existingItemsInTimeBlock.map((item) => item.internalRef.item.sortOrder)) + 1
 
-      const preparationNotes = requiresPreparationDraft ? normalizedPreparationNotesDraft : ''
+      const preparationNotes = normalizedPreparationNotesDraft
+      const requiresPreparation = preparationNotes.length > 0
       const nextDeadlineDate = isNecessaryDraft ? normalizedDeadlineDateDraft : undefined
+      const nextIsStepped = isSteppedDraft
+      const nextIsSegmented = nextIsStepped ? false : isSegmentedDraft
 
-      if (requiresPreparationDraft && !preparationNotes) {
-        setComposerErrorMessage('准备内容不能为空。')
-        return
-      }
       if (isNecessaryDraft && !nextDeadlineDate) {
         setComposerErrorMessage('必要事项必须设置 DDL。')
+        return
+      }
+      if (nextIsStepped && !normalizedCurrentStepDraft) {
+        setComposerErrorMessage('分步 Todo 必须填写当前步骤。')
         return
       }
       const repeatRuleDraft = resolveRepeatRuleDraft()
@@ -1280,9 +1418,12 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           title,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
-          requiresPreparation: requiresPreparationDraft,
+          requiresPreparation,
           preparationNotes,
-          isSegmented: isSegmentedDraft,
+          isSegmented: nextIsSegmented,
+          isStepped: nextIsStepped,
+          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
@@ -1291,6 +1432,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         await appDataRepository.dayPlanItems.update({
           id: createdItem.id,
           rootItemId: createdItem.id,
+          stepRootItemId: nextIsStepped ? createdItem.id : undefined,
         })
       } else {
         const appData = await appDataRepository.get()
@@ -1306,7 +1448,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           interestLevel: 2,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
-          requiresPreparation: requiresPreparationDraft,
+          requiresPreparation,
           preparationNotes,
           recurrence: serializedRepeatRule.recurrence,
           repeatType:
@@ -1315,7 +1457,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
               : serializedRepeatRule.repeatType,
           repeatIntervalUnit: serializedRepeatRule.repeatIntervalUnit,
           repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
-          isSegmented: isSegmentedDraft,
+          isSegmented: nextIsSegmented,
+          isStepped: nextIsStepped,
+          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           isArchived: false,
         })
 
@@ -1331,18 +1476,22 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           title,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
-          requiresPreparation: requiresPreparationDraft,
+          requiresPreparation,
           preparationNotes,
-          isSegmented: isSegmentedDraft,
+          isSegmented: nextIsSegmented,
+          isStepped: nextIsStepped,
+          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
         })
 
-        if (isSegmentedDraft) {
+        if (nextIsSegmented || nextIsStepped) {
           await appDataRepository.dayPlanItems.update({
             id: createdItem.id,
             rootItemId: createdItem.id,
+            stepRootItemId: nextIsStepped ? createdItem.id : undefined,
           })
         }
 
@@ -1527,8 +1676,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         return
       }
 
-      const preparationNotes = requiresPreparationDraft ? preparationNotesDraft.trim() : ''
+      const preparationNotes = preparationNotesDraft.trim()
+      const requiresPreparation = preparationNotes.length > 0
       const nextDeadlineDate = isNecessaryDraft ? normalizedDeadlineDateDraft : undefined
+      const nextIsStepped = isSteppedDraft
+      const nextIsSegmented = nextIsStepped ? false : isSegmentedDraft
       const repeatRuleDraft = resolveRepeatRuleDraft()
 
       if (!repeatRuleDraft) {
@@ -1537,6 +1689,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       }
       if (isNecessaryDraft && !nextDeadlineDate) {
         setComposerErrorMessage('必要事项必须设置 DDL。')
+        return
+      }
+      if (nextIsStepped && !normalizedCurrentStepDraft) {
+        setComposerErrorMessage('分步 Todo 必须填写当前步骤。')
         return
       }
 
@@ -1548,9 +1704,12 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           options: {
             isNecessary: isNecessaryDraft,
             deadlineDate: nextDeadlineDate,
-            requiresPreparation: requiresPreparationDraft,
+            requiresPreparation,
             preparationNotes,
-            isSegmented: isSegmentedDraft,
+            isSegmented: nextIsSegmented,
+            isStepped: nextIsStepped,
+            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           },
         })
       } else {
@@ -1572,7 +1731,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           interestLevel: 2,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
-          requiresPreparation: requiresPreparationDraft,
+          requiresPreparation,
           preparationNotes,
           recurrence: serializedRepeatRule.recurrence,
           repeatType:
@@ -1581,7 +1740,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
               : serializedRepeatRule.repeatType,
           repeatIntervalUnit: serializedRepeatRule.repeatIntervalUnit,
           repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
-          isSegmented: isSegmentedDraft,
+          isSegmented: nextIsSegmented,
+          isStepped: nextIsStepped,
+          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           isArchived: false,
         })
 
@@ -1598,18 +1760,22 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           activityTypeId: template.activityTypeId,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
-          requiresPreparation: requiresPreparationDraft,
+          requiresPreparation,
           preparationNotes,
-          isSegmented: isSegmentedDraft,
+          isSegmented: nextIsSegmented,
+          isStepped: nextIsStepped,
+          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
+          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
         })
 
-        if (isSegmentedDraft) {
+        if (nextIsSegmented || nextIsStepped) {
           await appDataRepository.dayPlanItems.update({
             id: createdItem.id,
             rootItemId: createdItem.id,
+            stepRootItemId: nextIsStepped ? createdItem.id : undefined,
           })
         }
 
@@ -1725,6 +1891,59 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     await reloadItems()
   }
 
+  const createNextStepTodoIfNeeded = async (item: DayPlanItem) => {
+    const nextStep = item.nextStep.trim()
+
+    if (!item.isStepped || !nextStep) {
+      return
+    }
+
+    const allItems = await appDataRepository.dayPlanItems.list()
+    const existingNextStep = allItems.find(
+      (candidate) => candidate.previousStepItemId === item.id && candidate.status !== 'deleted',
+    )
+
+    if (existingNextStep) {
+      return
+    }
+
+    const existingItemsInTimeBlock = allItems.filter(
+      (candidate) =>
+        candidate.date === item.date &&
+        candidate.timeBlock === item.timeBlock &&
+        candidate.status !== 'deleted',
+    )
+    const sortOrder =
+      existingItemsInTimeBlock.length === 0
+        ? 1
+        : Math.max(...existingItemsInTimeBlock.map((candidate) => candidate.sortOrder)) + 1
+    const stepRootItemId = item.stepRootItemId ?? item.id
+
+    await appDataRepository.dayPlanItems.create({
+      date: item.date,
+      originDate: item.date,
+      timeBlock: item.timeBlock,
+      timeBlockSource: item.timeBlockSource,
+      sortOrder,
+      source: 'manual_temporary',
+      title: item.title,
+      activityTypeId: item.activityTypeId,
+      isNecessary: false,
+      deadlineDate: undefined,
+      requiresPreparation: item.requiresPreparation,
+      preparationNotes: item.preparationNotes,
+      isSegmented: false,
+      isStepped: true,
+      currentStep: nextStep,
+      nextStep: '',
+      stepRootItemId,
+      previousStepItemId: item.id,
+      progressState: 'not_started',
+      progressPercent: 0,
+      status: 'pending',
+    })
+  }
+
   const completeItem = async (viewModel: TodoViewModel) => {
     const { item } = viewModel.internalRef
 
@@ -1814,6 +2033,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       })
     }
 
+    await createNextStepTodoIfNeeded(item)
+
     setEditingCompletedAtDrafts((current) => ({
       ...current,
       [viewModel.id]: toCompletedAtDraft(nowIso),
@@ -1822,10 +2043,18 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }
 
   const deleteTemporaryItem = async (viewModel: TodoViewModel) => {
-    const { item, templateKind, template } = viewModel.internalRef
+    const { item, templateKind } = viewModel.internalRef
 
     if (!viewModel.canDelete) {
       return
+    }
+
+    if (isGrassTodo(viewModel)) {
+      const shouldDelete = window.confirm('这是一条来自种草清单的todo，彻底删除后不会返回种草清单，确定要删除吗？')
+
+      if (!shouldDelete) {
+        return
+      }
     }
 
     await appDataRepository.dayPlanItems.update({
@@ -1846,12 +2075,32 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       })
     }
 
-    if (
-      item.source === 'decision_selected' &&
-      templateKind === 'grass' &&
-      template?.grassStatus === 'picked' &&
-      item.templateId
-    ) {
+    await reloadItems()
+  }
+
+  const returnGrassTodoToList = async (viewModel: TodoViewModel) => {
+    const { item } = viewModel.internalRef
+
+    if (!canReturnGrassTodoToList(viewModel) || !item.templateId) {
+      return
+    }
+
+    await appDataRepository.dayPlanItems.update({
+      id: item.id,
+      status: 'deleted',
+      deletedAt: new Date().toISOString(),
+      consumesDateTrigger: item.consumesDateTrigger,
+    })
+
+    if (item.recurringInstanceId) {
+      await appDataRepository.recurringTaskInstances.update({
+        id: item.recurringInstanceId,
+        status: 'expired',
+        completedAt: undefined,
+      })
+    }
+
+    if (item.templateId) {
       await appDataRepository.taskTemplates.update({
         id: item.templateId,
         grassStatus: 'active',
@@ -2044,6 +2293,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           const { item } = viewModel.internalRef
           const tags = buildTodoTags(viewModel)
           const nextProgressAriaLabel = `调整 ${viewModel.title} 的进度，当前 ${viewModel.progressPercent}%`
+          const canReturnToGrassList = canReturnGrassTodoToList(viewModel)
 
           const itemCard = (
             <article
@@ -2064,6 +2314,19 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     <div className="todo-item-card__title-row">
                       <div className="todo-item-card__title-main">
                         <h5>{viewModel.title}</h5>
+                        {viewModel.canEdit && !viewModel.isCompleted ? (
+                          <button
+                            className="todo-item-card__icon-button todo-item-card__title-edit-button"
+                            type="button"
+                            aria-label="编辑事项"
+                            title="编辑事项"
+                            onClick={() => {
+                              startEditingItem(viewModel)
+                            }}
+                          >
+                            <EditIcon className="todo-item-card__icon" />
+                          </button>
+                        ) : null}
                         {viewModel.isNecessary ? (
                           <span
                             className={
@@ -2218,7 +2481,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
                   {!viewModel.isCompleted && viewModel.preparationNotes ? (
                     <div className="todo-item-card__notes">
-                      <p>前置准备内容：{viewModel.preparationNotes}</p>
+                      <p>备注：{viewModel.preparationNotes}</p>
                     </div>
                   ) : null}
 
@@ -2259,17 +2522,17 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     </button>
                   ) : null}
 
-                  {viewModel.canEdit && !viewModel.isCompleted ? (
+                  {canReturnToGrassList ? (
                     <button
-                      className="todo-item-card__icon-button"
+                      className="todo-item-card__icon-button todo-item-card__return-button"
                       type="button"
-                      aria-label="编辑事项"
-                      title="编辑事项"
+                      aria-label="回到种草清单"
+                      title="回到种草清单"
                       onClick={() => {
-                        startEditingItem(viewModel)
+                        void returnGrassTodoToList(viewModel)
                       }}
                     >
-                      <EditIcon className="todo-item-card__icon" />
+                      <ReturnIcon className="todo-item-card__icon" />
                     </button>
                   ) : null}
 
@@ -2363,6 +2626,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       {isQuickAddOpen && (!isPastDate || isComposerEditing) && (!isComposerEditing || activeEditingComposerItem) ? (
         <section
           ref={quickAddCardRef}
+          data-tutorial-id="todo-composer-main"
           className={
             composerMode === 'manual'
               ? 'temporary-composer temporary-composer--compact mode-panel__composer-float mode-panel__composer-float--manual'
@@ -2409,6 +2673,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
               </div>
 
               <div
+                data-tutorial-id="todo-composer-mode"
                 className="segmented-control temporary-composer__mode-segmented"
                 aria-label={isComposerEditing ? '编辑事项类型' : '新增模式'}
               >
@@ -2448,6 +2713,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
 
             <div className="temporary-composer__top-row-side">
               <div
+                data-tutorial-id="todo-composer-time"
                 className="segmented-control temporary-composer__segmented temporary-composer__segmented--light"
                 aria-label="Todo 时段"
               >
@@ -2513,16 +2779,50 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             </div>
           ) : null}
 
+          <input
+            ref={preparationNotesInputRef}
+            data-tutorial-id="todo-composer-note"
+            className="temporary-composer__note-input"
+            type="text"
+            value={preparationNotesDraft}
+            onChange={(event) => {
+              setPreparationNotesDraft(event.target.value)
+              setComposerErrorMessage(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') {
+                return
+              }
+
+              event.preventDefault()
+
+              if (isComposerEditing) {
+                void saveEditedItem()
+                return
+              }
+
+              if (composerMode === 'manual') {
+                void createTemporaryItem()
+              }
+            }}
+            placeholder="备注"
+            aria-label="Todo 备注"
+          />
+
           <div className="temporary-composer__more temporary-composer__more--open">
             <div className="temporary-composer__section temporary-composer__section--form">
               <div
+                data-tutorial-id="todo-composer-options"
                 className={
                   composerMode === 'manual'
                     ? 'temporary-composer__settings-row temporary-composer__settings-row--manual'
                     : 'temporary-composer__settings-row'
                 }
               >
-                <label className="toggle-chip temporary-composer__option-chip">
+                <label
+                  className="toggle-chip temporary-composer__option-chip"
+                  data-tutorial-id="todo-composer-necessary"
+                >
                   <input
                     type="checkbox"
                     checked={isNecessaryDraft}
@@ -2548,18 +2848,22 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 <label className="toggle-chip temporary-composer__option-chip">
                   <input
                     type="checkbox"
-                    checked={requiresPreparationDraft}
+                    checked={isSteppedDraft}
                     onChange={(event) => {
                       const nextChecked = event.target.checked
-                      setRequiresPreparationDraft(nextChecked)
+                      setIsSteppedDraft(nextChecked)
                       setComposerErrorMessage(null)
 
-                      if (!nextChecked) {
-                        setPreparationNotesDraft('')
+                      if (nextChecked) {
+                        setIsSegmentedDraft(false)
+                        return
                       }
+
+                      setCurrentStepDraft('')
+                      setNextStepDraft('')
                     }}
                   />
-                  <span>准备</span>
+                  <span>分步</span>
                 </label>
 
                 <label className="toggle-chip temporary-composer__option-chip">
@@ -2567,14 +2871,57 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                     type="checkbox"
                     checked={isSegmentedDraft}
                     onChange={(event) => {
-                      setIsSegmentedDraft(event.target.checked)
+                      const nextChecked = event.target.checked
+                      setIsSegmentedDraft(nextChecked)
+                      setComposerErrorMessage(null)
+
+                      if (nextChecked) {
+                        setIsSteppedDraft(false)
+                        setCurrentStepDraft('')
+                        setNextStepDraft('')
+                      }
                     }}
                   />
                   <span>分次</span>
                 </label>
               </div>
 
-              <div className="temporary-composer__settings-row temporary-composer__settings-row--recurrence">
+              {isSteppedDraft ? (
+                <div
+                  className="temporary-composer__step-panel"
+                  data-tutorial-id="todo-composer-step-segment"
+                >
+                  <label className="temporary-composer__step-field">
+                    <span>当前步骤：</span>
+                    <input
+                      type="text"
+                      value={currentStepDraft}
+                      onChange={(event) => {
+                        setCurrentStepDraft(event.target.value)
+                        setComposerErrorMessage(null)
+                      }}
+                      placeholder="当前步骤"
+                    />
+                  </label>
+                  <label className="temporary-composer__step-field">
+                    <span>下一步：</span>
+                    <input
+                      type="text"
+                      value={nextStepDraft}
+                      onChange={(event) => {
+                        setNextStepDraft(event.target.value)
+                        setComposerErrorMessage(null)
+                      }}
+                      placeholder="如无下一步则留空"
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              <div
+                className="temporary-composer__settings-row temporary-composer__settings-row--recurrence"
+                data-tutorial-id="todo-composer-repeat"
+              >
                 <div className="temporary-composer__recurrence-group" aria-label="Todo 重复规则">
                   {repeatTypeOptions.map((option) => (
                     <button
@@ -2645,36 +2992,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 ) : null}
               </div>
 
-              {requiresPreparationDraft ? (
-                <textarea
-                  ref={preparationNotesInputRef}
-                  className="template-form__notes-input"
-                  rows={2}
-                  value={preparationNotesDraft}
-                  onChange={(event) => {
-                    setPreparationNotesDraft(event.target.value)
-                    setComposerErrorMessage(null)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') {
-                      return
-                    }
-
-                    event.preventDefault()
-
-                    if (isComposerEditing) {
-                      void saveEditedItem()
-                      return
-                    }
-
-                    void createTemporaryItem()
-                  }}
-                  placeholder="记录这次 Todo 的准备备注"
-                />
-              ) : null}
-
               {isNecessaryDraft ? (
-                <div className="temporary-composer__deadline-panel">
+                <div className="temporary-composer__deadline-panel" data-tutorial-id="todo-composer-ddl">
                   <div className="temporary-composer__deadline-row">
                     <input
                       ref={deadlineDateInputRef}
@@ -2854,6 +3173,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             {!isPastDate ? (
               <button
                 ref={quickAddTriggerRef}
+                data-tutorial-id="todo-quick-add"
                 className="quick-add-inline"
                 type="button"
                 aria-label="打开 Quick add"
@@ -2867,6 +3187,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
               </button>
             ) : null}
 
+            <div data-tutorial-id="todo-list">
             {isSortMode ? (
               <DndContext
                 sensors={sortSensors}
@@ -2915,9 +3236,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                 </div>
               </>
             )}
+            </div>
 
             {completedItems.length > 0 ? (
-              <div className="todo-board__completed">
+              <div className="todo-board__completed" data-tutorial-id="todo-completed-area">
                 <div className="list-group__header">
                   <div className="list-group__heading">
                     <p className="eyebrow">Completed</p>

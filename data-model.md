@@ -64,6 +64,14 @@
 - `JSON` 作为完整备份与迁移格式
 - 若短期必须过渡，可先保留 Web 侧 IndexedDB 与 Desktop 侧 JSON 导入桥接，但这只是过渡方案
 
+### 4.1 V2.4D 教学演示数据
+- 教学演示模式需要一套独立 demo 数据。
+- demo 数据仅用于前端教学展示，不属于运行时主数据。
+- demo 数据不得写入 SQLite / IndexedDB。
+- demo 数据不得进入 JSON 导出 / 导入 / 自动备份 / 同步协议。
+- demo 数据不得复用或改写用户当前 Todo、种草、日志、设置、同步目标或自动备份信息。
+- 若实现需要类型辅助，应作为前端只读 fixture / view model 处理，不新增持久化 schema。
+
 ### 5. Sync 1 本地同步元数据补充
 - `SQLite` 继续作为每台设备自己的运行时主库。
 - 第一版本地文件夹同步不会直接同步 `j-flow.sqlite3` 文件本体。
@@ -112,6 +120,12 @@ type TodoItem = {
   isSegmented: boolean
   progressPercent: number
 
+  isStepped: boolean
+  currentStep: string
+  nextStep?: string
+  stepRootItemId?: string
+  previousStepItemId?: string
+
   source: 'manual' | 'grass' | 'recurring'
   sourceRefId?: string
 
@@ -145,6 +159,30 @@ type TodoItem = {
 - 若事项此前已被顺延到今天，则其当前 `date` 应视为今天：
   - 完成后再取消完成，应回到今天，而不是回到更早历史日期。
 - 历史已完成事项若缺少 `completedAt`，本阶段先兼容排序到已完成组最后，不强制立刻 migration。
+- V2.4 起，`requiresPreparation / preparationNotes` 的用户侧语义调整为备注：
+  - 新数据中 `preparationNotes` 表示备注内容
+  - `requiresPreparation` 仅作为历史兼容字段或派生布尔
+  - UI 不再展示“准备”开关
+  - 旧数据只要 `preparationNotes` 非空，就按 `备注：...` 展示
+- V2.4 起，分步 Todo 建议使用：
+  - `isStepped`
+  - `currentStep`
+  - `nextStep`
+  - `stepRootItemId`
+  - `previousStepItemId`
+- `isStepped` 与 `isSegmented` 第一版互斥。
+- 分步 Todo 的列表显示标题由：
+  - `title`
+  - `currentStep`
+  拼接得到，不建议把拼接后的标题反写回 `title`。
+- 分步 Todo 完成后若 `nextStep` 非空，应创建新的 `DayPlanItem`：
+  - `title` 沿用原基础标题
+  - `currentStep` 取上一条的 `nextStep`
+  - `nextStep` 初始为空
+  - `deadlineDate` 不继承上一条，默认为空
+  - `previousStepItemId` 指向上一条
+  - `stepRootItemId` 沿用原 root，若不存在则取第一条分步 Todo 的 id
+- 分步 Todo 的 `deadlineDate` 只约束当前步骤，不代表整条分步链路的总截止日期。
 
 ### 2. RepeatRule
 
@@ -292,6 +330,43 @@ type SegmentedProgressLog = {
 - 当前口径采用：
   - 当天第一次推进前的起点
   - 当天最后一次推进后的进度
+
+### 8. AppSettings
+
+```ts
+type AppSettings = {
+  initialized: boolean
+  tieBreakerOrder: 'asc' | 'desc'
+  weatherEnabled: boolean
+  completedAtRoundingMinutes: 0 | 5 | 10 | 30
+
+  defaultNightTodoByTimeEnabled: boolean
+  defaultNightTodoStartHour: number
+  defaultNightTodoEndHour: number
+
+  createdAt: string
+  updatedAt: string
+}
+```
+
+说明：
+- `defaultNightTodoByTimeEnabled` 控制新增 Todo 是否按当前本地小时自动默认到晚上。
+- 默认值为：
+  - `false`
+- `defaultNightTodoStartHour / defaultNightTodoEndHour` 取值范围为：
+  - `0-23`
+- 默认建议值为：
+  - `17`
+  - `23`
+- 支持跨午夜区间：
+  - 若开始小时大于结束小时，则表示跨午夜
+  - 例如 `22-6` 覆盖 `22:00-23:59` 与 `00:00-05:59`
+- 该设置只影响新增表单打开时的默认 `timeBlock`，不改写已有 Todo。
+- SQLite migration 与 JSON 导入应为旧数据补齐上述默认值。
+- V2.4D 初始化页 / 功能教学第一版不新增持久化字段：
+  - `initialized` 仍只表示是否完成首次初始化
+  - `重看功能教学` 不应通过清空或改写 `initialized` 实现
+  - 若后续需要记录教学完成时间，再单独设计设置字段
 
 ---
 

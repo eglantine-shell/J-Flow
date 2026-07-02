@@ -18,6 +18,9 @@ export type TodoViewModel = {
   isCompleted: boolean
   isDeleted: boolean
   isSegmented: boolean
+  isStepped: boolean
+  currentStep: string
+  nextStep: string
   progressPercent: number
   isRepeating: boolean
   isNecessary: boolean
@@ -89,6 +92,14 @@ const formatCompletedLabel = (completedAt?: string) => {
   const minutes = String(date.getMinutes()).padStart(2, '0')
 
   return `完成于 ${month}/${day} ${hours}:${minutes}`
+}
+
+export function getTodoDisplayTitle(
+  item: Pick<DayPlanItem, 'title'> & Partial<Pick<DayPlanItem, 'isStepped' | 'currentStep'>>,
+) {
+  const currentStep = item.currentStep?.trim() ?? ''
+
+  return item.isStepped && currentStep ? `${item.title}：${currentStep}` : item.title
 }
 
 export function getOriginLabel(
@@ -171,12 +182,15 @@ export function mapDayPlanItemToTodoViewModel(
 
   return {
     id: item.id,
-    title: item.title,
+    title: getTodoDisplayTitle(item),
     date: item.date,
     timeBlock: item.timeBlock,
     isCompleted: item.status === 'completed',
     isDeleted: item.status === 'deleted',
     isSegmented: item.isSegmented,
+    isStepped: item.isStepped,
+    currentStep: item.currentStep,
+    nextStep: item.nextStep,
     progressPercent: item.progressPercent,
     isRepeating: isRepeatingTodo(item, templateKind),
     isNecessary: item.isNecessary,
@@ -184,8 +198,7 @@ export function mapDayPlanItemToTodoViewModel(
     deadlineLabel: deadlinePresentation?.label ?? '',
     isDeadlineOverdue: deadlinePresentation?.isOverdue ?? false,
     isDeadlineDueToday: deadlinePresentation?.isDueToday ?? false,
-    preparationNotes:
-      item.requiresPreparation && item.preparationNotes.trim() ? item.preparationNotes : '',
+    preparationNotes: item.preparationNotes.trim() ? item.preparationNotes : '',
     createdAtHint: getCreatedAtHint(item),
     originLabel: getOriginLabel(item, templateKind),
     ...capabilities,

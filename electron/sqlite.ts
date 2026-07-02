@@ -27,12 +27,15 @@ import type {
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
-const SQLITE_SCHEMA_VERSION = 4
+const SQLITE_SCHEMA_VERSION = 6
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
 const META_LAST_DAILY_ROLLOVER_DATE = 'lastDailyRolloverDate'
 const DEFAULT_COMPLETED_AT_ROUNDING_MINUTES: AppSettings['completedAtRoundingMinutes'] = 5
+const DEFAULT_NIGHT_TODO_BY_TIME_ENABLED = false
+const DEFAULT_NIGHT_TODO_START_HOUR = 17
+const DEFAULT_NIGHT_TODO_END_HOUR = 23
 const SYNC_META_DEVICE_ID = 'deviceId'
 const SYNC_META_LAST_SYNCED_AT = 'lastSyncedAt'
 const SYNC_META_LAST_SYNC_STATUS = 'lastSyncStatus'
@@ -250,6 +253,9 @@ const ensureSchema = (database: DatabaseSync) => {
       tie_breaker_order TEXT NOT NULL,
       weather_enabled INTEGER NOT NULL,
       completed_time_rounding_minutes INTEGER NOT NULL DEFAULT 5,
+      default_night_todo_by_time_enabled INTEGER NOT NULL DEFAULT 0,
+      default_night_todo_start_hour INTEGER NOT NULL DEFAULT 17,
+      default_night_todo_end_hour INTEGER NOT NULL DEFAULT 23,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -287,6 +293,9 @@ const ensureSchema = (database: DatabaseSync) => {
       repeat_interval_unit TEXT,
       repeat_interval_value INTEGER,
       is_segmented INTEGER NOT NULL,
+      is_stepped INTEGER NOT NULL DEFAULT 0,
+      current_step TEXT NOT NULL DEFAULT '',
+      next_step TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       grass_status TEXT,
@@ -333,6 +342,11 @@ const ensureSchema = (database: DatabaseSync) => {
       requires_preparation INTEGER NOT NULL,
       preparation_notes TEXT NOT NULL,
       is_segmented INTEGER NOT NULL,
+      is_stepped INTEGER NOT NULL DEFAULT 0,
+      current_step TEXT NOT NULL DEFAULT '',
+      next_step TEXT NOT NULL DEFAULT '',
+      step_root_item_id TEXT,
+      previous_step_item_id TEXT,
       progress_state TEXT NOT NULL,
       progress_percent REAL NOT NULL,
       status TEXT NOT NULL,
@@ -414,6 +428,11 @@ const ensureSchema = (database: DatabaseSync) => {
   const recurringTaskInstanceColumns = database
     .prepare('PRAGMA table_info(recurring_task_instances)')
     .all() as Array<{ name?: unknown }>
+  const settingsColumns = database
+    .prepare('PRAGMA table_info(settings)')
+    .all() as Array<{ name?: unknown }>
+
+  ensureSettingsColumns(database, settingsColumns)
 
   if (!dayPlanItemColumns.some((column) => column.name === 'deleted_at')) {
     database.exec(`
@@ -433,6 +452,62 @@ const ensureSchema = (database: DatabaseSync) => {
     database.exec(`
       ALTER TABLE task_templates
       ADD COLUMN deadline_date TEXT;
+    `)
+  }
+
+  if (!taskTemplateColumns.some((column) => column.name === 'is_stepped')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN is_stepped INTEGER NOT NULL DEFAULT 0;
+    `)
+  }
+
+  if (!taskTemplateColumns.some((column) => column.name === 'current_step')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN current_step TEXT NOT NULL DEFAULT '';
+    `)
+  }
+
+  if (!taskTemplateColumns.some((column) => column.name === 'next_step')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN next_step TEXT NOT NULL DEFAULT '';
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'is_stepped')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN is_stepped INTEGER NOT NULL DEFAULT 0;
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'current_step')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN current_step TEXT NOT NULL DEFAULT '';
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'next_step')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN next_step TEXT NOT NULL DEFAULT '';
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'step_root_item_id')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN step_root_item_id TEXT;
+    `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'previous_step_item_id')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN previous_step_item_id TEXT;
     `)
   }
 
@@ -492,6 +567,41 @@ const ensureSchema = (database: DatabaseSync) => {
   }
 
   ensureSyncMetaDefaults(database)
+}
+
+const ensureSettingsColumns = (
+  database: DatabaseSync,
+  settingsColumns = database
+    .prepare('PRAGMA table_info(settings)')
+    .all() as Array<{ name?: unknown }>,
+) => {
+  if (!settingsColumns.some((column) => column.name === 'completed_time_rounding_minutes')) {
+    database.exec(`
+      ALTER TABLE settings
+      ADD COLUMN completed_time_rounding_minutes INTEGER NOT NULL DEFAULT 5;
+    `)
+  }
+
+  if (!settingsColumns.some((column) => column.name === 'default_night_todo_by_time_enabled')) {
+    database.exec(`
+      ALTER TABLE settings
+      ADD COLUMN default_night_todo_by_time_enabled INTEGER NOT NULL DEFAULT 0;
+    `)
+  }
+
+  if (!settingsColumns.some((column) => column.name === 'default_night_todo_start_hour')) {
+    database.exec(`
+      ALTER TABLE settings
+      ADD COLUMN default_night_todo_start_hour INTEGER NOT NULL DEFAULT 17;
+    `)
+  }
+
+  if (!settingsColumns.some((column) => column.name === 'default_night_todo_end_hour')) {
+    database.exec(`
+      ALTER TABLE settings
+      ADD COLUMN default_night_todo_end_hour INTEGER NOT NULL DEFAULT 23;
+    `)
+  }
 }
 
 const readMeta = (database: DatabaseSync, key: string) => {
@@ -785,6 +895,18 @@ const mapSettingsRow = (row: Record<string, unknown>): AppSettings => ({
   completedAtRoundingMinutes:
     (row.completed_time_rounding_minutes as AppSettings['completedAtRoundingMinutes'] | undefined) ??
     DEFAULT_COMPLETED_AT_ROUNDING_MINUTES,
+  defaultNightTodoByTimeEnabled:
+    row.default_night_todo_by_time_enabled === undefined
+      ? DEFAULT_NIGHT_TODO_BY_TIME_ENABLED
+      : toBoolean(row.default_night_todo_by_time_enabled),
+  defaultNightTodoStartHour:
+    typeof row.default_night_todo_start_hour === 'number'
+      ? row.default_night_todo_start_hour
+      : DEFAULT_NIGHT_TODO_START_HOUR,
+  defaultNightTodoEndHour:
+    typeof row.default_night_todo_end_hour === 'number'
+      ? row.default_night_todo_end_hour
+      : DEFAULT_NIGHT_TODO_END_HOUR,
   createdAt: row.created_at as string,
   updatedAt: row.updated_at as string,
 })
@@ -809,6 +931,9 @@ const mapTemplateRow = (row: Record<string, unknown>): TaskTemplate => ({
       ? undefined
       : Number(row.repeat_interval_value),
   isSegmented: toBoolean(row.is_segmented),
+  isStepped: toBoolean(row.is_stepped),
+  currentStep: (row.current_step as string | undefined) ?? '',
+  nextStep: (row.next_step as string | undefined) ?? '',
   createdAt: row.created_at as string,
   updatedAt: row.updated_at as string,
   grassStatus: toNullableString(row.grass_status) as TaskTemplate['grassStatus'],
@@ -862,6 +987,11 @@ const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => ({
   requiresPreparation: toBoolean(row.requires_preparation),
   preparationNotes: row.preparation_notes as string,
   isSegmented: toBoolean(row.is_segmented),
+  isStepped: toBoolean(row.is_stepped),
+  currentStep: (row.current_step as string | undefined) ?? '',
+  nextStep: (row.next_step as string | undefined) ?? '',
+  stepRootItemId: toNullableString(row.step_root_item_id),
+  previousStepItemId: toNullableString(row.previous_step_item_id),
   progressState: row.progress_state as DayPlanItem['progressState'],
   progressPercent: Number(row.progress_percent),
   status: row.status as DayPlanItem['status'],
@@ -1056,16 +1186,7 @@ const clearAppData = (database: DatabaseSync) => {
     DELETE FROM settings;
   `)
 
-  const settingsColumns = database
-    .prepare('PRAGMA table_info(settings)')
-    .all() as Array<{ name?: unknown }>
-
-  if (!settingsColumns.some((column) => column.name === 'completed_time_rounding_minutes')) {
-    database.exec(`
-      ALTER TABLE settings
-      ADD COLUMN completed_time_rounding_minutes INTEGER NOT NULL DEFAULT 5;
-    `)
-  }
+  ensureSettingsColumns(database)
 }
 
 const insertAppData = (database: DatabaseSync, appData: AppData) => {
@@ -1073,8 +1194,12 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
     .prepare(`
       INSERT INTO settings (
         id, initialized, tie_breaker_order, weather_enabled,
-        completed_time_rounding_minutes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        completed_time_rounding_minutes,
+        default_night_todo_by_time_enabled,
+        default_night_todo_start_hour,
+        default_night_todo_end_hour,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       SETTINGS_ROW_ID,
@@ -1082,6 +1207,9 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       appData.settings.tieBreakerOrder,
       appData.settings.weatherEnabled ? 1 : 0,
       appData.settings.completedAtRoundingMinutes,
+      appData.settings.defaultNightTodoByTimeEnabled ? 1 : 0,
+      appData.settings.defaultNightTodoStartHour,
+      appData.settings.defaultNightTodoEndHour,
       appData.settings.createdAt,
       appData.settings.updatedAt,
     )
@@ -1099,8 +1227,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       id, template_kind, title, date_value, deadline_date, activity_type_id, scene_tag_ids_json,
       interest_level, is_necessary, requires_preparation, preparation_notes,
       recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
-      is_segmented, created_at, updated_at, grass_status, is_archived
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertRecurringTaskInstance = database.prepare(`
     INSERT INTO recurring_task_instances (
@@ -1115,8 +1243,9 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
       root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
       is_necessary, requires_preparation, preparation_notes, is_segmented,
+      is_stepped, current_step, next_step, step_root_item_id, previous_step_item_id,
       progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertLogbookEntry = database.prepare(`
     INSERT INTO logbook_entries (
@@ -1167,6 +1296,9 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       template.repeatIntervalUnit ?? null,
       template.repeatIntervalValue ?? null,
       template.isSegmented ? 1 : 0,
+      template.isStepped ? 1 : 0,
+      template.currentStep ?? '',
+      template.nextStep ?? '',
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1217,6 +1349,11 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       item.requiresPreparation ? 1 : 0,
       item.preparationNotes,
       item.isSegmented ? 1 : 0,
+      item.isStepped ? 1 : 0,
+      item.currentStep ?? '',
+      item.nextStep ?? '',
+      item.stepRootItemId ?? null,
+      item.previousStepItemId ?? null,
       item.progressState,
       item.progressPercent,
       item.status,
@@ -1361,13 +1498,20 @@ const upsertSettings = (database: DatabaseSync, settings: AppSettings) => {
     .prepare(`
       INSERT INTO settings (
         id, initialized, tie_breaker_order, weather_enabled,
-        completed_time_rounding_minutes, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        completed_time_rounding_minutes,
+        default_night_todo_by_time_enabled,
+        default_night_todo_start_hour,
+        default_night_todo_end_hour,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         initialized = excluded.initialized,
         tie_breaker_order = excluded.tie_breaker_order,
         weather_enabled = excluded.weather_enabled,
         completed_time_rounding_minutes = excluded.completed_time_rounding_minutes,
+        default_night_todo_by_time_enabled = excluded.default_night_todo_by_time_enabled,
+        default_night_todo_start_hour = excluded.default_night_todo_start_hour,
+        default_night_todo_end_hour = excluded.default_night_todo_end_hour,
         created_at = excluded.created_at,
         updated_at = excluded.updated_at
     `)
@@ -1377,6 +1521,9 @@ const upsertSettings = (database: DatabaseSync, settings: AppSettings) => {
       settings.tieBreakerOrder,
       settings.weatherEnabled ? 1 : 0,
       settings.completedAtRoundingMinutes,
+      settings.defaultNightTodoByTimeEnabled ? 1 : 0,
+      settings.defaultNightTodoStartHour,
+      settings.defaultNightTodoEndHour,
       settings.createdAt,
       settings.updatedAt,
     )
@@ -1451,8 +1598,8 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
         id, template_kind, title, date_value, deadline_date, activity_type_id, scene_tag_ids_json,
         interest_level, is_necessary, requires_preparation, preparation_notes,
         recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
-        is_segmented, created_at, updated_at, grass_status, is_archived
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       template.id,
@@ -1471,6 +1618,9 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
       template.repeatIntervalUnit ?? null,
       template.repeatIntervalValue ?? null,
       template.isSegmented ? 1 : 0,
+      template.isStepped ? 1 : 0,
+      template.currentStep ?? '',
+      template.nextStep ?? '',
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1498,6 +1648,9 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
         repeat_interval_unit = ?,
         repeat_interval_value = ?,
         is_segmented = ?,
+        is_stepped = ?,
+        current_step = ?,
+        next_step = ?,
         created_at = ?,
         updated_at = ?,
         grass_status = ?,
@@ -1520,6 +1673,9 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
       template.repeatIntervalUnit ?? null,
       template.repeatIntervalValue ?? null,
       template.isSegmented ? 1 : 0,
+      template.isStepped ? 1 : 0,
+      template.currentStep ?? '',
+      template.nextStep ?? '',
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1610,8 +1766,9 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
       root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
       is_necessary, requires_preparation, preparation_notes, is_segmented,
+      is_stepped, current_step, next_step, step_root_item_id, previous_step_item_id,
       progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       item.id,
@@ -1635,6 +1792,11 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.requiresPreparation ? 1 : 0,
       item.preparationNotes,
       item.isSegmented ? 1 : 0,
+      item.isStepped ? 1 : 0,
+      item.currentStep ?? '',
+      item.nextStep ?? '',
+      item.stepRootItemId ?? null,
+      item.previousStepItemId ?? null,
       item.progressState,
       item.progressPercent,
       item.status,
@@ -1670,6 +1832,11 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
         requires_preparation = ?,
         preparation_notes = ?,
         is_segmented = ?,
+        is_stepped = ?,
+        current_step = ?,
+        next_step = ?,
+        step_root_item_id = ?,
+        previous_step_item_id = ?,
         progress_state = ?,
         progress_percent = ?,
         status = ?,
@@ -1700,6 +1867,11 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.requiresPreparation ? 1 : 0,
       item.preparationNotes,
       item.isSegmented ? 1 : 0,
+      item.isStepped ? 1 : 0,
+      item.currentStep ?? '',
+      item.nextStep ?? '',
+      item.stepRootItemId ?? null,
+      item.previousStepItemId ?? null,
       item.progressState,
       item.progressPercent,
       item.status,

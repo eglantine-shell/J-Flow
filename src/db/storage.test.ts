@@ -131,6 +131,24 @@ describe('appDataRepository.taskTemplates.create', () => {
     expect(imported.settings.completedAtRoundingMinutes).toBe(5)
   })
 
+  it('defaults night todo settings for legacy imports', async () => {
+    const { appDataRepository } = await import('@/db/storage')
+
+    const imported = await appDataRepository.importSnapshot({
+      ...mockSeedAppData,
+      settings: {
+        ...mockSeedAppData.settings,
+        defaultNightTodoByTimeEnabled: undefined,
+        defaultNightTodoStartHour: undefined,
+        defaultNightTodoEndHour: undefined,
+      },
+    } as unknown as typeof mockSeedAppData)
+
+    expect(imported.settings.defaultNightTodoByTimeEnabled).toBe(false)
+    expect(imported.settings.defaultNightTodoStartHour).toBe(17)
+    expect(imported.settings.defaultNightTodoEndHour).toBe(23)
+  })
+
   it('defaults logbook entries to an empty array for legacy imports', async () => {
     const { appDataRepository } = await import('@/db/storage')
 

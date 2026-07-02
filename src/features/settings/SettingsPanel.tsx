@@ -19,6 +19,9 @@ type SettingsViewState = {
   isLoading: boolean
   tieBreakerOrder: TieBreakerOrder
   completedAtRoundingMinutes: CompletedAtRoundingMinutes
+  defaultNightTodoByTimeEnabled: boolean
+  defaultNightTodoStartHour: number
+  defaultNightTodoEndHour: number
   isDesktop: boolean
   deviceId: string | null
   lastSyncedAt: string | null
@@ -36,6 +39,9 @@ const initialViewState: SettingsViewState = {
   isLoading: true,
   tieBreakerOrder: 'desc',
   completedAtRoundingMinutes: DEFAULT_COMPLETED_AT_ROUNDING_MINUTES,
+  defaultNightTodoByTimeEnabled: false,
+  defaultNightTodoStartHour: 17,
+  defaultNightTodoEndHour: 23,
   isDesktop: false,
   deviceId: null,
   lastSyncedAt: null,
@@ -49,7 +55,51 @@ const initialViewState: SettingsViewState = {
   latestAutoBackupAt: null,
 }
 
+const TODO_DEFAULT_HOUR_OPTIONS = Array.from({ length: 24 }, (_, value) => value)
+
 const pad = (value: number) => String(value).padStart(2, '0')
+
+const isTutorialMode = () =>
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('tutorial') === '1'
+
+const getDesktopApiForSettings = () => {
+  if (isTutorialMode()) {
+    return null
+  }
+
+  return window.jflowDesktop ?? null
+}
+
+const tutorialSyncState: LocalSyncState = {
+  deviceId: 'tutorial-device',
+  lastSyncedAt: '2026-07-02T13:30:00.000Z',
+  lastSyncStatus: 'success',
+  lastSyncError: null,
+  lastSyncAttemptedAt: '2026-07-02T13:30:00.000Z',
+  lastSyncResult: {
+    status: 'success',
+    attemptedAt: '2026-07-02T13:30:00.000Z',
+    backupCreated: true,
+    backupFilePath: 'J-Flow Sync/backups/tutorial-backup.json',
+    importResult: {
+      appliedCount: 2,
+      skippedCount: 0,
+      failedCount: 0,
+    },
+    exportResult: {
+      exportedCount: 5,
+      failedCount: 0,
+    },
+    errors: [],
+    warnings: [],
+  },
+  syncTargetPath: '/J-Flow Sync',
+  syncTargetConfig: {
+    type: 'localFolder',
+    path: '/J-Flow Sync',
+  },
+}
 
 const buildBackupFilename = () => {
   const now = new Date()
@@ -126,18 +176,27 @@ export function SettingsPanel() {
           return
         }
 
-        const autoBackupInfo = window.jflowDesktop
-          ? await window.jflowDesktop.getAutoBackupInfo().catch(() => null)
-          : null
-        const syncState = window.jflowDesktop
-          ? await window.jflowDesktop.repository.sync.getState().catch(() => null)
-          : null
+        const desktopApi = getDesktopApiForSettings()
+        const tutorialMode = isTutorialMode()
+        const autoBackupInfo = desktopApi
+          ? await desktopApi.getAutoBackupInfo().catch(() => null)
+          : tutorialMode
+            ? { backupCount: 3, latestBackupAt: '2026-07-02T13:30:00.000Z' }
+            : null
+        const syncState = desktopApi
+          ? await desktopApi.repository.sync.getState().catch(() => null)
+          : tutorialMode
+            ? tutorialSyncState
+            : null
 
         setViewState({
           isLoading: false,
           tieBreakerOrder: appData.settings.tieBreakerOrder,
           completedAtRoundingMinutes: appData.settings.completedAtRoundingMinutes,
-          isDesktop: Boolean(window.jflowDesktop),
+          defaultNightTodoByTimeEnabled: appData.settings.defaultNightTodoByTimeEnabled,
+          defaultNightTodoStartHour: appData.settings.defaultNightTodoStartHour,
+          defaultNightTodoEndHour: appData.settings.defaultNightTodoEndHour,
+          isDesktop: Boolean(desktopApi) || tutorialMode,
           deviceId: syncState?.deviceId ?? null,
           lastSyncedAt: syncState?.lastSyncedAt ?? null,
           lastSyncStatus: syncState?.lastSyncStatus ?? null,
@@ -186,11 +245,13 @@ export function SettingsPanel() {
   }
 
   const refreshDesktopAutoBackupInfo = async () => {
-    if (!window.jflowDesktop) {
+    const desktopApi = getDesktopApiForSettings()
+
+    if (!desktopApi) {
       return
     }
 
-    const autoBackupInfo = await window.jflowDesktop.getAutoBackupInfo().catch(() => null)
+    const autoBackupInfo = await desktopApi.getAutoBackupInfo().catch(() => null)
 
     if (!autoBackupInfo) {
       return
@@ -204,11 +265,13 @@ export function SettingsPanel() {
   }
 
   const refreshDesktopSyncState = async () => {
-    if (!window.jflowDesktop) {
+    const desktopApi = getDesktopApiForSettings()
+
+    if (!desktopApi) {
       return
     }
 
-    const syncState = await window.jflowDesktop.repository.sync.getState().catch(() => null)
+    const syncState = await desktopApi.repository.sync.getState().catch(() => null)
 
     if (!syncState) {
       return
@@ -258,6 +321,39 @@ export function SettingsPanel() {
     })
   }
 
+  const updateDefaultNightTodoSettings = async ({
+    defaultNightTodoByTimeEnabled = viewState.defaultNightTodoByTimeEnabled,
+    defaultNightTodoStartHour = viewState.defaultNightTodoStartHour,
+    defaultNightTodoEndHour = viewState.defaultNightTodoEndHour,
+  }: {
+    defaultNightTodoByTimeEnabled?: boolean
+    defaultNightTodoStartHour?: number
+    defaultNightTodoEndHour?: number
+  }) => {
+    if (
+      defaultNightTodoByTimeEnabled === viewState.defaultNightTodoByTimeEnabled &&
+      defaultNightTodoStartHour === viewState.defaultNightTodoStartHour &&
+      defaultNightTodoEndHour === viewState.defaultNightTodoEndHour
+    ) {
+      return
+    }
+
+    await withSaving(async () => {
+      await appDataRepository.settings.update({
+        defaultNightTodoByTimeEnabled,
+        defaultNightTodoStartHour,
+        defaultNightTodoEndHour,
+      })
+      setViewState((current) => ({
+        ...current,
+        defaultNightTodoByTimeEnabled,
+        defaultNightTodoStartHour,
+        defaultNightTodoEndHour,
+      }))
+      setSuccessMessage('已更新新增 Todo 默认时段。')
+    })
+  }
+
   const resetForTesting = async () => {
     const shouldReset = window.confirm(
       '确认重置应用吗？这会清空当前本地数据，并回到第一次打开应用的初始化状态。',
@@ -273,13 +369,19 @@ export function SettingsPanel() {
     })
   }
 
+  const replayTutorial = () => {
+    navigate('/?tutorial=1')
+  }
+
   const exportBackup = async () => {
     await withSaving(async () => {
       const appData = await appDataRepository.exportSnapshot()
       const content = `${JSON.stringify(appData, null, 2)}\n`
 
-      if (window.jflowDesktop) {
-        const result = await window.jflowDesktop.saveJsonBackup({
+      const desktopApi = getDesktopApiForSettings()
+
+      if (desktopApi) {
+        const result = await desktopApi.saveJsonBackup({
           suggestedFilename: buildBackupFilename(),
           content,
         })
@@ -333,6 +435,9 @@ export function SettingsPanel() {
         isLoading: false,
         tieBreakerOrder: imported.settings.tieBreakerOrder,
         completedAtRoundingMinutes: imported.settings.completedAtRoundingMinutes,
+        defaultNightTodoByTimeEnabled: imported.settings.defaultNightTodoByTimeEnabled,
+        defaultNightTodoStartHour: imported.settings.defaultNightTodoStartHour,
+        defaultNightTodoEndHour: imported.settings.defaultNightTodoEndHour,
       }))
       await refreshDesktopAutoBackupInfo()
       setSuccessMessage('已导入备份并覆盖当前本地数据。')
@@ -351,7 +456,7 @@ export function SettingsPanel() {
   }
 
   const importBackupFromDesktop = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -382,6 +487,9 @@ export function SettingsPanel() {
         isLoading: false,
         tieBreakerOrder: imported.settings.tieBreakerOrder,
         completedAtRoundingMinutes: imported.settings.completedAtRoundingMinutes,
+        defaultNightTodoByTimeEnabled: imported.settings.defaultNightTodoByTimeEnabled,
+        defaultNightTodoStartHour: imported.settings.defaultNightTodoStartHour,
+        defaultNightTodoEndHour: imported.settings.defaultNightTodoEndHour,
       }))
       await refreshDesktopAutoBackupInfo()
       setSuccessMessage(
@@ -393,7 +501,7 @@ export function SettingsPanel() {
   }
 
   const restoreLatestAutoBackup = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -422,6 +530,9 @@ export function SettingsPanel() {
         isLoading: false,
         tieBreakerOrder: imported.settings.tieBreakerOrder,
         completedAtRoundingMinutes: imported.settings.completedAtRoundingMinutes,
+        defaultNightTodoByTimeEnabled: imported.settings.defaultNightTodoByTimeEnabled,
+        defaultNightTodoStartHour: imported.settings.defaultNightTodoStartHour,
+        defaultNightTodoEndHour: imported.settings.defaultNightTodoEndHour,
       }))
       await refreshDesktopAutoBackupInfo()
       setSuccessMessage('已恢复最新一份自动备份。')
@@ -442,7 +553,7 @@ export function SettingsPanel() {
   const hasConfiguredSyncTarget = activeSyncTarget !== null
 
   const chooseDesktopSyncDirectory = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -469,7 +580,7 @@ export function SettingsPanel() {
   }
 
   const testDesktopSyncDirectory = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -487,7 +598,7 @@ export function SettingsPanel() {
   }
 
   const clearDesktopSyncDirectory = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -508,7 +619,7 @@ export function SettingsPanel() {
   }
 
   const openDesktopSyncDirectory = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -526,7 +637,7 @@ export function SettingsPanel() {
   }
 
   const runDesktopManualSync = async () => {
-    const desktopApi = window.jflowDesktop
+    const desktopApi = getDesktopApiForSettings()
 
     if (!desktopApi) {
       return
@@ -730,7 +841,92 @@ export function SettingsPanel() {
               </div>
             </section>
 
-          <section className="settings-panel__section settings-panel__section--data">
+            <section className="settings-panel__section settings-panel__section--preferences">
+              <div className="settings-panel__section-header">
+                <p className="eyebrow">Preferences</p>
+                <h3>新增 Todo 默认时段</h3>
+                <p>开启后，夜间时段内新增的 Todo 默认放入晚上。</p>
+              </div>
+
+              <div className="settings-choice-row">
+                <button
+                  className={
+                    viewState.defaultNightTodoByTimeEnabled
+                      ? 'check-tile check-tile--selected'
+                      : 'check-tile'
+                  }
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => {
+                    void updateDefaultNightTodoSettings({
+                      defaultNightTodoByTimeEnabled: true,
+                    })
+                  }}
+                >
+                  开启
+                </button>
+                <button
+                  className={
+                    !viewState.defaultNightTodoByTimeEnabled
+                      ? 'check-tile check-tile--selected'
+                      : 'check-tile'
+                  }
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => {
+                    void updateDefaultNightTodoSettings({
+                      defaultNightTodoByTimeEnabled: false,
+                    })
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+
+              <div className="settings-hour-window">
+                <label className="settings-hour-window__field">
+                  <span>开始</span>
+                  <select
+                    value={viewState.defaultNightTodoStartHour}
+                    disabled={isSaving}
+                    onChange={(event) => {
+                      void updateDefaultNightTodoSettings({
+                        defaultNightTodoStartHour: Number(event.target.value),
+                      })
+                    }}
+                  >
+                    {TODO_DEFAULT_HOUR_OPTIONS.map((hour) => (
+                      <option key={hour} value={hour}>
+                        {pad(hour)}:00
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="settings-hour-window__field">
+                  <span>结束</span>
+                  <select
+                    value={viewState.defaultNightTodoEndHour}
+                    disabled={isSaving}
+                    onChange={(event) => {
+                      void updateDefaultNightTodoSettings({
+                        defaultNightTodoEndHour: Number(event.target.value),
+                      })
+                    }}
+                  >
+                    {TODO_DEFAULT_HOUR_OPTIONS.map((hour) => (
+                      <option key={hour} value={hour}>
+                        {pad(hour)}:00
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+          <section
+            className="settings-panel__section settings-panel__section--data"
+            data-tutorial-id="settings-data"
+          >
             <div className="settings-panel__section-header">
               <p className="eyebrow">Data</p>
               <h3>数据导入 / 导出</h3>
@@ -793,7 +989,10 @@ export function SettingsPanel() {
           </section>
 
           {viewState.isDesktop ? (
-            <section className="settings-panel__section settings-panel__section--data">
+            <section
+              className="settings-panel__section settings-panel__section--data"
+              data-tutorial-id="settings-sync"
+            >
               <div className="settings-panel__section-header">
                 <p className="eyebrow">Sync</p>
                 <h3>同步</h3>
@@ -990,30 +1189,39 @@ export function SettingsPanel() {
             </section>
           ) : null}
 
-          <section className="settings-panel__section settings-panel__section--danger">
+          <section className="settings-panel__section settings-panel__section--guide">
             <div className="settings-panel__section-header">
-              <p className="eyebrow">Reset</p>
-              <h3>重置应用</h3>
+              <p className="eyebrow">Guide</p>
+              <h3>初始化与使用教学</h3>
+              <p>
+                重置应用后会清空当前本地应用数据，并回到第一次打开应用的初始化流程；也可以在此重看使用教学。
+              </p>
             </div>
 
-            <div className="settings-danger-zone">
-              <p className="form-message">
-                重置后会清空当前本地应用数据，并回到第一次打开应用的初始化流程。
-              </p>
-              <div className="setup-actions">
-                <button
-                  className="ghost-button"
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => {
-                    void resetForTesting()
-                  }}
-                >
-                  重置
-                </button>
-              </div>
+            <div className="settings-guide-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  void resetForTesting()
+                }}
+              >
+                重置应用
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                disabled={isSaving}
+                onClick={replayTutorial}
+              >
+                使用教学
+              </button>
             </div>
             </section>
+            <p className="settings-panel__credit">
+              制作：葉汀芷（微博/小红书：@也停止）
+            </p>
           </div>
         </div>
       </section>

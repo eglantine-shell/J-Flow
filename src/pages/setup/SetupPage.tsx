@@ -210,7 +210,7 @@ export function SetupPage() {
         },
       })
 
-      navigate('/', { replace: true })
+      navigate('/?tutorial=1', { replace: true })
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error ? error.message : '初始化保存失败，请稍后重试。',

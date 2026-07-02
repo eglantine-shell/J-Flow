@@ -155,7 +155,10 @@ export function LogbookPage() {
 
   return (
     <div className="page-stack">
-      <section className="surface-card surface-card--compact page-panel page-panel--logbook">
+      <section
+        className="surface-card surface-card--compact page-panel page-panel--logbook"
+        data-tutorial-id="logbook-page"
+      >
         <div className="page-stack__header">
           <p className="eyebrow">Logbook</p>
           <h2>日志</h2>

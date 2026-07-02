@@ -1,4 +1,5 @@
 import { appDataRepository } from '@/db/storage'
+import { getTodoDisplayTitle } from '@/features/todo/todo-view-model'
 import type {
   AppData,
   DayPlanItem,
@@ -72,7 +73,7 @@ const buildCompletedSnapshotItems = (appData: AppData, dateKey: string): Logbook
     .map((item) => ({
       id: item.id,
       status: 'completed',
-      titleSnapshot: item.title,
+      titleSnapshot: getTodoDisplayTitle(item),
       time: toTimeLabel(item.completedAt as string),
       isNecessary: item.isNecessary,
       isPicked: item.source === 'decision_selected',
@@ -131,7 +132,7 @@ const buildPendingSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
       return {
         id: item.id,
         status: 'pending',
-        titleSnapshot: item.title,
+        titleSnapshot: getTodoDisplayTitle(item),
         isNecessary: item.isNecessary,
         isPicked: item.source === 'decision_selected',
         isSegmented: item.isSegmented,
@@ -157,7 +158,7 @@ const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
     .map((item) => ({
       id: item.id,
       status: 'deleted',
-      titleSnapshot: item.title,
+      titleSnapshot: getTodoDisplayTitle(item),
       isNecessary: item.isNecessary,
       isPicked: item.source === 'decision_selected',
       isSegmented: item.isSegmented,

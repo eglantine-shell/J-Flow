@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  CornerUpLeft,
   Ellipsis,
   GripVertical,
   Copy,
@@ -86,6 +87,10 @@ export function CopyIcon(props: IconProps) {
 
 export function RepeatIcon(props: IconProps) {
   return <Repeat2 {...defaultProps} {...props} />
+}
+
+export function ReturnIcon(props: IconProps) {
+  return <CornerUpLeft {...defaultProps} {...props} />
 }
 
 export function ImportantIcon(props: IconProps) {
