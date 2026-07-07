@@ -228,6 +228,17 @@ type RepeatRule = {
   - 后续改该条 Todo 的 `date`
   - 不自动顺延 `deadlineDate`
 
+### 2.2 Recurring Todo 与日夜归属
+- 对重复 Todo，模板应显式保存：
+  - `timeBlock`
+  - `timeBlockSource`
+- 后续 occurrence 生成时直接继承模板 `timeBlock / timeBlockSource`。
+- 场景 tag 仅作为用户定义的“有空就做”分类 / 筛选信息，不再参与日夜语境推断。
+- 不应根据 tag 中文名称做语义匹配。
+- 旧数据迁移时：
+  - 若重复模板已有对应 `DayPlanItem` 实例，应优先从最近实例回填 `timeBlock`
+  - 若无法回填，则默认 `day / default_day`
+
 ### 3. GrassItem
 
 ```ts

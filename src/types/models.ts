@@ -79,6 +79,8 @@ export interface TaskTemplate {
   title: string
   date: string
   deadlineDate?: string
+  timeBlock: TimeBlock
+  timeBlockSource: TimeBlockSource
   activityTypeId?: string
   sceneTagIds: string[]
   interestLevel: InterestLevel

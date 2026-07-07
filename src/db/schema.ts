@@ -27,6 +27,13 @@ const grassStatusSchema = z.enum(['active', 'picked', 'archived'])
 const repeatTypeSchema = z.enum(['none', 'calendar', 'afterCompletion'])
 const repeatIntervalUnitSchema = z.enum(['day', 'week', 'month', 'year'])
 const repeatIntervalValueSchema = z.number().int().min(1).max(100)
+const timeBlockSchema = z.enum(['day', 'night'])
+const timeBlockSourceSchema = z.enum([
+  'mapped_day',
+  'default_day',
+  'mapped_night',
+  'manual_night',
+])
 
 export const sceneTagSchema = z.object({
   id: z.string().min(1),
@@ -50,6 +57,8 @@ export const taskTemplateSchema = z.object({
   title: z.string().min(1),
   date: templateDateSchema,
   deadlineDate: dateSchema.optional(),
+  timeBlock: timeBlockSchema.default('day'),
+  timeBlockSource: timeBlockSourceSchema.default('default_day'),
   activityTypeId: z.string().min(1).optional(),
   sceneTagIds: z.array(z.string().min(1)),
   interestLevel: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -110,13 +119,8 @@ export const dayPlanItemSchema = z.object({
   originDate: dateSchema.optional(),
   targetDate: dateSchema.optional(),
   deadlineDate: dateSchema.optional(),
-  timeBlock: z.enum(['day', 'night']),
-  timeBlockSource: z.enum([
-    'mapped_day',
-    'default_day',
-    'mapped_night',
-    'manual_night',
-  ]),
+  timeBlock: timeBlockSchema,
+  timeBlockSource: timeBlockSourceSchema,
   sortOrder: z.number(),
   source: z.enum(['auto_generated', 'decision_selected', 'manual_temporary']),
   templateId: z.string().min(1).optional(),
@@ -299,7 +303,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 12
+export const APP_DATA_SCHEMA_VERSION = 13
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

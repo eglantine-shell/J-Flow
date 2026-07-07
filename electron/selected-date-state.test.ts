@@ -36,6 +36,8 @@ describe('electron/selected-date-state', () => {
           templateKind: 'todo_recurring',
           title: '每周阅读',
           date: '2026-05-20',
+          timeBlock: 'day',
+          timeBlockSource: 'default_day',
           sceneTagIds: [],
           interestLevel: 2,
           isNecessary: false,
@@ -46,6 +48,9 @@ describe('electron/selected-date-state', () => {
           repeatIntervalUnit: 'week',
           repeatIntervalValue: 1,
           isSegmented: false,
+          isStepped: false,
+          currentStep: '',
+          nextStep: '',
           createdAt: '2026-05-20T09:00:00.000Z',
           updatedAt: '2026-05-20T09:00:00.000Z',
           isArchived: false,
@@ -65,6 +70,90 @@ describe('electron/selected-date-state', () => {
         date: '2026-05-27',
         targetDate: '2026-05-27',
         status: 'pending',
+      }),
+    )
+  })
+
+  it('uses recurring template time block instead of scene tag name mapping', async () => {
+    const dataPath = await createTempDirectory('j-flow-selected-date-time-block-')
+
+    replaceSqliteSnapshot(dataPath, {
+      ...sqliteTestSeedAppData,
+      taskTemplates: [
+        {
+          id: 'template-night-necessary',
+          templateKind: 'todo_recurring',
+          title: '夜间必要每日事项',
+          date: '2026-05-20',
+          deadlineDate: '2026-05-20',
+          timeBlock: 'night',
+          timeBlockSource: 'manual_night',
+          sceneTagIds: ['scene-weekday-evening'],
+          interestLevel: 2,
+          isNecessary: true,
+          requiresPreparation: false,
+          preparationNotes: '',
+          recurrence: 'daily',
+          repeatType: 'calendar',
+          repeatIntervalUnit: 'day',
+          repeatIntervalValue: 1,
+          isSegmented: false,
+          isStepped: false,
+          currentStep: '',
+          nextStep: '',
+          createdAt: '2026-05-20T09:00:00.000Z',
+          updatedAt: '2026-05-20T09:00:00.000Z',
+          isArchived: false,
+        },
+        {
+          id: 'template-day-with-evening-tag',
+          templateKind: 'todo_recurring',
+          title: '白天但带工作日晚上标签',
+          date: '2026-05-20',
+          timeBlock: 'day',
+          timeBlockSource: 'default_day',
+          sceneTagIds: ['scene-weekday-evening'],
+          interestLevel: 2,
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          recurrence: 'daily',
+          repeatType: 'calendar',
+          repeatIntervalUnit: 'day',
+          repeatIntervalValue: 1,
+          isSegmented: false,
+          isStepped: false,
+          currentStep: '',
+          nextStep: '',
+          createdAt: '2026-05-20T10:00:00.000Z',
+          updatedAt: '2026-05-20T10:00:00.000Z',
+          isArchived: false,
+        },
+      ],
+    })
+
+    const result = await prepareSelectedDateState(dataPath, '2026-05-21')
+    const appData = getSqliteAppData(dataPath)
+    const nightItem = appData?.dayPlanItems.find(
+      (item) => item.templateId === 'template-night-necessary' && item.targetDate === '2026-05-21',
+    )
+    const dayItem = appData?.dayPlanItems.find(
+      (item) => item.templateId === 'template-day-with-evening-tag' && item.targetDate === '2026-05-21',
+    )
+
+    expect(result.updated).toBe(true)
+    expect(nightItem).toEqual(
+      expect.objectContaining({
+        timeBlock: 'night',
+        timeBlockSource: 'manual_night',
+        isNecessary: true,
+        deadlineDate: '2026-05-21',
+      }),
+    )
+    expect(dayItem).toEqual(
+      expect.objectContaining({
+        timeBlock: 'day',
+        timeBlockSource: 'default_day',
       }),
     )
   })

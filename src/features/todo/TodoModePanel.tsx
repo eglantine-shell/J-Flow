@@ -347,9 +347,6 @@ const formatCompletedTimeEditorLabel = (completedAt?: string) => {
   return `完成于 ${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-const DAY_SCENE_NAMES = new Set(['上午', '下午', '白天'])
-const NIGHT_SCENE_NAMES = new Set(['晚上', '夜间'])
-
 const repeatTypeOptions: Array<{
   label: string
   value: RepeatType
@@ -398,14 +395,6 @@ function sortTodoItems(items: DayPlanItem[]) {
 
     return left.createdAt.localeCompare(right.createdAt)
   })
-}
-
-function resolveRecurringSceneTagIds(sceneTags: SceneTag[], timeBlock: TimeBlock) {
-  const matchedNames = timeBlock === 'night' ? NIGHT_SCENE_NAMES : DAY_SCENE_NAMES
-
-  return sceneTags
-    .filter((sceneTag) => matchedNames.has(sceneTag.name))
-    .map((sceneTag) => sceneTag.id)
 }
 
 async function syncSelectedDateData(selectedDate: Date) {
@@ -1262,22 +1251,14 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         }
       } else {
         const serializedRepeatRule = serializeRepeatRule(repeatRuleDraft)
-        const availableSceneTags =
-          sceneTags.length > 0 ? sceneTags : await appDataRepository.sceneTags.list()
-        const recurringSceneTagIds = resolveRecurringSceneTagIds(
-          availableSceneTags,
-          temporaryTimeBlock,
-        )
-
-        if (sceneTags.length === 0) {
-          setSceneTags(availableSceneTags)
-        }
+        const inheritedSceneTagIds = activeEditingComposerItem.internalRef.template?.sceneTagIds ?? []
 
         if (isRecurringItem && item.templateId) {
           await appDataRepository.taskTemplates.update({
             id: item.templateId,
             title: nextTitle,
-            sceneTagIds: recurringSceneTagIds,
+            timeBlock: temporaryTimeBlock,
+            timeBlockSource: nextTimeBlockSource,
             isNecessary: isNecessaryDraft,
             deadlineDate: nextDeadlineDate,
             requiresPreparation: nextRequiresPreparation,
@@ -1324,7 +1305,9 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             date: nextDateKey,
             activityTypeId: undefined,
             title: nextTitle,
-            sceneTagIds: recurringSceneTagIds,
+            timeBlock: temporaryTimeBlock,
+            timeBlockSource: nextTimeBlockSource,
+            sceneTagIds: inheritedSceneTagIds,
             interestLevel: 2,
             isNecessary: isNecessaryDraft,
             deadlineDate: nextDeadlineDate,
@@ -1435,8 +1418,6 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           stepRootItemId: nextIsStepped ? createdItem.id : undefined,
         })
       } else {
-        const appData = await appDataRepository.get()
-        const sceneTagIds = resolveRecurringSceneTagIds(appData.sceneTags, temporaryTimeBlock)
         const serializedRepeatRule = serializeRepeatRule(repeatRuleDraft)
 
         const template = await appDataRepository.taskTemplates.create({
@@ -1444,7 +1425,9 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           date: nextDateKey,
           activityTypeId: undefined,
           title,
-          sceneTagIds,
+          timeBlock: temporaryTimeBlock,
+          timeBlockSource: temporaryTimeBlock === 'night' ? 'manual_night' : 'default_day',
+          sceneTagIds: [],
           interestLevel: 2,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,
@@ -1720,14 +1703,15 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           existingItemsInTimeBlock.length === 0
             ? 1
             : Math.max(...existingItemsInTimeBlock.map((item) => item.internalRef.item.sortOrder)) + 1
-        const recurringSceneTagIds = resolveRecurringSceneTagIds(sceneTags, temporaryTimeBlock)
         const serializedRepeatRule = serializeRepeatRule(repeatRuleDraft)
         const recurringTemplate = await appDataRepository.taskTemplates.create({
           templateKind: 'todo_recurring',
           date: nextDateKey,
           activityTypeId: undefined,
           title: template.title,
-          sceneTagIds: recurringSceneTagIds,
+          timeBlock: temporaryTimeBlock,
+          timeBlockSource: temporaryTimeBlock === 'night' ? 'manual_night' : 'default_day',
+          sceneTagIds: template.sceneTagIds,
           interestLevel: 2,
           isNecessary: isNecessaryDraft,
           deadlineDate: nextDeadlineDate,

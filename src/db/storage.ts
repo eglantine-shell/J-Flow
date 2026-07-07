@@ -37,9 +37,30 @@ type ActivityTypeCreateInput = Omit<ActivityType, 'id' | 'createdAt' | 'updatedA
 
 type TaskTemplateCreateInput = Omit<
   TaskTemplate,
-  'id' | 'createdAt' | 'updatedAt' | 'date' | 'isStepped' | 'currentStep' | 'nextStep'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'date'
+  | 'timeBlock'
+  | 'timeBlockSource'
+  | 'isStepped'
+  | 'currentStep'
+  | 'nextStep'
 > &
-  Partial<Pick<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'date' | 'isStepped' | 'currentStep' | 'nextStep'>>
+  Partial<
+    Pick<
+      TaskTemplate,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'date'
+      | 'timeBlock'
+      | 'timeBlockSource'
+      | 'isStepped'
+      | 'currentStep'
+      | 'nextStep'
+    >
+  >
 
 type RecurringTaskInstanceCreateInput = Omit<
   RecurringTaskInstance,
@@ -712,6 +733,8 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     title: input.title,
     date: input.date ?? todayDateString(),
     deadlineDate: input.deadlineDate,
+    timeBlock: input.timeBlock ?? 'day',
+    timeBlockSource: input.timeBlockSource ?? 'default_day',
     activityTypeId: input.activityTypeId,
     sceneTagIds: [...input.sceneTagIds],
     interestLevel: input.interestLevel,

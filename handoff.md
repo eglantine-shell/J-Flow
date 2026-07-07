@@ -1,5 +1,112 @@
 # 项目交接摘要
 
+## 最新状态（2026-07-07，V3 版本口径校正与打包准备，优先参考）
+- 用户确认：原先称为 `V2.4` 的大更新应作为 `V3` 发布。
+- V3 范围包含：
+  - 原 V2.4 A：备注替代准备 + 夜间新增 Todo 默认归属晚上
+  - 原 V2.4 B：拔草删除语义重构
+  - 原 V2.4 C：分步 Todo
+  - 原 V2.4 D：初始化页与真实 UI 使用教学
+  - 2026-07-07 重复 Todo 日夜归属 bug 修复
+- 本轮已更新：
+  - `README.md`
+  - `package.json`
+  - `dev-log.md`
+  - `handoff.md`
+- 打包命名已更新：
+  - macOS：`J-Flow-V3.dmg`
+  - Windows setup：`J-Flow-V3-win-setup.exe`
+  - Windows portable：`J-Flow-V3-win-portable.exe`
+- V3 macOS 产物已生成：
+  - `release/J-Flow-V3.dmg`
+  - `release/J-Flow-V3.dmg.blockmap`
+- 已挂载最终 DMG 校验：
+  - `CFBundleDisplayName = J-Flow`
+  - `CFBundleExecutable = J-Flow`
+  - `CFBundleIconFile = icon.icns`
+  - `CFBundleIdentifier = com.jflow.desktop`
+  - `CFBundleShortVersionString = 3.0.0`
+  - `CFBundleVersion = 3.0.0`
+  - 包内包含 `app.asar`、`icon.icns`、`icon.png`
+- 注意：
+  - V3 Windows 包尚未在本轮打包验证
+  - 本轮 `corepack pnpm run package:mac` 已正常通过，未复现之前的 pnpm 依赖收集 `ERR_SQLITE_ERROR`
+  - 打包时仍提示 `build/icon.ico` 不存在；该资源只影响 Windows extraResources，本轮 macOS DMG 不受影响
+
+## 最新状态（2026-07-07，V3 重复 Todo 日夜归属修复，优先参考）
+- 本轮修复“每日重复的必要事项无法稳定放在晚上”的问题。
+- 排查结论：
+  - 现行规则已取消场景 tag 与白天 / 晚上的语义映射
+  - 代码仍残留重复 Todo 的 tag 名称推断日夜逻辑
+  - 根因是 `TaskTemplate` 没有保存 `timeBlock / timeBlockSource`
+- 本轮已实现：
+  - `TaskTemplate` 新增 `timeBlock`
+  - `TaskTemplate` 新增 `timeBlockSource`
+  - JSON app data schema version：`13`
+  - SQLite schema version：`7`
+  - SQLite `task_templates` 新增：
+    - `time_block`
+    - `time_block_source`
+  - 旧 SQLite migration 优先从已有重复 occurrence 的最近 `DayPlanItem.timeBlock` 回填模板
+  - 无法回填时默认 `day / default_day`
+  - Web / renderer 重复生成路径直接继承模板日夜
+  - Electron 后台日切重复生成路径直接继承模板日夜
+  - Todo 表单创建 / 编辑重复 Todo 时写入模板日夜
+  - 不再根据日夜选择自动写入“白天 / 晚上”场景 tag
+  - 不再根据 `工作日晚上`、`晚上`、`白天` 等 tag 中文名推断日夜
+- 本轮涉及文件：
+  - `src/types/models.ts`
+  - `electron/types.ts`
+  - `src/db/schema.ts`
+  - `src/db/storage.ts`
+  - `electron/sqlite.ts`
+  - `src/features/recurrence/auto-generated.ts`
+  - `electron/selected-date-state.ts`
+  - `src/features/todo/TodoModePanel.tsx`
+  - `electron/selected-date-state.test.ts`
+  - `product-rules.md`
+  - `data-model.md`
+  - `manual-test-checklist.md`
+  - `task-list.md`
+  - `dev-log.md`
+  - `handoff.md`
+- 当前验证：
+  - `corepack pnpm exec tsc --noEmit`：通过
+  - `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+  - `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts electron/selected-date-state.test.ts`：通过，`22` 项
+- 后续注意：
+  - `mapped_day / mapped_night` 仍作为旧数据兼容值保留
+  - 目前未启动 Electron 人工验证，建议正式使用前检查一个每日重复必要晚上 Todo 的次日生成
+
+## 最新状态（2026-07-02，V2.4 DMG 图标修复，优先参考）
+- 新打包的 `release/J-Flow-V2.4.dmg` 曾出现没有 J-Flow 图标的问题。
+- 排查结论：
+  - 先前 DMG 是从未组装完成的裸 `Electron.app` 生成的。
+  - 该 app bundle 的 `Info.plist` 仍为 Electron 默认元信息，并指向 `electron.icns`。
+  - 包内缺少完整 J-Flow app resources，因此不是正确的 V2.4 试用包。
+- 本轮已修复：
+  - 重新在临时目录组装 `J-Flow.app`
+  - 写入 `dist-electron`、`dist-desktop`、`package.json`
+  - 补入运行时依赖 `fast-xml-parser` 及其依赖
+  - 写入 `icon.icns` 与 `icon.png`
+  - 将 app bundle 元信息改为 `J-Flow / com.jflow.desktop / 2.4.0`
+  - 重新生成 `release/J-Flow-V2.4.dmg`
+- 当前验证：
+  - `electron-builder --mac dmg --prepackaged /private/tmp/jflow_v24_icon_fix_20260702/J-Flow.app -c.dmg.artifactName=J-Flow-V2.4.dmg`：通过
+  - `release/J-Flow-V2.4.dmg`：生成成功，大小约 `111M`
+  - 已挂载最终 DMG 校验：
+    - `CFBundleDisplayName = J-Flow`
+    - `CFBundleExecutable = J-Flow`
+    - `CFBundleIconFile = icon.icns`
+    - `CFBundleIdentifier = com.jflow.desktop`
+    - `CFBundleShortVersionString = 2.4.0`
+    - 包内 `icon.icns` 为有效 macOS icon
+    - 包内包含 `dist-electron`、`dist-desktop`、`node_modules`
+- 后续注意：
+  - 完整 `electron-builder --mac dmg` 路径目前仍会在 pnpm 依赖收集阶段触发 `ERR_SQLITE_ERROR`
+  - 本轮为保证 V2.4 包可用，采用手工组装 `J-Flow.app` 后 `--prepackaged` 打包
+  - 后续应单独修复 electron-builder 与 pnpm 依赖收集兼容问题，避免手工组装成为常规流程
+
 ## 最新状态（2026-07-02，V2.4 确认完成但未经实际使用测试，优先参考）
 - V2.4 已确认完成：
   - A：备注替代准备 + 夜间新增 Todo 默认归属晚上

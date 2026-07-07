@@ -27,7 +27,7 @@ import type {
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
-const SQLITE_SCHEMA_VERSION = 6
+const SQLITE_SCHEMA_VERSION = 7
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
@@ -282,6 +282,8 @@ const ensureSchema = (database: DatabaseSync) => {
       title TEXT NOT NULL,
       date_value TEXT NOT NULL,
       deadline_date TEXT,
+      time_block TEXT NOT NULL DEFAULT 'day',
+      time_block_source TEXT NOT NULL DEFAULT 'default_day',
       activity_type_id TEXT,
       scene_tag_ids_json TEXT NOT NULL,
       interest_level INTEGER NOT NULL,
@@ -452,6 +454,43 @@ const ensureSchema = (database: DatabaseSync) => {
     database.exec(`
       ALTER TABLE task_templates
       ADD COLUMN deadline_date TEXT;
+    `)
+  }
+
+  if (!taskTemplateColumns.some((column) => column.name === 'time_block')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN time_block TEXT NOT NULL DEFAULT 'day';
+    `)
+    database.exec(`
+      UPDATE task_templates
+      SET time_block = COALESCE(
+        (
+          SELECT item.time_block
+          FROM day_plan_items item
+          WHERE item.template_id = task_templates.id
+          ORDER BY item.created_at DESC
+          LIMIT 1
+        ),
+        'day'
+      )
+      WHERE template_kind = 'todo_recurring';
+    `)
+  }
+
+  if (!taskTemplateColumns.some((column) => column.name === 'time_block_source')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN time_block_source TEXT NOT NULL DEFAULT 'default_day';
+    `)
+    database.exec(`
+      UPDATE task_templates
+      SET time_block_source =
+        CASE
+          WHEN time_block = 'night' THEN 'manual_night'
+          ELSE 'default_day'
+        END
+      WHERE template_kind = 'todo_recurring';
     `)
   }
 
@@ -917,6 +956,9 @@ const mapTemplateRow = (row: Record<string, unknown>): TaskTemplate => ({
   title: row.title as string,
   date: row.date_value as string,
   deadlineDate: toNullableString(row.deadline_date),
+  timeBlock: (row.time_block as TaskTemplate['timeBlock'] | undefined) ?? 'day',
+  timeBlockSource:
+    (row.time_block_source as TaskTemplate['timeBlockSource'] | undefined) ?? 'default_day',
   activityTypeId: toNullableString(row.activity_type_id),
   sceneTagIds: parseStringArray(row.scene_tag_ids_json),
   interestLevel: row.interest_level as TaskTemplate['interestLevel'],
@@ -1224,11 +1266,12 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
   `)
   const insertTaskTemplate = database.prepare(`
     INSERT INTO task_templates (
-      id, template_kind, title, date_value, deadline_date, activity_type_id, scene_tag_ids_json,
+      id, template_kind, title, date_value, deadline_date, time_block, time_block_source,
+      activity_type_id, scene_tag_ids_json,
       interest_level, is_necessary, requires_preparation, preparation_notes,
       recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
       is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertRecurringTaskInstance = database.prepare(`
     INSERT INTO recurring_task_instances (
@@ -1285,6 +1328,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       template.title,
       template.date,
       template.deadlineDate ?? null,
+      template.timeBlock ?? 'day',
+      template.timeBlockSource ?? 'default_day',
       template.activityTypeId ?? null,
       serializeStringArray(template.sceneTagIds),
       template.interestLevel,
@@ -1595,11 +1640,12 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
   database
     .prepare(`
       INSERT INTO task_templates (
-        id, template_kind, title, date_value, deadline_date, activity_type_id, scene_tag_ids_json,
+        id, template_kind, title, date_value, deadline_date, time_block, time_block_source,
+        activity_type_id, scene_tag_ids_json,
         interest_level, is_necessary, requires_preparation, preparation_notes,
         recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
         is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       template.id,
@@ -1607,6 +1653,8 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
       template.title,
       template.date,
       template.deadlineDate ?? null,
+      template.timeBlock ?? 'day',
+      template.timeBlockSource ?? 'default_day',
       template.activityTypeId ?? null,
       serializeStringArray(template.sceneTagIds),
       template.interestLevel,
@@ -1637,6 +1685,8 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
         title = ?,
         date_value = ?,
         deadline_date = ?,
+        time_block = ?,
+        time_block_source = ?,
         activity_type_id = ?,
         scene_tag_ids_json = ?,
         interest_level = ?,
@@ -1662,6 +1712,8 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
       template.title,
       template.date,
       template.deadlineDate ?? null,
+      template.timeBlock ?? 'day',
+      template.timeBlockSource ?? 'default_day',
       template.activityTypeId ?? null,
       serializeStringArray(template.sceneTagIds),
       template.interestLevel,
