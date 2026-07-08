@@ -95,6 +95,7 @@ export interface TaskTemplate {
   isStepped: boolean
   currentStep: string
   nextStep: string
+  plannedSteps: string[]
   createdAt: string
   updatedAt: string
   grassStatus?: GrassStatus
@@ -144,6 +145,7 @@ export interface DayPlanItem {
   isStepped: boolean
   currentStep: string
   nextStep: string
+  plannedSteps: string[]
   stepRootItemId?: string
   previousStepItemId?: string
   progressState: ProgressState

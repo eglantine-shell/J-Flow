@@ -138,6 +138,7 @@ type DecisionSelectedOptions = {
   isStepped: boolean
   currentStep: string
   nextStep: string
+  plannedSteps: string[]
 }
 
 export async function createDecisionSelectedDayPlanItem({
@@ -197,7 +198,8 @@ export async function createDecisionSelectedDayPlanItem({
     isSegmented: options.isStepped ? false : options.isSegmented,
     isStepped: options.isStepped,
     currentStep: options.isStepped ? options.currentStep : '',
-    nextStep: options.isStepped ? options.nextStep : '',
+    nextStep: options.isStepped ? options.plannedSteps[0] ?? options.nextStep : '',
+    plannedSteps: options.isStepped ? options.plannedSteps : [],
     progressState: carryover && carryover.progressPercent > 0 ? 'in_progress' : 'not_started',
     progressPercent: carryover?.progressPercent ?? 0,
     status: 'pending',

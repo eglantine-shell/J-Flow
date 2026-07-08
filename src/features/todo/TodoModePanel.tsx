@@ -207,6 +207,18 @@ const toDateString = (date: Date) =>
 const isDesktopRuntime = () =>
   typeof window !== 'undefined' && Boolean(window.jflowDesktop)
 
+const isTutorialModeActive = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return (
+    window.__JFLOW_TUTORIAL_MODE__ === true ||
+    new URLSearchParams(window.location.search).get('tutorial') === '1' ||
+    document.body.classList.contains('jflow-tutorial-active')
+  )
+}
+
 const toDateValue = (value?: string) => {
   if (!value) {
     return ''
@@ -614,7 +626,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   const [isSegmentedDraft, setIsSegmentedDraft] = useState(false)
   const [isSteppedDraft, setIsSteppedDraft] = useState(false)
   const [currentStepDraft, setCurrentStepDraft] = useState('')
-  const [nextStepDraft, setNextStepDraft] = useState('')
+  const [plannedStepDrafts, setPlannedStepDrafts] = useState<string[]>([''])
   const [defaultTemporaryTimeBlock, setDefaultTemporaryTimeBlock] =
     useState<TemporaryTimeBlock>('day')
   const [recommendationPanel, setRecommendationPanel] = useState<RecommendationPanelState | null>(null)
@@ -753,6 +765,10 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         return
       }
 
+      if (isTutorialModeActive()) {
+        return
+      }
+
       if (!isComposerEditing && temporaryTitle.trim()) {
         void createTemporaryItem()
         return
@@ -809,7 +825,11 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   )
   const normalizedPreparationNotesDraft = preparationNotesDraft.trim()
   const normalizedCurrentStepDraft = currentStepDraft.trim()
-  const normalizedNextStepDraft = nextStepDraft.trim()
+  const normalizedPlannedStepDrafts = useMemo(
+    () => plannedStepDrafts.map((step) => step.trim()).filter(Boolean),
+    [plannedStepDrafts],
+  )
+  const normalizedNextStepDraft = normalizedPlannedStepDrafts[0] ?? ''
   const normalizedDeadlineDateDraft = deadlineDateDraft || ''
   const parsedDeadlineWithinDaysDraft = parseDeadlineWithinDaysInput(deadlineWithinDaysDraft)
   const isDeadlineMissing = isNecessaryDraft && normalizedDeadlineDateDraft.length === 0
@@ -851,8 +871,39 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setIsSegmentedDraft(false)
     setIsSteppedDraft(false)
     setCurrentStepDraft('')
-    setNextStepDraft('')
+    setPlannedStepDrafts([''])
     setRecommendationPanel(null)
+  }
+
+  const resolveSteppedDraftPayload = (isStepped: boolean) => ({
+    currentStep: isStepped ? normalizedCurrentStepDraft : '',
+    nextStep: isStepped ? normalizedNextStepDraft : '',
+    plannedSteps: isStepped ? normalizedPlannedStepDrafts : [],
+  })
+
+  const resetPlannedStepDrafts = () => {
+    setPlannedStepDrafts([''])
+  }
+
+  const updatePlannedStepDraft = (index: number, value: string) => {
+    setPlannedStepDrafts((current) =>
+      current.map((step, stepIndex) => (stepIndex === index ? value : step)),
+    )
+    setComposerErrorMessage(null)
+  }
+
+  const addPlannedStepDraft = () => {
+    setPlannedStepDrafts((current) => [...current, ''])
+    setComposerErrorMessage(null)
+  }
+
+  const removePlannedStepDraft = (index: number) => {
+    setPlannedStepDrafts((current) => {
+      const next = current.filter((_, stepIndex) => stepIndex !== index)
+
+      return next.length > 0 ? next : ['']
+    })
+    setComposerErrorMessage(null)
   }
 
   const resetComposerState = () => {
@@ -928,7 +979,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         setIsSteppedDraft(true)
         setIsSegmentedDraft(false)
         setCurrentStepDraft('第一章')
-        setNextStepDraft('第二章')
+        setPlannedStepDrafts(['第二章', '第三章'])
       }
 
       if (customEvent.detail?.focus === 'repeat') {
@@ -1045,7 +1096,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
     setIsSegmentedDraft(item.isSegmented)
     setIsSteppedDraft(item.isStepped)
     setCurrentStepDraft(item.currentStep)
-    setNextStepDraft(item.nextStep)
+    setPlannedStepDrafts(item.isStepped ? item.plannedSteps.length > 0 ? item.plannedSteps : [''] : [''])
     setRecommendationPanel(null)
 
     const repeatRuleSource =
@@ -1207,6 +1258,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       return
     }
 
+    const nextSteppedDraftPayload = resolveSteppedDraftPayload(nextIsStepped)
     const updatePayload = {
       id: item.id,
       date: nextDateKey,
@@ -1219,8 +1271,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       preparationNotes: nextPreparationNotes,
       isSegmented: nextIsSegmented,
       isStepped: nextIsStepped,
-      currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-      nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+      ...nextSteppedDraftPayload,
     } satisfies Partial<DayPlanItem> & Pick<DayPlanItem, 'id'>
     const isRecurringItem = templateKind === 'todo_recurring' && Boolean(item.templateId)
 
@@ -1272,8 +1323,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
             isSegmented: nextIsSegmented,
             isStepped: nextIsStepped,
-            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+            ...nextSteppedDraftPayload,
             isArchived: false,
           })
 
@@ -1322,8 +1372,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
             isSegmented: nextIsSegmented,
             isStepped: nextIsStepped,
-            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+            ...nextSteppedDraftPayload,
             isArchived: false,
           })
 
@@ -1390,6 +1439,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         return
       }
 
+      const nextSteppedDraftPayload = resolveSteppedDraftPayload(nextIsStepped)
+
       if (repeatRuleDraft.repeatType === 'none') {
         const createdItem = await appDataRepository.dayPlanItems.create({
           date: nextDateKey,
@@ -1405,8 +1456,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           preparationNotes,
           isSegmented: nextIsSegmented,
           isStepped: nextIsStepped,
-          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+          ...nextSteppedDraftPayload,
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
@@ -1442,8 +1492,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
           isSegmented: nextIsSegmented,
           isStepped: nextIsStepped,
-          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+          ...nextSteppedDraftPayload,
           isArchived: false,
         })
 
@@ -1463,8 +1512,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           preparationNotes,
           isSegmented: nextIsSegmented,
           isStepped: nextIsStepped,
-          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+          ...nextSteppedDraftPayload,
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
@@ -1679,6 +1727,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         return
       }
 
+      const nextSteppedDraftPayload = resolveSteppedDraftPayload(nextIsStepped)
+
       if (repeatRuleDraft.repeatType === 'none') {
         await createDecisionSelectedDayPlanItem({
           selectedDate: nextSelectedDate,
@@ -1691,8 +1741,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
             preparationNotes,
             isSegmented: nextIsSegmented,
             isStepped: nextIsStepped,
-            currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-            nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+            ...nextSteppedDraftPayload,
           },
         })
       } else {
@@ -1726,8 +1775,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           repeatIntervalValue: serializedRepeatRule.repeatIntervalValue,
           isSegmented: nextIsSegmented,
           isStepped: nextIsStepped,
-          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+          ...nextSteppedDraftPayload,
           isArchived: false,
         })
 
@@ -1748,8 +1796,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           preparationNotes,
           isSegmented: nextIsSegmented,
           isStepped: nextIsStepped,
-          currentStep: nextIsStepped ? normalizedCurrentStepDraft : '',
-          nextStep: nextIsStepped ? normalizedNextStepDraft : '',
+          ...nextSteppedDraftPayload,
           progressState: 'not_started',
           progressPercent: 0,
           status: 'pending',
@@ -1876,7 +1923,12 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
   }
 
   const createNextStepTodoIfNeeded = async (item: DayPlanItem) => {
-    const nextStep = item.nextStep.trim()
+    const plannedSteps = (item.plannedSteps ?? []).length > 0
+      ? (item.plannedSteps ?? []).map((step) => step.trim()).filter(Boolean)
+      : item.nextStep.trim()
+        ? [item.nextStep.trim()]
+        : []
+    const [nextStep, ...remainingPlannedSteps] = plannedSteps
 
     if (!item.isStepped || !nextStep) {
       return
@@ -1919,7 +1971,8 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
       isSegmented: false,
       isStepped: true,
       currentStep: nextStep,
-      nextStep: '',
+      nextStep: remainingPlannedSteps[0] ?? '',
+      plannedSteps: remainingPlannedSteps,
       stepRootItemId,
       previousStepItemId: item.id,
       progressState: 'not_started',
@@ -2844,7 +2897,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                       }
 
                       setCurrentStepDraft('')
-                      setNextStepDraft('')
+                      resetPlannedStepDrafts()
                     }}
                   />
                   <span>分步</span>
@@ -2862,7 +2915,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                       if (nextChecked) {
                         setIsSteppedDraft(false)
                         setCurrentStepDraft('')
-                        setNextStepDraft('')
+                        resetPlannedStepDrafts()
                       }
                     }}
                   />
@@ -2887,18 +2940,45 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
                       placeholder="当前步骤"
                     />
                   </label>
-                  <label className="temporary-composer__step-field">
-                    <span>下一步：</span>
-                    <input
-                      type="text"
-                      value={nextStepDraft}
-                      onChange={(event) => {
-                        setNextStepDraft(event.target.value)
-                        setComposerErrorMessage(null)
-                      }}
-                      placeholder="如无下一步则留空"
-                    />
-                  </label>
+                  <div className="temporary-composer__planned-steps">
+                    {plannedStepDrafts.map((plannedStepDraft, index) => (
+                      <label
+                        className="temporary-composer__step-field temporary-composer__planned-step-field"
+                        key={`planned-step-${index}`}
+                      >
+                        <span>下一步：</span>
+                        <input
+                          type="text"
+                          value={plannedStepDraft}
+                          onChange={(event) => {
+                            updatePlannedStepDraft(index, event.target.value)
+                          }}
+                          placeholder="如无下一步则留空"
+                        />
+                        {index === 0 ? (
+                          <button
+                            type="button"
+                            className="temporary-composer__step-action"
+                            onClick={addPlannedStepDraft}
+                            aria-label="增加后续步骤"
+                            title="增加后续步骤"
+                          >
+                            <PlusIcon />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="temporary-composer__step-action"
+                            onClick={() => removePlannedStepDraft(index)}
+                            aria-label="删除后续步骤"
+                            title="删除后续步骤"
+                          >
+                            <CloseIcon />
+                          </button>
+                        )}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

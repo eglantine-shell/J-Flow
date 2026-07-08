@@ -123,6 +123,7 @@ type TodoItem = {
   isStepped: boolean
   currentStep: string
   nextStep?: string
+  plannedSteps: string[]
   stepRootItemId?: string
   previousStepItemId?: string
 
@@ -164,25 +165,39 @@ type TodoItem = {
   - `requiresPreparation` 仅作为历史兼容字段或派生布尔
   - UI 不再展示“准备”开关
   - 旧数据只要 `preparationNotes` 非空，就按 `备注：...` 展示
-- V2.4 起，分步 Todo 建议使用：
+- V3 基础分步 Todo 已使用：
   - `isStepped`
   - `currentStep`
   - `nextStep`
   - `stepRootItemId`
   - `previousStepItemId`
+- V3.1 分步优化建议新增：
+  - `plannedSteps: string[]`
+- `plannedSteps` 表示当前步骤之后的所有后续步骤，按数组顺序依次推进。
+- `nextStep` 在 V3.1 后作为兼容字段保留：
+  - 旧数据若只有 `nextStep` 且没有 `plannedSteps`，读取时等价于 `plannedSteps = [nextStep]`
+  - 新数据保存时，可继续把 `nextStep` 同步写为 `plannedSteps[0] ?? ''`
+  - 后续若所有数据完成迁移，可再评估是否移除用户不可见的 `nextStep` 兼容层
 - `isStepped` 与 `isSegmented` 第一版互斥。
 - 分步 Todo 的列表显示标题由：
   - `title`
   - `currentStep`
   拼接得到，不建议把拼接后的标题反写回 `title`。
-- 分步 Todo 完成后若 `nextStep` 非空，应创建新的 `DayPlanItem`：
+- 分步 Todo 完成后若后续步骤队列非空，应创建新的 `DayPlanItem`：
   - `title` 沿用原基础标题
-  - `currentStep` 取上一条的 `nextStep`
-  - `nextStep` 初始为空
+  - `currentStep` 取上一条 `plannedSteps[0]`
+  - `plannedSteps` 取上一条 `plannedSteps.slice(1)`
+  - `nextStep` 兼容写为新 `plannedSteps[0] ?? ''`
   - `deadlineDate` 不继承上一条，默认为空
   - `previousStepItemId` 指向上一条
   - `stepRootItemId` 沿用原 root，若不存在则取第一条分步 Todo 的 id
 - 分步 Todo 的 `deadlineDate` 只约束当前步骤，不代表整条分步链路的总截止日期。
+- V3.1 分步优化预计需要：
+  - JSON app data schema version 从 `13` 升级到 `14`
+  - SQLite schema version 从 `7` 升级到 `8`
+  - `task_templates` 增加 `planned_steps_json`
+  - `day_plan_items` 增加 `planned_steps_json`
+  - JSON 导入、SQLite migration、同步 item 读写均补齐新字段兼容
 
 ### 2. RepeatRule
 

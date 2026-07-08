@@ -1295,12 +1295,26 @@ button:hover:not(:disabled) {
   gap: 8px;
 }
 
+.temporary-composer__planned-steps {
+  display: flex;
+  flex: 1 1 260px;
+  min-width: min(100%, 260px);
+  flex-direction: column;
+  gap: 8px;
+}
+
 .temporary-composer__step-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: min(100%, 210px);
   flex: 1 1 210px;
+}
+
+.temporary-composer__planned-step-field {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .temporary-composer__step-field span {
@@ -1319,6 +1333,30 @@ button:hover:not(:disabled) {
   border-color: var(--border-soft);
   background: transparent;
   font-size: 0.82rem;
+}
+
+.temporary-composer__step-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--template-control-radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.temporary-composer__step-action:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.temporary-composer__step-action svg {
+  width: 15px;
+  height: 15px;
 }
 
 .temporary-composer__settings-row--manual .toggle-chip.temporary-composer__option-chip,

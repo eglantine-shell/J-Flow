@@ -1,5 +1,217 @@
 # 项目交接摘要
 
+## 最新状态（2026-07-08，V3.1 Windows 源码交接包已生成，优先参考）
+- 已生成 Windows 源码交接包：
+  - `J-Flow-V3.1-win-handoff-source-20260708.zip`
+- 交接包大小约 `3.0M`。
+- 交接包包含当前 V3.1 源码、文档、脚本与 `build/icon.png`。
+- 交接包已确认排除：
+  - `.git/`
+  - `node_modules/`
+  - `release/`
+  - `dist/`
+  - `dist-desktop/`
+  - `dist-electron/`
+  - `.pnpm-store/`
+  - `.env.local`
+  - `.DS_Store`
+  - `*.tsbuildinfo`
+  - `*.zip`
+- Windows 侧仍需在真机运行：
+```bash
+corepack pnpm install
+corepack pnpm run sync:icon
+corepack pnpm run build:desktop
+corepack pnpm run package:win:dir
+corepack pnpm run package:win:portable
+corepack pnpm run package:win:nsis
+```
+- Windows 侧预期产物名：
+  - `release/J-Flow-V3.1-win-portable.exe`
+  - `release/J-Flow-V3.1-win-setup.exe`
+- 注意：
+  - macOS 本轮已生成并校验 `release/J-Flow-V3.1.dmg`
+  - Windows 包尚未在本机生成或真机验证
+  - Windows 真机打包前应先运行 `corepack pnpm run sync:icon`，生成 `build/icon.ico`
+
+## 最新状态（2026-07-08，V3.1 macOS DMG 已打包并校验，优先参考）
+- V3.1 macOS DMG 已生成：
+  - `release/J-Flow-V3.1.dmg`
+  - `release/J-Flow-V3.1.dmg.blockmap`
+- `package.json` 已更新：
+  - `version = 3.1.0`
+  - macOS DMG artifact：`J-Flow-V3.1.dmg`
+  - Windows setup artifact：`J-Flow-V3.1-win-setup.exe`
+  - Windows portable artifact：`J-Flow-V3.1-win-portable.exe`
+- README 已更新：
+  - V3.1 从“计划”改为“已完成”
+  - 当前桌面产物改为 V3.1 命名
+  - 平台状态与 Releases 建议改为 V3.1 口径
+- 本轮测试：
+  - `corepack pnpm exec tsc --noEmit`：通过
+  - `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+  - `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts electron/selected-date-state.test.ts`：通过，`23` 项
+  - `corepack pnpm run package:mac`：通过
+- 分步回归覆盖：
+  - SQLite plannedSteps 往返
+  - DayPlanItem plannedSteps 更新
+  - 旧 `nextStep` 兼容迁移为 `plannedSteps`
+  - selected-date 生成路径的既有回归
+- DMG 校验：
+  - `hdiutil attach` 成功，CRC 校验通过
+  - `CFBundleDisplayName = J-Flow`
+  - `CFBundleExecutable = J-Flow`
+  - `CFBundleIconFile = icon.icns`
+  - `CFBundleIdentifier = com.jflow.desktop`
+  - `CFBundleShortVersionString = 3.1.0`
+  - `CFBundleVersion = 3.1.0`
+  - 包内包含 `app.asar`、`icon.icns`、`icon.png`
+  - `release/latest-mac.yml` 指向 `J-Flow-V3.1.dmg`
+- 打包注意：
+  - `package:mac` 仍提示 `build/icon.ico` 不存在；这是 Windows extraResources 提示，不阻断 macOS DMG。
+  - `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断。
+  - V3.1 Windows 包尚未在本轮打包，需后续 Windows 真机完成。
+
+## 最新状态（2026-07-08，V3.1 教学态 bugfix，优先参考）
+- 本轮修复两个教学态问题：
+  - Guide 第 3 步进入 “Todo：普通/拔草条目” 时，新增 Todo 表单偶发没有出现在 Todo 页面。
+  - 教学态中演示用的 `读《夜航西飞》` 可能被写入真实 Todo 数据。
+- 后续复测发现 Guide 第 3 步仍不显示表单：
+  - 经查不是表单开在别处，而是 demo 选中日期写死为 `2026-07-05`
+  - 该日期在 2026-07-02 开发时是未来日期，但到 2026-07-08 已变成历史日期
+  - Todo 真实业务规则会禁止历史日期新增，因此表单渲染条件被挡住
+- 本轮已改为：
+  - 教学选中日期动态取“打开教学时的本地今天 + 3 天”
+  - 教学 demo 数据中的 Todo、重复实例、日志、分次记录同步使用该动态日期
+  - 保留真实使用中历史日期不能新增 Todo 的规则，不做教学态历史日期豁免
+- 根因与处理：
+  - 教学数据隔离此前主要依赖 URL `?tutorial=1` 判断，真实 UI / 路由 / 表单事件交接时不够稳。
+  - 现在 renderer 增加 `window.__JFLOW_TUTORIAL_MODE__` 会话标记。
+  - 存储层同时识别会话标记与 URL 参数，教学态继续走内存 demo 数据，不走 SQLite / IndexedDB 持久化。
+  - 教学结束 / 跳过时会先关闭 Todo / 种草新增表单，再退出教学态，避免演示表单残留后写入真实数据。
+  - Todo 新增表单的“点外部自动保存”在教学态下禁用。
+  - Guide 步骤的 `beforeShow` 事件增加多次补发，降低页面切换或组件挂载时错过事件的概率。
+- 已验证：
+  - `corepack pnpm exec tsc --noEmit`：通过
+  - `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+  - `corepack pnpm run lint`：通过
+  - `corepack pnpm run build:desktop`：通过
+  - `build:desktop` 仍只有既有 Vite 大 chunk warning，不阻断。
+- 仍建议人工复测：
+  - 从设置页进入“使用教学”
+  - 切到 Guide 第 3 步，确认页面日期为本地今天 + 3 天，Todo 新增表单稳定出现
+  - 在教学态里操作 / 跳过后，确认真实 Todo 不出现新的 `读《夜航西飞》`
+
+## 最新状态（2026-07-08，Windows 交接暂停与多步骤分步需求评估，优先参考）
+- 用户已要求暂停 Windows 打包与交接。
+- 原已生成的 `J-Flow-V3-win-handoff-source-20260707.zip` 已删除。
+- 用户确认：该需求计为 `V3.1 分步优化`。
+- 暂停原因：
+  - 打包前需要继续增强 `分步 Todo`
+  - 新需求是支持一次安排多个后续步骤，而不只是单个 `下一步`
+  - 文档与真实 UI 教学也需要同步更新
+- 当前评估结论：
+  - 现有实现采用 `currentStep: string` + `nextStep: string`
+  - 只能表达“当前步骤 + 一个下一步”
+  - 若要支持多个预排步骤，应将后续步骤建模为有序队列，而不是继续叠加多个 `nextStepN` 字段
+  - 建议新增兼容字段，例如 `plannedSteps: string[]`
+  - 旧 `nextStep` 可迁移为 `plannedSteps[0]`，并在兼容期保留读取 / 导入兜底
+- 文档已更新 V3.1 规划：
+  - `product-rules.md`
+  - `data-model.md`
+  - `manual-test-checklist.md`
+  - `README.md`
+  - `task-list.md`
+  - `dev-log.md`
+  - `handoff.md`
+- V3.1 计划 schema：
+  - JSON app data schema：`14`
+  - SQLite schema：`8`
+- V3.1 数据模型与 migration 已完成：
+  - `TaskTemplate.plannedSteps: string[]`
+  - `DayPlanItem.plannedSteps: string[]`
+  - JSON app data schema 已升到 `14`
+  - SQLite schema 已升到 `8`
+  - SQLite 新增 `task_templates.planned_steps_json`
+  - SQLite 新增 `day_plan_items.planned_steps_json`
+  - 旧库 migration 会从 `next_step` 回填 `planned_steps_json`
+  - 旧 JSON / IndexedDB 数据若只有 `nextStep`，读取时补为单元素 `plannedSteps`
+  - 新数据仍同步维护 `nextStep = plannedSteps[0] ?? ''` 作为兼容字段
+- 已验证：
+  - `corepack pnpm exec tsc --noEmit`：通过
+  - `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+  - `corepack pnpm exec vitest run src/db/storage.test.ts electron/sqlite.test.ts electron/selected-date-state.test.ts`：通过，`23` 项
+- 教学 demo 与 Guide 代码已更新：
+  - Guide “分步和分次”说明改为队列式分步
+  - 教学 demo 中 `读《夜航西飞》` 当前步骤为 `第一章`
+  - 教学 demo 中后续步骤为 `第二章 / 第三章 / 第四章`
+  - demo 数据中的模板与 Todo 均已补齐 `plannedSteps`
+- V3.1 Todo 表单与完成逻辑已完成：
+  - 分步表单后续步骤支持多行输入
+  - 第一行右侧 `+` 可继续添加后续步骤
+  - 新增行右侧可删除该行
+  - 保存时过滤空白后续步骤并写入 `plannedSteps`
+  - 普通 Todo、重复 Todo、从种草加入 Todo、编辑 Todo 均支持 `plannedSteps`
+  - 完成分步 Todo 时按队列弹出：
+    - `plannedSteps[0]` 成为新 Todo 的 `currentStep`
+    - 剩余步骤成为新 Todo 的 `plannedSteps`
+    - 新 Todo 不继承上一条 DDL
+  - 旧 `nextStep` 数据仍兼容为单后续步骤
+- 当前补充验证：
+  - `corepack pnpm run lint`：通过
+  - `corepack pnpm run build:desktop`：通过
+  - `build:desktop` 仍有既有 Vite 大 chunk warning，不阻断
+  - 教学 demo / Guide 更新后：
+    - `corepack pnpm exec tsc --noEmit`：通过
+    - `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+    - `corepack pnpm run build:desktop`：通过
+- Windows 交接包需要在多步骤分步完成、验证、文档更新后重新生成。
+
+## 最新状态（2026-07-07，V3 release 清理与 Windows 交接准备，历史记录）
+- 本轮已清理本地 `release/` 历史产物。
+- 当前 `release/` 仅保留：
+  - `release/J-Flow-V3.dmg`
+  - `release/J-Flow-V3.dmg.blockmap`
+- 已删除的本地旧产物包括：
+  - V1.4 / V2.1 / V2.2 / V2.3.1 / V2.3.2 / V2.4 的历史 DMG、EXE、blockmap
+  - 旧 `release/mac-arm64/`
+  - 旧 builder 临时配置文件
+- 当前 `release/` 约 `115M`。
+- Windows 交接重点：
+  - 曾生成源码交接包：`J-Flow-V3-win-handoff-source-20260707.zip`
+  - 该包已于 2026-07-08 按用户要求删除，待多步骤分步完成后重做
+  - `package.json` 版本为 `3.0.0`
+  - Windows 预期产物名：
+    - `J-Flow-V3-win-portable.exe`
+    - `J-Flow-V3-win-setup.exe`
+  - Windows 真机必须先生成 `build/icon.ico`
+  - 生成方式为运行 `corepack pnpm run sync:icon`
+  - Windows 下该命令会调用 `scripts/generate-icon-win.ps1`
+  - `scripts/fix-win-exe-icon.mjs` 会在 `afterPack` 阶段用 `rcedit.exe` 写入 exe 图标，缺少 `build/icon.ico` 时会报错中止
+- 建议 Windows 侧命令：
+```bash
+corepack pnpm install
+corepack pnpm run sync:icon
+corepack pnpm run build:desktop
+corepack pnpm run package:win:dir
+corepack pnpm run package:win:portable
+corepack pnpm run package:win:nsis
+```
+- 交接包不应包含：
+  - `node_modules/`
+  - `.git/`
+  - `release/`
+  - `dist/`
+  - `dist-desktop/`
+  - `dist-electron/`
+  - 本地 `.env.local`
+  - 本机 `.DS_Store`
+- Windows 侧完成打包后应回传：
+  - `release/J-Flow-V3-win-portable.exe`
+  - `release/J-Flow-V3-win-setup.exe`
+  - 如存在 setup blockmap，也回传并记录校验信息
+- V3 Windows 包尚未在本轮验证，仍需 Windows 真机打包和启动测试。
+
 ## 最新状态（2026-07-07，V3 版本口径校正与打包准备，优先参考）
 - 用户确认：原先称为 `V2.4` 的大更新应作为 `V3` 发布。
 - V3 范围包含：
@@ -295,7 +507,7 @@
   - 进入正式自用前，进行一轮真实数据使用测试
   - 重点观察备注、夜间默认、拔草删除 / 返回、分步 Todo、教学模式和同步设置在真实日常数据下的表现
 
-## 最新状态（2026-06-30，V2.4 文档规划完成，优先参考）
+## 最新状态（2026-06-30，V2.4 文档规划完成，历史记录）
 - 本轮仅修改文档，尚未改业务代码。
 - V2.4 实施顺序已确认：
   - A：备注替代准备 + 夜间新增 Todo 默认归属晚上，含起止小时配置
@@ -319,7 +531,8 @@
   - 未完成拔草 Todo 将新增显式“回到种草清单”动作
   - 分步 Todo 与分次 Todo 第一版互斥
   - 分步 Todo 显示为 `事项内容：当前步骤`
-  - 分步 Todo 完成后，若下一步非空，自动创建下一步 Todo
+  - V2.4 基础分步 Todo 完成后，若下一步非空，自动创建下一步 Todo
+  - V3.1 将在此基础上扩展为多个后续步骤队列
   - 分步 Todo 自动创建下一步时不继承 DDL，DDL 只属于当前这一步
   - “回到种草清单”不需要二次确认，也不需要额外成功反馈
   - 彻底删除拔草 Todo 需要二次确认

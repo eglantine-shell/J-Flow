@@ -153,6 +153,7 @@ describe('electron/sqlite', () => {
       isStepped: true,
       currentStep: '第一章',
       nextStep: '第二章',
+      plannedSteps: ['第二章', '第三章'],
       createdAt: '2026-05-01T08:00:00.000Z',
       updatedAt: '2026-05-01T08:00:00.000Z',
       grassStatus: 'active',
@@ -162,6 +163,11 @@ describe('electron/sqlite', () => {
     expect(createdTemplate.title).toBe('SQLite 条目')
     expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.title).toBe('SQLite 条目')
     expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.currentStep).toBe('第一章')
+    expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.nextStep).toBe('第二章')
+    expect(getSqliteTaskTemplateById(dataPath, createdTemplate.id)?.plannedSteps).toEqual([
+      '第二章',
+      '第三章',
+    ])
 
     createSqliteDayPlanItem(dataPath, {
       id: 'day-plan-item-sqlite-test',
@@ -180,6 +186,7 @@ describe('electron/sqlite', () => {
       isStepped: true,
       currentStep: '第一章',
       nextStep: '第二章',
+      plannedSteps: ['第二章', '第三章'],
       stepRootItemId: 'day-plan-item-sqlite-test',
       progressState: 'not_started',
       progressPercent: 0,
@@ -196,12 +203,74 @@ describe('electron/sqlite', () => {
 
     expect(updatedDayPlanItem?.status).toBe('deleted')
     expect(updatedDayPlanItem?.nextStep).toBe('第三章')
+    expect(updatedDayPlanItem?.plannedSteps).toEqual(['第三章'])
     expect(updatedDayPlanItem?.deletedAt).toBe('2026-05-01T09:00:00.000Z')
     expect(
       listSqliteDayPlanItems(dataPath).some(
         (item: { id: string }) => item.id === 'day-plan-item-sqlite-test',
       ),
     ).toBe(true)
+  })
+
+  it('normalizes legacy stepped nextStep into plannedSteps', async () => {
+    const dataPath = await createTempDataPath()
+
+    replaceSqliteSnapshot(dataPath, {
+      ...sqliteTestSeedAppData,
+      taskTemplates: [
+        {
+          id: 'legacy-stepped-template',
+          templateKind: 'grass',
+          title: '旧分步模板',
+          date: '2026-05-01',
+          activityTypeId: sqliteTestSeedAppData.activityTypes[0]?.id,
+          sceneTagIds: [],
+          interestLevel: 1,
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          recurrence: 'none',
+          isSegmented: false,
+          isStepped: true,
+          currentStep: '第一章',
+          nextStep: '第二章',
+          createdAt: '2026-05-01T08:00:00.000Z',
+          updatedAt: '2026-05-01T08:00:00.000Z',
+          grassStatus: 'active',
+          isArchived: false,
+        },
+      ],
+      dayPlanItems: [
+        {
+          id: 'legacy-stepped-item',
+          date: '2026-05-01',
+          originDate: '2026-05-01',
+          timeBlock: 'day',
+          timeBlockSource: 'default_day',
+          sortOrder: 1,
+          source: 'manual_temporary',
+          title: '旧分步 Todo',
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          isSegmented: false,
+          isStepped: true,
+          currentStep: '第一章',
+          nextStep: '第二章',
+          stepRootItemId: 'legacy-stepped-item',
+          progressState: 'not_started',
+          progressPercent: 0,
+          status: 'pending',
+          createdAt: '2026-05-01T08:00:00.000Z',
+          updatedAt: '2026-05-01T08:00:00.000Z',
+        },
+      ],
+    } as unknown as typeof sqliteTestSeedAppData)
+
+    const appData = getSqliteAppData(dataPath)
+
+    expect(appData?.taskTemplates[0]?.plannedSteps).toEqual(['第二章'])
+    expect(appData?.dayPlanItems[0]?.plannedSteps).toEqual(['第二章'])
   })
 
   it('deletes scene tags and detaches them from templates in one operation', async () => {

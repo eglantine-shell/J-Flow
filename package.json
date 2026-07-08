@@ -1,7 +1,7 @@
 {
   "name": "j-flow",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
@@ -55,12 +55,12 @@
         "portable",
         "nsis"
       ],
-      "artifactName": "J-Flow-V3-win-portable.${ext}",
+      "artifactName": "J-Flow-V3.1-win-portable.${ext}",
       "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {
-      "artifactName": "J-Flow-V3-win-setup.${ext}",
+      "artifactName": "J-Flow-V3.1-win-setup.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -72,7 +72,7 @@
       "winCodeSign": "1.1.0"
     },
     "dmg": {
-      "artifactName": "J-Flow-V3.dmg"
+      "artifactName": "J-Flow-V3.1.dmg"
     },
     "extraResources": [
       {

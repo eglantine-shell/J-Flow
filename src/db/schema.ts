@@ -73,6 +73,7 @@ export const taskTemplateSchema = z.object({
   isStepped: z.boolean(),
   currentStep: z.string(),
   nextStep: z.string(),
+  plannedSteps: z.array(z.string()).default([]),
   createdAt: isoDatetimeSchema,
   updatedAt: isoDatetimeSchema,
   grassStatus: grassStatusSchema.optional(),
@@ -138,6 +139,7 @@ export const dayPlanItemSchema = z.object({
   isStepped: z.boolean(),
   currentStep: z.string(),
   nextStep: z.string(),
+  plannedSteps: z.array(z.string()).default([]),
   stepRootItemId: z.string().min(1).optional(),
   previousStepItemId: z.string().min(1).optional(),
   progressState: z.enum(['not_started', 'in_progress', 'completed']),
@@ -303,7 +305,7 @@ export const appDataSchema = z.object({
 })
 
 export const APP_DATA_RECORD_ID = 'app-data'
-export const APP_DATA_SCHEMA_VERSION = 13
+export const APP_DATA_SCHEMA_VERSION = 14
 
 export const appDataRecordSchema = z.object({
   id: z.literal(APP_DATA_RECORD_ID),

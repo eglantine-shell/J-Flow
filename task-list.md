@@ -281,18 +281,19 @@
 - 更新产品规则、数据模型与手动验证清单。
 - 新增 `分步` 类型，独立于 `分次`。
 - `分步` 与 `分次` 第一版互斥。
-- 分步表单包含：
+- V2.4 基础分步表单包含：
   - 当前步骤
   - 下一步步骤
 - 当前步骤必填。
 - 下一步可空。
 - 列表显示：
   - `事项内容：当前步骤`
-- 完成分步 Todo 时：
+- V2.4 基础分步完成时：
   - 当前 Todo 标记完成
   - 若下一步非空，自动创建下一步 Todo
   - 若下一步为空，链路结束
 - 编辑分步 Todo 时，可修改当前步骤与下一步步骤。
+- V3.1 将在此基础上把单个下一步扩展为多个后续步骤队列。
 
 ### 任务组 D：初始化页与功能教学
 - 更新产品规则与手动验证清单。
@@ -355,6 +356,80 @@
   - 后续 occurrence 继承模板日夜，不再根据“工作日晚上”等 tag 名称推断
   - SQLite schema 升级到 `7`
   - JSON app data schema 升级到 `13`
+
+---
+
+## V3.1 分步 Todo 优化
+
+说明：
+- 本节为当前发布口径的 `V3.1`。
+- 上方早期 `V3.1 Core Fixes` 属于历史里程碑命名，保留用于追踪旧任务。
+
+### 优先级
+- Must-have before Windows handoff
+
+### 目标
+- 在 V3 正式进行 Windows 交接与打包前，增强分步 Todo。
+- 支持用户一次安排多个后续步骤，而不是只能填写一个 `下一步`。
+- 同步更新真实 UI 教学与文档。
+
+### 任务组 A：规则与数据模型
+- 将分步 Todo 从单个 `nextStep` 扩展为后续步骤队列。
+- 建议新增：
+  - `plannedSteps: string[]`
+- 保留 `nextStep` 作为兼容字段：
+  - 旧数据 `nextStep` 读取为单元素队列
+  - 新数据可同步写 `nextStep = plannedSteps[0] ?? ''`
+- JSON app data schema 计划从 `13` 升级到 `14`。
+- SQLite schema 计划从 `7` 升级到 `8`。
+- SQLite 计划新增：
+  - `task_templates.planned_steps_json`
+  - `day_plan_items.planned_steps_json`
+
+### 任务组 B：Todo 表单与完成逻辑
+- 分步展开区保留 `当前步骤` 输入框。
+- 后续步骤区默认显示一行 `下一步` 输入框与 `+` 按钮。
+- 点击 `+` 增加一行新的 `下一步` 输入框。
+- 保存时按界面顺序写入后续步骤队列，并忽略空白后续步骤。
+- 完成当前步骤时：
+  - 若队列非空，取第一项生成新 Todo 的 `currentStep`
+  - 剩余项继续作为新 Todo 的后续步骤队列
+  - 不继承上一条 DDL
+  - 若队列为空，链路结束
+
+### 任务组 C：教学与验证
+- 教学 demo 数据改为包含多个后续步骤的分步 Todo。
+- Guide “分步和分次”文案更新为：
+  - 分步按后续步骤队列逐步生成
+  - 分次用进度条记录推进百分比
+- 手动验证覆盖：
+  - 旧单 `nextStep` 数据兼容
+  - 多后续步骤顺序推进
+  - DDL 不继承
+  - 编辑后续步骤队列
+  - 分步 / 分次互斥
+
+### 当前状态
+- V3.1 分步 Todo 优化已完成代码实现。
+- 已完成数据模型与 migration：
+  - JSON app data schema `14`
+  - SQLite schema `8`
+  - `plannedSteps` 与旧 `nextStep` 兼容
+- 已完成 Todo 表单与完成逻辑：
+  - 多行后续步骤输入
+  - 队列弹出创建下一步
+  - 自动创建下一步不继承 DDL
+- 已完成真实 UI 教学同步：
+  - Guide 文案更新
+  - demo 数据包含多个后续步骤
+  - 教学 demo 日期动态取打开教学时的本地今天 + 3 天
+- 已完成测试：
+  - TypeScript renderer / electron 检查通过
+  - SQLite / storage / selected-date-state 测试 `23` 项通过
+- 已生成 V3.1 macOS DMG：
+  - `release/J-Flow-V3.1.dmg`
+  - `release/J-Flow-V3.1.dmg.blockmap`
+- Windows 交接仍暂停，待后续重新准备 Windows 真机打包与源码交接。
 
 ---
 
@@ -538,11 +613,14 @@
   - `release/J-Flow-V1-win-portable.exe`
 
 ### 当前未完成 / 风险
-- 尚未完成 Windows 真机测试闭环
-- 当前已知问题：
-  - Windows 首包打开后“没有反应”
-  - 需要到 Windows 真机环境中继续排查运行日志、架构兼容性与系统拦截
-- 当前在 macOS 环境构建 Windows 包时，仍需要联网下载 Windows Electron runtime；建议继续使用镜像
+- V3 Windows 包尚未完成真机打包与启动测试闭环。
+- Windows 侧需要先运行 `corepack pnpm run sync:icon` 生成 `build/icon.ico`。
+- 当前 Windows `afterPack` 会检查并写入 exe 图标；缺少 `build/icon.ico` 时会中止打包，避免产出无图标包。
+- 当前建议 Windows 真机依次验证：
+  - `corepack pnpm run package:win:dir`
+  - `corepack pnpm run package:win:portable`
+  - `corepack pnpm run package:win:nsis`
+- 当前在 macOS 环境构建 Windows 包时，仍需要联网下载 Windows Electron runtime；建议继续使用镜像。
 
 ---
 

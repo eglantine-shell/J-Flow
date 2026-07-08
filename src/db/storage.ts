@@ -7,7 +7,10 @@ import {
 } from '@/db/schema'
 import { normalizeCompletedAtRoundingMinutes } from '@/features/todo/completed-at-rounding'
 import { resolveRepeatRule, serializeRepeatRule } from '@/features/recurrence/repeat-rule'
-import { tutorialDemoAppData } from '@/features/tutorial/tutorial-demo-data'
+import {
+  createTutorialDemoAppData,
+  getTutorialSelectedDateKey,
+} from '@/features/tutorial/tutorial-demo-data'
 import { mockSeedAppData } from '@/mocks'
 import type {
   ActivityType,
@@ -46,6 +49,7 @@ type TaskTemplateCreateInput = Omit<
   | 'isStepped'
   | 'currentStep'
   | 'nextStep'
+  | 'plannedSteps'
 > &
   Partial<
     Pick<
@@ -59,6 +63,7 @@ type TaskTemplateCreateInput = Omit<
       | 'isStepped'
       | 'currentStep'
       | 'nextStep'
+      | 'plannedSteps'
     >
   >
 
@@ -75,6 +80,7 @@ type DayPlanItemCreateInput = Omit<
   | 'isStepped'
   | 'currentStep'
   | 'nextStep'
+  | 'plannedSteps'
   | 'stepRootItemId'
   | 'previousStepItemId'
 > &
@@ -87,6 +93,7 @@ type DayPlanItemCreateInput = Omit<
       | 'isStepped'
       | 'currentStep'
       | 'nextStep'
+      | 'plannedSteps'
       | 'stepRootItemId'
       | 'previousStepItemId'
     >
@@ -104,18 +111,25 @@ type AppSettingsUpdateInput = Partial<Omit<AppSettings, 'createdAt' | 'updatedAt
 const cloneAppData = (appData: AppData): AppData => structuredClone(appData)
 
 let tutorialMemoryAppData: AppData | null = null
+let tutorialMemorySelectedDateKey: string | null = null
 
 const isTutorialStorageMode = () => {
   if (typeof window === 'undefined') {
     return false
   }
 
-  return new URLSearchParams(window.location.search).get('tutorial') === '1'
+  return (
+    window.__JFLOW_TUTORIAL_MODE__ === true ||
+    new URLSearchParams(window.location.search).get('tutorial') === '1'
+  )
 }
 
 const getTutorialMemoryAppData = () => {
-  if (!tutorialMemoryAppData) {
-    tutorialMemoryAppData = appDataSchema.parse(tutorialDemoAppData)
+  const selectedDateKey = getTutorialSelectedDateKey()
+
+  if (!tutorialMemoryAppData || tutorialMemorySelectedDateKey !== selectedDateKey) {
+    tutorialMemoryAppData = appDataSchema.parse(createTutorialDemoAppData())
+    tutorialMemorySelectedDateKey = selectedDateKey
   }
 
   return cloneAppData(tutorialMemoryAppData)
@@ -123,6 +137,7 @@ const getTutorialMemoryAppData = () => {
 
 const replaceTutorialMemoryAppData = (appData: AppData) => {
   tutorialMemoryAppData = appDataSchema.parse(appData)
+  tutorialMemorySelectedDateKey = getTutorialSelectedDateKey()
 
   return cloneAppData(tutorialMemoryAppData)
 }
@@ -211,6 +226,24 @@ const normalizeLogbookSnapshotItem = (item: Record<string, unknown>) => {
   }
 
   return normalized
+}
+
+const normalizePlannedSteps = (input: {
+  isStepped?: boolean
+  plannedSteps?: string[]
+  nextStep?: string
+}) => {
+  if (!input.isStepped) {
+    return []
+  }
+
+  if (input.plannedSteps !== undefined) {
+    return input.plannedSteps.map((step) => step.trim()).filter(Boolean)
+  }
+
+  const legacyNextStep = input.nextStep?.trim()
+
+  return legacyNextStep ? [legacyNextStep] : []
 }
 
 const normalizeLegacyLogbookEntry = (entry: unknown) => {
@@ -308,7 +341,14 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
     ...serializeRepeatRule(resolveRepeatRule(template)),
     isStepped: template.isStepped ?? false,
     currentStep: template.currentStep ?? '',
-    nextStep: template.nextStep ?? '',
+    ...(() => {
+      const plannedSteps = normalizePlannedSteps(template)
+
+      return {
+        plannedSteps,
+        nextStep: plannedSteps[0] ?? template.nextStep ?? '',
+      }
+    })(),
     isSegmented: template.isStepped ? false : template.isSegmented,
     grassStatus: resolveGrassStatus(template),
     isArchived:
@@ -343,7 +383,14 @@ const normalizeLegacyAppData = (appData: AppData): AppData => ({
     deadlineDate: item.isNecessary ? item.deadlineDate ?? item.date : undefined,
     isStepped: item.isStepped ?? false,
     currentStep: item.currentStep ?? '',
-    nextStep: item.nextStep ?? '',
+    ...(() => {
+      const plannedSteps = normalizePlannedSteps(item)
+
+      return {
+        plannedSteps,
+        nextStep: plannedSteps[0] ?? item.nextStep ?? '',
+      }
+    })(),
     isSegmented: item.isStepped ? false : item.isSegmented,
     stepRootItemId: item.stepRootItemId,
     previousStepItemId: item.previousStepItemId,
@@ -718,6 +765,7 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
   const timestamp = nowIso()
   const templateKind = input.templateKind ?? 'grass'
   const isStepped = input.isStepped ?? false
+  const plannedSteps = normalizePlannedSteps({ ...input, isStepped })
   const grassStatus =
     templateKind === 'grass'
       ? resolveGrassStatus({
@@ -748,7 +796,8 @@ function normalizeTaskTemplate(input: TaskTemplateCreateInput): TaskTemplate {
     isSegmented: isStepped ? false : input.isSegmented,
     isStepped,
     currentStep: isStepped ? input.currentStep?.trim() ?? '' : '',
-    nextStep: isStepped ? input.nextStep?.trim() ?? '' : '',
+    nextStep: isStepped ? plannedSteps[0] ?? input.nextStep?.trim() ?? '' : '',
+    plannedSteps,
     createdAt: input.createdAt ?? timestamp,
     updatedAt: input.updatedAt ?? timestamp,
     grassStatus,
@@ -786,6 +835,7 @@ function normalizeRecurringTaskInstance(
 function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
   const createdAt = input.createdAt ?? nowIso()
   const isStepped = input.isStepped ?? false
+  const plannedSteps = normalizePlannedSteps({ ...input, isStepped })
 
   return {
     id: input.id ?? createId('day-plan-item'),
@@ -811,7 +861,8 @@ function normalizeDayPlanItem(input: DayPlanItemCreateInput): DayPlanItem {
     isSegmented: isStepped ? false : input.isSegmented,
     isStepped,
     currentStep: isStepped ? input.currentStep?.trim() ?? '' : '',
-    nextStep: isStepped ? input.nextStep?.trim() ?? '' : '',
+    nextStep: isStepped ? plannedSteps[0] ?? input.nextStep?.trim() ?? '' : '',
+    plannedSteps,
     stepRootItemId: input.stepRootItemId,
     previousStepItemId: input.previousStepItemId,
     progressState: input.progressState,

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { getTutorialSelectedDateKey } from '@/features/tutorial/tutorial-demo-data'
+
 type TutorialStep = {
   id: string
   pathname: string
@@ -19,7 +21,6 @@ type TargetRect = {
 
 const TUTORIAL_PARAM = 'tutorial'
 const STEP_PARAM = 'step'
-const TUTORIAL_SELECTED_DATE = '2026-07-05'
 
 const tutorialSteps: TutorialStep[] = [
   {
@@ -90,7 +91,7 @@ const tutorialSteps: TutorialStep[] = [
     targetId: 'todo-composer-step-segment',
     title: '分步和分次',
     description:
-      '分步事项在完成当前步骤后自动生成下一步。分次事项显示进度条，你可以拖动进度，记录今天推进到了哪里。',
+      '分步事项可以一次安排多个后续步骤，完成当前步骤后会按队列自动生成下一步；分次事项显示进度条，你可以拖动进度，记录今天推进到了哪里。',
     beforeShow: () => {
       window.dispatchEvent(
         new CustomEvent('jflow:tutorial-open-todo-composer', {
@@ -154,6 +155,10 @@ const getTodayDateKey = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 }
 
+const setTutorialModeFlag = (isEnabled: boolean) => {
+  window.__JFLOW_TUTORIAL_MODE__ = isEnabled
+}
+
 export function TutorialOverlay() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -164,9 +169,11 @@ export function TutorialOverlay() {
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null)
 
   useEffect(() => {
+    setTutorialModeFlag(isActive)
     document.body.classList.toggle('jflow-tutorial-active', isActive)
 
     return () => {
+      setTutorialModeFlag(false)
       document.body.classList.remove('jflow-tutorial-active')
     }
   }, [isActive])
@@ -204,11 +211,14 @@ export function TutorialOverlay() {
   )
 
   const finishTutorial = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('jflow:tutorial-close-todo-composer'))
+    window.dispatchEvent(new CustomEvent('jflow:tutorial-close-grass-composer'))
     window.dispatchEvent(
       new CustomEvent('jflow:tutorial-exit', {
         detail: { date: getTodayDateKey() },
       }),
     )
+    setTutorialModeFlag(false)
 
     navigate(
       {
@@ -236,14 +246,14 @@ export function TutorialOverlay() {
       window.setTimeout(() => {
         window.dispatchEvent(
           new CustomEvent('jflow:tutorial-select-date', {
-            detail: { date: TUTORIAL_SELECTED_DATE },
+            detail: { date: getTutorialSelectedDateKey() },
           }),
         )
       }, delayMs),
     )
 
     if (currentStep.beforeShow) {
-      ;[120, 280].forEach((delayMs) => {
+      ;[120, 280, 520, 900].forEach((delayMs) => {
         timeoutIds.push(
           window.setTimeout(() => {
             currentStep.beforeShow?.()

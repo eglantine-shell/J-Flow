@@ -215,6 +215,7 @@ type JFlowDesktopApi = {
 declare global {
   interface Window {
     jflowDesktop?: JFlowDesktopApi
+    __JFLOW_TUTORIAL_MODE__?: boolean
   }
 }
 

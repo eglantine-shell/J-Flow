@@ -116,7 +116,7 @@ Todo 会区分白天和晚上。你可以把事项放到更适合的时间段里
 
 ---
 
-### 6. 分步事项：完成当前步骤后自动生成下一步
+### 6. 分步事项：完成当前步骤后自动生成后续步骤
 
 有些事情不适合只用一条 Todo 完成，比如：
 - 读一本书；
@@ -124,7 +124,7 @@ Todo 会区分白天和晚上。你可以把事项放到更适合的时间段里
 - 整理一批资料；
 - 推进一个需要分阶段处理的问题。
 
-这类事项可以设为分步事项。添加时填写“当前步骤”和“下一步”。列表里会显示为“事项内容：当前步骤”。完成当前步骤后，如果下一步不为空，系统会自动创建下一条 Todo；如果下一步为空，这条分步链路就结束。
+这类事项可以设为分步事项。添加时填写“当前步骤”，并可继续添加多个后续步骤。列表里会显示为“事项内容：当前步骤”。完成当前步骤后，如果后续步骤不为空，系统会按顺序自动创建下一条 Todo；如果后续步骤为空，这条分步链路就结束。
 
 分步事项的 DDL 只属于当前这一步。自动创建下一步时，不继承上一条的 DDL。
 
@@ -245,16 +245,17 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 - `V2.2`：主要修复日志 / 同步时序问题，并补强桌面常驻与 Windows 打包体验；
 - `V2.3`：集中优化 Todo 与种草清单体验，包含跨日刷新、日志修复、兴趣排序、必要事项筛选、24 小时完成时间编辑和拖动排序。
 - `V3`：整合原 V2.4 大更新，包含备注替代准备、夜间新增默认归属、拔草删除语义重构、分步 Todo、真实 UI 使用教学，以及重复 Todo 日夜归属修复。
+- `V3.1`：已完成分步 Todo 优化，支持一次安排多个后续步骤，并同步更新真实 UI 教学与教学 demo 日期逻辑。
 
 当前桌面版产物：
-- macOS：`J-Flow-V3.dmg`
-- Windows：`J-Flow-V3-win-setup.exe`
-- Windows：`J-Flow-V3-win-portable.exe`
+- macOS：`J-Flow-V3.1.dmg`
+- Windows：`J-Flow-V3.1-win-setup.exe`
+- Windows：`J-Flow-V3.1-win-portable.exe`
 
 平台状态：
-- macOS：V3 已完成构建层验证，仍建议正式使用前做一轮真实数据试用；
+- macOS：V3.1 已完成构建层验证，仍建议正式使用前做一轮真实数据试用；
 - Windows：
-  - V3 Windows 包待单独打包验证；
+  - V3.1 Windows 包待单独真机打包验证；
   - 推荐普通用户优先下载 `setup`；
   - `portable` 首次启动需要自解包，启动时间通常更长；
 - Web：V2 版本保留为在线参考版本；
@@ -263,9 +264,9 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 Releases：
 - GitHub Releases：<https://github.com/eglantine-shell/J-Flow/releases>
 - 当前建议通过 GitHub Releases 分发与下载：
-  - `J-Flow-V3.dmg`
-  - `J-Flow-V3-win-setup.exe`
-  - `J-Flow-V3-win-portable.exe`
+  - `J-Flow-V3.1.dmg`
+  - `J-Flow-V3.1-win-setup.exe`
+  - `J-Flow-V3.1-win-portable.exe`
 
 > 当前 macOS 与 Windows 安装包均未进行正式代码签名。首次打开时，系统或安全软件可能显示风险提示，请确认文件来自本仓库 Releases。
 
@@ -280,11 +281,11 @@ J-Flow 还不是一个完整商业化产品，目前更接近一个持续打磨�
 - 暂不支持账号系统、官方云同步；
 - 暂不支持手机端；
 - 暂不支持多人协作；
-- V3 的真实 UI 教学仍需继续通过实际使用打磨。
+- V3.1 的真实 UI 教学仍需继续通过实际使用打磨。
 
 下一步优先方向：
 
-- 进行 V3 真实数据试用与 debug；
+- 进行 V3.1 真实数据试用与 debug；
 - 完善本地备份与同步的说明和体验。
 
 ---
@@ -332,6 +333,19 @@ corepack pnpm run package:mac
 corepack pnpm run package:win
 corepack pnpm run package:win:nsis
 ```
+
+Windows 真机打包建议：
+
+```bash
+corepack pnpm install
+corepack pnpm run sync:icon
+corepack pnpm run build:desktop
+corepack pnpm run package:win:dir
+corepack pnpm run package:win:portable
+corepack pnpm run package:win:nsis
+```
+
+> Windows 图标由 `corepack pnpm run sync:icon` 在 Windows 上生成 `build/icon.ico`。缺少该文件时，Windows 打包会中止，避免产出无图标安装包。
 
 更多开发资料见：
 

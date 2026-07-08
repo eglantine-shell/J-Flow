@@ -2,10 +2,29 @@ import type { AppData } from '@/types'
 
 const createdAt = '2026-07-01T09:00:00.000Z'
 const updatedAt = '2026-07-02T13:30:00.000Z'
-const today = '2026-07-02'
-const selected = '2026-07-05'
 
-export const tutorialDemoAppData: AppData = {
+const toDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const addDays = (date: Date, days: number) => {
+  const nextDate = new Date(date)
+
+  nextDate.setDate(nextDate.getDate() + days)
+
+  return nextDate
+}
+
+export const getTutorialTodayDateKey = () => toDateKey(new Date())
+
+export const getTutorialSelectedDateKey = () => toDateKey(addDays(new Date(), 3))
+
+export const createTutorialDemoAppData = (): AppData => {
+  const today = getTutorialTodayDateKey()
+  const selected = getTutorialSelectedDateKey()
+  const selectedCompletedAt = `${selected}T10:30:00.000Z`
+  const selectedGeneratedAt = `${selected}T23:50:00.000Z`
+
+  return {
   settings: {
     initialized: true,
     tieBreakerOrder: 'desc',
@@ -81,6 +100,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       createdAt,
       updatedAt,
       grassStatus: 'picked',
@@ -103,6 +123,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       createdAt,
       updatedAt,
       grassStatus: 'active',
@@ -125,6 +146,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       createdAt,
       updatedAt,
       grassStatus: 'active',
@@ -149,6 +171,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       createdAt,
       updatedAt,
       isArchived: false,
@@ -190,6 +213,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       progressState: 'not_started',
       progressPercent: 0,
       status: 'pending',
@@ -213,6 +237,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: true,
       currentStep: '第一章',
       nextStep: '第二章',
+      plannedSteps: ['第二章', '第三章', '第四章'],
       stepRootItemId: 'tutorial-todo-stepped',
       progressState: 'not_started',
       progressPercent: 0,
@@ -236,6 +261,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       progressState: 'in_progress',
       progressPercent: 45,
       status: 'pending',
@@ -260,6 +286,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       progressState: 'not_started',
       progressPercent: 0,
       status: 'pending',
@@ -283,10 +310,11 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       progressState: 'completed',
       progressPercent: 100,
       status: 'completed',
-      completedAt: '2026-07-05T10:30:00.000Z',
+      completedAt: selectedCompletedAt,
       createdAt,
       updatedAt,
     },
@@ -306,6 +334,7 @@ export const tutorialDemoAppData: AppData = {
       isStepped: false,
       currentStep: '',
       nextStep: '',
+      plannedSteps: [],
       progressState: 'not_started',
       progressPercent: 0,
       status: 'pending',
@@ -316,7 +345,7 @@ export const tutorialDemoAppData: AppData = {
   logbookEntries: [
     {
       date: selected,
-      generatedAt: '2026-07-05T23:50:00.000Z',
+      generatedAt: selectedGeneratedAt,
       remark: '教学演示：日志会把完成、未完成和删除过的事项收进当天快照。',
       snapshotItems: [
         {
@@ -362,3 +391,6 @@ export const tutorialDemoAppData: AppData = {
     },
   ],
 }
+}
+
+export const tutorialDemoAppData: AppData = createTutorialDemoAppData()

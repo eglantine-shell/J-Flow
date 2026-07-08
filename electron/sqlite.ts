@@ -27,7 +27,7 @@ import type {
 } from './types.js'
 
 const SQLITE_FILENAME = 'j-flow.sqlite3'
-const SQLITE_SCHEMA_VERSION = 7
+const SQLITE_SCHEMA_VERSION = 8
 const SETTINGS_ROW_ID = 1
 const META_SQLITE_SCHEMA_VERSION = 'sqlite_schema_version'
 const META_APP_DATA_REVISION = 'app_data_revision'
@@ -80,6 +80,47 @@ const parseStringArray = (value: unknown) => {
   const parsed = JSON.parse(value)
 
   return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+}
+
+const normalizePlannedSteps = (
+  input: {
+    isStepped?: boolean
+    plannedSteps?: string[]
+    nextStep?: string
+  },
+) => {
+  if (!input.isStepped) {
+    return []
+  }
+
+  if (input.plannedSteps !== undefined) {
+    return input.plannedSteps.map((step) => step.trim()).filter(Boolean)
+  }
+
+  const legacyNextStep = input.nextStep?.trim()
+
+  return legacyNextStep ? [legacyNextStep] : []
+}
+
+const parsePlannedSteps = (value: unknown, legacyNextStep: unknown, isStepped: boolean) => {
+  const fallbackNextStep = typeof legacyNextStep === 'string' ? legacyNextStep : undefined
+
+  if (typeof value === 'string' && value.length > 0) {
+    const parsedSteps = parseStringArray(value)
+
+    if (parsedSteps.length > 0 || !fallbackNextStep?.trim()) {
+      return normalizePlannedSteps({
+        isStepped,
+        plannedSteps: parsedSteps,
+        nextStep: fallbackNextStep,
+      })
+    }
+  }
+
+  return normalizePlannedSteps({
+    isStepped,
+    nextStep: fallbackNextStep,
+  })
 }
 
 const parseJsonArray = <Item>(
@@ -298,6 +339,7 @@ const ensureSchema = (database: DatabaseSync) => {
       is_stepped INTEGER NOT NULL DEFAULT 0,
       current_step TEXT NOT NULL DEFAULT '',
       next_step TEXT NOT NULL DEFAULT '',
+      planned_steps_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       grass_status TEXT,
@@ -347,6 +389,7 @@ const ensureSchema = (database: DatabaseSync) => {
       is_stepped INTEGER NOT NULL DEFAULT 0,
       current_step TEXT NOT NULL DEFAULT '',
       next_step TEXT NOT NULL DEFAULT '',
+      planned_steps_json TEXT NOT NULL DEFAULT '[]',
       step_root_item_id TEXT,
       previous_step_item_id TEXT,
       progress_state TEXT NOT NULL,
@@ -515,6 +558,14 @@ const ensureSchema = (database: DatabaseSync) => {
     `)
   }
 
+  if (!taskTemplateColumns.some((column) => column.name === 'planned_steps_json')) {
+    database.exec(`
+      ALTER TABLE task_templates
+      ADD COLUMN planned_steps_json TEXT NOT NULL DEFAULT '[]';
+    `)
+    migratePlannedStepsFromNextStep(database, 'task_templates')
+  }
+
   if (!dayPlanItemColumns.some((column) => column.name === 'is_stepped')) {
     database.exec(`
       ALTER TABLE day_plan_items
@@ -534,6 +585,14 @@ const ensureSchema = (database: DatabaseSync) => {
       ALTER TABLE day_plan_items
       ADD COLUMN next_step TEXT NOT NULL DEFAULT '';
     `)
+  }
+
+  if (!dayPlanItemColumns.some((column) => column.name === 'planned_steps_json')) {
+    database.exec(`
+      ALTER TABLE day_plan_items
+      ADD COLUMN planned_steps_json TEXT NOT NULL DEFAULT '[]';
+    `)
+    migratePlannedStepsFromNextStep(database, 'day_plan_items')
   }
 
   if (!dayPlanItemColumns.some((column) => column.name === 'step_root_item_id')) {
@@ -606,6 +665,29 @@ const ensureSchema = (database: DatabaseSync) => {
   }
 
   ensureSyncMetaDefaults(database)
+}
+
+const migratePlannedStepsFromNextStep = (
+  database: DatabaseSync,
+  tableName: 'task_templates' | 'day_plan_items',
+) => {
+  const rows = database
+    .prepare(`SELECT id, is_stepped, next_step FROM ${tableName}`)
+    .all() as Array<{ id?: unknown; is_stepped?: unknown; next_step?: unknown }>
+  const update = database.prepare(`UPDATE ${tableName} SET planned_steps_json = ? WHERE id = ?`)
+
+  for (const row of rows) {
+    if (typeof row.id !== 'string') {
+      continue
+    }
+
+    const plannedSteps = normalizePlannedSteps({
+      isStepped: toBoolean(row.is_stepped),
+      nextStep: typeof row.next_step === 'string' ? row.next_step : undefined,
+    })
+
+    update.run(serializeStringArray(plannedSteps), row.id)
+  }
 }
 
 const ensureSettingsColumns = (
@@ -950,37 +1032,43 @@ const mapSettingsRow = (row: Record<string, unknown>): AppSettings => ({
   updatedAt: row.updated_at as string,
 })
 
-const mapTemplateRow = (row: Record<string, unknown>): TaskTemplate => ({
-  id: row.id as string,
-  templateKind: row.template_kind as TaskTemplate['templateKind'],
-  title: row.title as string,
-  date: row.date_value as string,
-  deadlineDate: toNullableString(row.deadline_date),
-  timeBlock: (row.time_block as TaskTemplate['timeBlock'] | undefined) ?? 'day',
-  timeBlockSource:
-    (row.time_block_source as TaskTemplate['timeBlockSource'] | undefined) ?? 'default_day',
-  activityTypeId: toNullableString(row.activity_type_id),
-  sceneTagIds: parseStringArray(row.scene_tag_ids_json),
-  interestLevel: row.interest_level as TaskTemplate['interestLevel'],
-  isNecessary: toBoolean(row.is_necessary),
-  requiresPreparation: toBoolean(row.requires_preparation),
-  preparationNotes: row.preparation_notes as string,
-  recurrence: row.recurrence as TaskTemplate['recurrence'],
-  repeatType: toNullableString(row.repeat_type) as TaskTemplate['repeatType'],
-  repeatIntervalUnit: toNullableString(row.repeat_interval_unit) as TaskTemplate['repeatIntervalUnit'],
-  repeatIntervalValue:
-    row.repeat_interval_value === null || row.repeat_interval_value === undefined
-      ? undefined
-      : Number(row.repeat_interval_value),
-  isSegmented: toBoolean(row.is_segmented),
-  isStepped: toBoolean(row.is_stepped),
-  currentStep: (row.current_step as string | undefined) ?? '',
-  nextStep: (row.next_step as string | undefined) ?? '',
-  createdAt: row.created_at as string,
-  updatedAt: row.updated_at as string,
-  grassStatus: toNullableString(row.grass_status) as TaskTemplate['grassStatus'],
-  isArchived: toBoolean(row.is_archived),
-})
+const mapTemplateRow = (row: Record<string, unknown>): TaskTemplate => {
+  const isStepped = toBoolean(row.is_stepped)
+  const plannedSteps = parsePlannedSteps(row.planned_steps_json, row.next_step, isStepped)
+
+  return {
+    id: row.id as string,
+    templateKind: row.template_kind as TaskTemplate['templateKind'],
+    title: row.title as string,
+    date: row.date_value as string,
+    deadlineDate: toNullableString(row.deadline_date),
+    timeBlock: (row.time_block as TaskTemplate['timeBlock'] | undefined) ?? 'day',
+    timeBlockSource:
+      (row.time_block_source as TaskTemplate['timeBlockSource'] | undefined) ?? 'default_day',
+    activityTypeId: toNullableString(row.activity_type_id),
+    sceneTagIds: parseStringArray(row.scene_tag_ids_json),
+    interestLevel: row.interest_level as TaskTemplate['interestLevel'],
+    isNecessary: toBoolean(row.is_necessary),
+    requiresPreparation: toBoolean(row.requires_preparation),
+    preparationNotes: row.preparation_notes as string,
+    recurrence: row.recurrence as TaskTemplate['recurrence'],
+    repeatType: toNullableString(row.repeat_type) as TaskTemplate['repeatType'],
+    repeatIntervalUnit: toNullableString(row.repeat_interval_unit) as TaskTemplate['repeatIntervalUnit'],
+    repeatIntervalValue:
+      row.repeat_interval_value === null || row.repeat_interval_value === undefined
+        ? undefined
+        : Number(row.repeat_interval_value),
+    isSegmented: isStepped ? false : toBoolean(row.is_segmented),
+    isStepped,
+    currentStep: (row.current_step as string | undefined) ?? '',
+    nextStep: plannedSteps[0] ?? (row.next_step as string | undefined) ?? '',
+    plannedSteps,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    grassStatus: toNullableString(row.grass_status) as TaskTemplate['grassStatus'],
+    isArchived: toBoolean(row.is_archived),
+  }
+}
 
 const mapRecurringInstanceRow = (row: Record<string, unknown>): RecurringTaskInstance => ({
   id: row.id as string,
@@ -1004,44 +1092,50 @@ const mapRecurringInstanceRow = (row: Record<string, unknown>): RecurringTaskIns
   completedAt: toNullableString(row.completed_at),
 })
 
-const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => ({
-  id: row.id as string,
-  date: row.date_value as string,
-  originDate: toNullableString(row.origin_date),
-  targetDate: toNullableString(row.target_date),
-  deadlineDate: toNullableString(row.deadline_date),
-  timeBlock: row.time_block as DayPlanItem['timeBlock'],
-  timeBlockSource: row.time_block_source as DayPlanItem['timeBlockSource'],
-  sortOrder: Number(row.sort_order),
-  source: row.source as DayPlanItem['source'],
-  templateId: toNullableString(row.template_id),
-  recurringInstanceId: toNullableString(row.recurring_instance_id),
-  consumesDateTrigger:
-    row.consumes_date_trigger === null || row.consumes_date_trigger === undefined
-      ? undefined
-      : toBoolean(row.consumes_date_trigger),
-  rootItemId: toNullableString(row.root_item_id),
-  continuationOfItemId: toNullableString(row.continuation_of_item_id),
-  carriedFromDate: toNullableString(row.carried_from_date),
-  title: row.title as string,
-  activityTypeId: toNullableString(row.activity_type_id),
-  isNecessary: toBoolean(row.is_necessary),
-  requiresPreparation: toBoolean(row.requires_preparation),
-  preparationNotes: row.preparation_notes as string,
-  isSegmented: toBoolean(row.is_segmented),
-  isStepped: toBoolean(row.is_stepped),
-  currentStep: (row.current_step as string | undefined) ?? '',
-  nextStep: (row.next_step as string | undefined) ?? '',
-  stepRootItemId: toNullableString(row.step_root_item_id),
-  previousStepItemId: toNullableString(row.previous_step_item_id),
-  progressState: row.progress_state as DayPlanItem['progressState'],
-  progressPercent: Number(row.progress_percent),
-  status: row.status as DayPlanItem['status'],
-  createdAt: row.created_at as string,
-  updatedAt: row.updated_at as string,
-  completedAt: toNullableString(row.completed_at),
-  deletedAt: toNullableString(row.deleted_at),
-})
+const mapDayPlanItemRow = (row: Record<string, unknown>): DayPlanItem => {
+  const isStepped = toBoolean(row.is_stepped)
+  const plannedSteps = parsePlannedSteps(row.planned_steps_json, row.next_step, isStepped)
+
+  return {
+    id: row.id as string,
+    date: row.date_value as string,
+    originDate: toNullableString(row.origin_date),
+    targetDate: toNullableString(row.target_date),
+    deadlineDate: toNullableString(row.deadline_date),
+    timeBlock: row.time_block as DayPlanItem['timeBlock'],
+    timeBlockSource: row.time_block_source as DayPlanItem['timeBlockSource'],
+    sortOrder: Number(row.sort_order),
+    source: row.source as DayPlanItem['source'],
+    templateId: toNullableString(row.template_id),
+    recurringInstanceId: toNullableString(row.recurring_instance_id),
+    consumesDateTrigger:
+      row.consumes_date_trigger === null || row.consumes_date_trigger === undefined
+        ? undefined
+        : toBoolean(row.consumes_date_trigger),
+    rootItemId: toNullableString(row.root_item_id),
+    continuationOfItemId: toNullableString(row.continuation_of_item_id),
+    carriedFromDate: toNullableString(row.carried_from_date),
+    title: row.title as string,
+    activityTypeId: toNullableString(row.activity_type_id),
+    isNecessary: toBoolean(row.is_necessary),
+    requiresPreparation: toBoolean(row.requires_preparation),
+    preparationNotes: row.preparation_notes as string,
+    isSegmented: isStepped ? false : toBoolean(row.is_segmented),
+    isStepped,
+    currentStep: (row.current_step as string | undefined) ?? '',
+    nextStep: plannedSteps[0] ?? (row.next_step as string | undefined) ?? '',
+    plannedSteps,
+    stepRootItemId: toNullableString(row.step_root_item_id),
+    previousStepItemId: toNullableString(row.previous_step_item_id),
+    progressState: row.progress_state as DayPlanItem['progressState'],
+    progressPercent: Number(row.progress_percent),
+    status: row.status as DayPlanItem['status'],
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    completedAt: toNullableString(row.completed_at),
+    deletedAt: toNullableString(row.deleted_at),
+  }
+}
 
 const mapLogbookEntryRow = (row: Record<string, unknown>): LogbookEntry => ({
   date: row.date_value as string,
@@ -1270,8 +1364,9 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       activity_type_id, scene_tag_ids_json,
       interest_level, is_necessary, requires_preparation, preparation_notes,
       recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
-      is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      is_segmented, is_stepped, current_step, next_step, planned_steps_json,
+      created_at, updated_at, grass_status, is_archived
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertRecurringTaskInstance = database.prepare(`
     INSERT INTO recurring_task_instances (
@@ -1286,9 +1381,10 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
       root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
       is_necessary, requires_preparation, preparation_notes, is_segmented,
-      is_stepped, current_step, next_step, step_root_item_id, previous_step_item_id,
+      is_stepped, current_step, next_step, planned_steps_json,
+      step_root_item_id, previous_step_item_id,
       progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertLogbookEntry = database.prepare(`
     INSERT INTO logbook_entries (
@@ -1343,7 +1439,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       template.isSegmented ? 1 : 0,
       template.isStepped ? 1 : 0,
       template.currentStep ?? '',
-      template.nextStep ?? '',
+      normalizePlannedSteps(template)[0] ?? template.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(template)),
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1396,7 +1493,8 @@ const insertAppData = (database: DatabaseSync, appData: AppData) => {
       item.isSegmented ? 1 : 0,
       item.isStepped ? 1 : 0,
       item.currentStep ?? '',
-      item.nextStep ?? '',
+      normalizePlannedSteps(item)[0] ?? item.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(item)),
       item.stepRootItemId ?? null,
       item.previousStepItemId ?? null,
       item.progressState,
@@ -1644,8 +1742,9 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
         activity_type_id, scene_tag_ids_json,
         interest_level, is_necessary, requires_preparation, preparation_notes,
         recurrence, repeat_type, repeat_interval_unit, repeat_interval_value,
-        is_segmented, is_stepped, current_step, next_step, created_at, updated_at, grass_status, is_archived
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_segmented, is_stepped, current_step, next_step, planned_steps_json,
+        created_at, updated_at, grass_status, is_archived
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       template.id,
@@ -1668,7 +1767,8 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
       template.isSegmented ? 1 : 0,
       template.isStepped ? 1 : 0,
       template.currentStep ?? '',
-      template.nextStep ?? '',
+      normalizePlannedSteps(template)[0] ?? template.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(template)),
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1701,6 +1801,7 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
         is_stepped = ?,
         current_step = ?,
         next_step = ?,
+        planned_steps_json = ?,
         created_at = ?,
         updated_at = ?,
         grass_status = ?,
@@ -1727,7 +1828,8 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
       template.isSegmented ? 1 : 0,
       template.isStepped ? 1 : 0,
       template.currentStep ?? '',
-      template.nextStep ?? '',
+      normalizePlannedSteps(template)[0] ?? template.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(template)),
       template.createdAt,
       template.updatedAt,
       template.grassStatus ?? null,
@@ -1818,9 +1920,10 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       sort_order, source, template_id, recurring_instance_id, consumes_date_trigger,
       root_item_id, continuation_of_item_id, carried_from_date, title, activity_type_id,
       is_necessary, requires_preparation, preparation_notes, is_segmented,
-      is_stepped, current_step, next_step, step_root_item_id, previous_step_item_id,
+      is_stepped, current_step, next_step, planned_steps_json,
+      step_root_item_id, previous_step_item_id,
       progress_state, progress_percent, status, created_at, updated_at, completed_at, deleted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       item.id,
@@ -1846,7 +1949,8 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.isSegmented ? 1 : 0,
       item.isStepped ? 1 : 0,
       item.currentStep ?? '',
-      item.nextStep ?? '',
+      normalizePlannedSteps(item)[0] ?? item.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(item)),
       item.stepRootItemId ?? null,
       item.previousStepItemId ?? null,
       item.progressState,
@@ -1887,6 +1991,7 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
         is_stepped = ?,
         current_step = ?,
         next_step = ?,
+        planned_steps_json = ?,
         step_root_item_id = ?,
         previous_step_item_id = ?,
         progress_state = ?,
@@ -1921,7 +2026,8 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       item.isSegmented ? 1 : 0,
       item.isStepped ? 1 : 0,
       item.currentStep ?? '',
-      item.nextStep ?? '',
+      normalizePlannedSteps(item)[0] ?? item.nextStep ?? '',
+      serializeStringArray(normalizePlannedSteps(item)),
       item.stepRootItemId ?? null,
       item.previousStepItemId ?? null,
       item.progressState,
@@ -2664,15 +2770,22 @@ export const createSqliteTaskTemplate = (dataPath: string, template: TaskTemplat
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
-    insertTaskTemplateRow(database, template)
+    const plannedSteps = normalizePlannedSteps(template)
+    const next: TaskTemplate = {
+      ...template,
+      plannedSteps,
+      nextStep: plannedSteps[0] ?? template.nextStep ?? '',
+    }
+
+    insertTaskTemplateRow(database, next)
     recordSyncChange(database, {
       entityType: 'taskTemplate',
-      entityId: template.id,
+      entityId: next.id,
       changeType: 'upsert',
-      changedAt: template.updatedAt,
+      changedAt: next.updatedAt,
     })
 
-    return template
+    return next
   })
 }
 
@@ -2686,10 +2799,22 @@ export const updateSqliteTaskTemplate = (dataPath: string, input: TaskTemplateUp
       return null
     }
 
-    const next: TaskTemplate = {
+    const merged: TaskTemplate = {
       ...current,
       ...input,
       updatedAt: input.updatedAt ?? nowIso(),
+    }
+    const plannedSteps = input.plannedSteps === undefined && input.nextStep !== undefined
+      ? normalizePlannedSteps({
+          ...merged,
+          plannedSteps: undefined,
+          nextStep: input.nextStep,
+        })
+      : normalizePlannedSteps(merged)
+    const next: TaskTemplate = {
+      ...merged,
+      plannedSteps,
+      nextStep: plannedSteps[0] ?? merged.nextStep ?? '',
     }
 
     replaceTaskTemplateRow(database, next)
@@ -2829,8 +2954,11 @@ export const createSqliteDayPlanItem = (dataPath: string, item: DayPlanItem) => 
   const database = getDatabase(dataPath)
 
   return runMutation(database, () => {
+    const plannedSteps = normalizePlannedSteps(item)
     const next: DayPlanItem = {
       ...item,
+      plannedSteps,
+      nextStep: plannedSteps[0] ?? item.nextStep ?? '',
       updatedAt: item.updatedAt || item.deletedAt || item.completedAt || item.createdAt,
     }
 
@@ -2856,10 +2984,22 @@ export const updateSqliteDayPlanItem = (dataPath: string, input: DayPlanItemUpda
       return null
     }
 
-    const next: DayPlanItem = {
+    const merged: DayPlanItem = {
       ...current,
       ...input,
       updatedAt: input.updatedAt ?? nowIso(),
+    }
+    const plannedSteps = input.plannedSteps === undefined && input.nextStep !== undefined
+      ? normalizePlannedSteps({
+          ...merged,
+          plannedSteps: undefined,
+          nextStep: input.nextStep,
+        })
+      : normalizePlannedSteps(merged)
+    const next: DayPlanItem = {
+      ...merged,
+      plannedSteps,
+      nextStep: plannedSteps[0] ?? merged.nextStep ?? '',
     }
 
     replaceDayPlanItemRow(database, next)
