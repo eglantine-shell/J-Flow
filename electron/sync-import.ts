@@ -310,6 +310,26 @@ const resolveLocalDeleteTime = (dataPath: string, entityType: SyncEntityType, en
   return syncChange?.changeType === 'delete' ? syncChange.changedAt : null
 }
 
+const normalizeForComparison = (value: unknown) => JSON.stringify(value)
+
+const areEntitiesEquivalent = (left: SupportedSyncEntity, right: SupportedSyncEntity) =>
+  normalizeForComparison(left) === normalizeForComparison(right)
+
+const shouldApplyRemoteItem = (
+  record: Extract<RemoteRecord, { kind: 'item' }>,
+  localEntity: SupportedSyncEntity,
+) => {
+  if (record.payload.updatedAt > localEntity.updatedAt) {
+    return true
+  }
+
+  if (record.payload.updatedAt < localEntity.updatedAt) {
+    return false
+  }
+
+  return !areEntitiesEquivalent(record.payload.data as SupportedSyncEntity, localEntity)
+}
+
 export const applyRemoteSyncChanges = async (input: {
   dataPath: string
   records: RemoteRecord[]
@@ -329,7 +349,7 @@ export const applyRemoteSyncChanges = async (input: {
 
       if (record.kind === 'item') {
         if (localEntity) {
-          if (record.payload.updatedAt > localEntity.updatedAt) {
+          if (shouldApplyRemoteItem(record, localEntity)) {
             applyRemoteUpsert(input.dataPath, record.entityType, record.payload.data as SupportedSyncEntity)
             appliedCount += 1
           } else {

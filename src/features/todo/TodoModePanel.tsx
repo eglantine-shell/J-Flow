@@ -70,6 +70,7 @@ import {
   buildTemplateKindMap,
   buildTemplatesById,
   buildTodoTags,
+  getTodoDisplayTitle,
   mapDayPlanItemsToTodoViewModels,
   type TodoViewModel,
 } from '@/features/todo/todo-view-model'
@@ -1893,7 +1894,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
         const nextLog = existingLog
           ? {
               ...existingLog,
-              titleSnapshot: item.title,
+              titleSnapshot: getTodoDisplayTitle(item),
               isNecessary: item.isNecessary,
               // Keep the first progress point of the day, but always reflect
               // the most recent progress value as the day's end snapshot.
@@ -1902,7 +1903,7 @@ export function TodoModePanel({ selectedDate }: { selectedDate: Date }) {
           : {
               date: progressLogDateKey,
               itemId: item.id,
-              titleSnapshot: item.title,
+              titleSnapshot: getTodoDisplayTitle(item),
               isNecessary: item.isNecessary,
               fromProgress: item.progressPercent,
               toProgress: normalizedProgressPercent,

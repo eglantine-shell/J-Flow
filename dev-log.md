@@ -1,5 +1,352 @@
 # Dev Log
 
+## 2026-07-18（V3.2：坚果云本地文件夹同步 `.tmp` 写入兼容热修）
+
+### 本轮目标
+- 修复 V3.2 真实 Mac / Windows 双端验证中，Windows A / B 可互通但 Mac C 与 Windows 最新内容无法互通的问题。
+- 重新打包 macOS DMG，并重新准备 Windows 真机打包源码交接包。
+
+### 排查结论
+- Mac 正式版同步目标为：
+  - `/Users/yetingzhi/Nutstore Files/J-Flow`
+- Windows 截图显示路径为：
+  - `C:\Users\萧锦瑟\Nutstore\1\J-Flow`
+- 进一步对照后，`\1\J-Flow` 更像坚果云 Windows 客户端的本地映射路径，并非必然是错误目录：
+  - Windows 资源管理器面包屑显示为 `坚果云 > J-Flow`
+  - 根目录中的 `sync-info-NSConflict...` 文件列表与 Mac 侧高度一致
+- 真实异常是 Windows 侧同步目录中出现：
+  - `sync-info.json.<timestamp>-<random>.tmp`
+  - 且状态同时显示绿色勾与红叉
+- Mac 侧未收到 Windows 设备 `59a28fdf-1264-4059-8099-520d850d1934` 的 2026-07-17 / 2026-07-18 更新，仍停在 2026-07-08。
+- 此时曾判断当前 `.tmp -> rename` 原子写法与坚果云目录监听 / 上传机制存在兼容风险，可能导致 Windows 本地显示成功但跨平台落地不一致。
+- 后续使用普通 txt 探针继续验证：
+  - Windows 端创建 `jflow-sync-probe-win.txt`
+  - 坚果云网页端可见该文件
+  - Mac 本地 `/Users/yetingzhi/Nutstore Files/J-Flow` 搜不到该文件
+- 最终人工确认：
+  - Mac 自动更新后坚果云客户端被关闭，且没有开机自启
+  - 本次“双端完全不同步”的最终根因是 Mac 坚果云客户端未运行
+  - J-Flow 代码层不是最终根因
+  - 本轮 `.tmp` 写入修复仍作为第三方云盘目录兼容性改进保留
+
+### 本轮修改
+- `electron/sync-target/local-folder-driver.ts`
+  - `safeWriteJson` 不再在目标同步目录内创建 `.tmp` 临时文件再 `rename`
+  - 改为直接写最终 JSON 文件
+  - 保留原有 logical path 安全校验、自动创建父目录、JSON pretty print
+- `electron/sync-target/local-folder-driver.test.ts`
+  - 新增回归测试：`safeWriteJson` 后 `devices/` 中只存在最终 `.json`，不留下 `.tmp`
+
+### 设计取舍
+- 对普通本地磁盘，`.tmp -> rename` 更接近原子写。
+- 但当前同步目标常位于坚果云等第三方云盘目录，小 JSON 文件快速 `.tmp -> rename` 更容易被云盘客户端捕捉为异常中间态。
+- 当前同步 JSON 文件很小，直接覆盖最终文件更适合本项目的第三方云盘目录使用场景。
+- 导入端继续只扫描 `.json` 文件，并对单个坏 JSON 记录 failure，不中止扫描其余文件。
+
+### 验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm exec vitest run electron/sync-target/local-folder-driver.test.ts electron/sync-target/metadata.test.ts electron/sync-import.test.ts electron/sync-export.test.ts electron/sync-now.test.ts electron/sqlite.test.ts`：通过，`55` 项
+
+### 后续
+- 已重新打包 macOS DMG：
+  - `release/J-Flow-V3.2.dmg`
+  - SHA256：`b702cbf4e7c1e2522040430d1d095c1894da48853a6fa8109f6e9fb34691d7cc`
+  - `hdiutil imageinfo`：通过
+  - `hdiutil attach`：通过
+  - `J-Flow.app` 版本为 `3.2.0`
+  - `icon.icns / icon.png` 存在
+- 已重新生成 Windows 源码交接包：
+  - `J-Flow-V3.2-win-handoff-source-20260718.zip`
+  - 用于 Windows 端重新打包包含坚果云 `.tmp` 写入兼容热修的安装包
+- 已完成 Windows 真机打包，Mac 工作区已归档：
+  - `release/J-Flow-V3.2-win-portable.exe`
+  - SHA256：`543469A6285B02C1B1D7980B150F3ED379BAE48EBC31E365848008E3F2FAE3DE`
+  - `release/J-Flow-V3.2-win-setup.exe`
+  - SHA256：`3FE02510528C184C563DF399461CAE7A0F5FCE38AEB78FAA588B050087452D5E`
+  - Windows 侧另有 `win-unpacked/J-Flow.exe` 与 setup blockmap；Mac 工作区当前只归档 portable / setup 两个 exe。
+- 后续使用坚果云等第三方云盘目录作为同步文件夹时，应先确认两端云盘客户端正在运行并完成目标文件夹同步。
+- 若再次出现跨端不同步，优先用普通 txt 探针确认第三方云盘跨端落地，再排查 J-Flow 导入 / 导出。
+
+## 2026-07-17（V3.2：Mac / Windows 同步 updatedAt 相等热修）
+
+### 本轮目标
+- 暂停 release 更新。
+- 排查 Win A / Win B 能互通，但 Win A 最新内容与 Mac C 最新内容无法互通的问题。
+
+### 根因
+- Win A / Win B 能互通，说明同步目录、Windows 包、基础导入导出链路可用。
+- Mac C 与 Win A 无法互通的关键原因是：
+  - 同一实体两端业务 `updatedAt` 相等
+  - 但 V3/V3.1 migration / repair 后实体内容不同
+  - `electron/sync-import.ts` 只在 `remote.updatedAt > local.updatedAt` 时应用远端
+  - 相等时直接跳过，导致两端都认为对方“不更新”
+- V3.2 repair 此前重新排队时沿用业务实体 `updatedAt`，导出的 sync item 顶层 `updatedAt` 也来自业务实体，因此无法打破“同时间戳不同内容”的僵局。
+
+### 本轮修改
+- `electron/sync-export.ts`
+  - sync item 新增 `syncUpdatedAt`
+  - 普通导出时 `syncUpdatedAt` 与业务 `updatedAt` 一致
+  - repair 导出时 `syncUpdatedAt` 可晚于业务 `updatedAt`
+- `electron/sqlite.ts`
+  - V3.2 repair 的 upsert `sync_changes.changedAt` 改为 repair 排队时间
+  - 不改写业务实体 `updatedAt`
+  - delete tombstone 仍保持原删除时间，避免旧删除误伤较新远端实体
+- `electron/sync-import.ts`
+  - 远端业务 `updatedAt > local.updatedAt`：继续应用远端
+  - 远端业务 `updatedAt < local.updatedAt`：继续跳过远端
+  - 远端业务 `updatedAt === local.updatedAt`：若实体内容不同，则应用当前同步文件内容
+- `electron/types.ts`
+  - `SyncItemFile` 增加可选 `syncUpdatedAt`
+- 测试：
+  - 导出 sync item 包含 `syncUpdatedAt`
+  - 远端与本地 `updatedAt` 相等但内容不同会应用远端
+  - V3.2 repair upsert 刷新同步排队时间但不改业务 `updatedAt`
+
+### 验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm exec vitest run electron/sync-import.test.ts electron/sync-export.test.ts electron/sqlite.test.ts electron/sync-now.test.ts electron/daily-logbook.test.ts src/features/logbook/logbook-service.test.ts src/db/storage.test.ts electron/selected-date-state.test.ts`：通过，`52` 项
+
+### 当前状态
+- 已重新打包 macOS DMG：
+  - `release/J-Flow-V3.2.dmg`
+  - SHA256：`e8063e24520a3addb91987dafbd79770b76743c082c62786b9602b90d0f10cab`
+  - `hdiutil imageinfo`：通过
+  - `hdiutil attach`：通过
+  - `J-Flow.app` 版本为 `3.2.0`
+  - `icon.icns / icon.png` 存在
+- 已重新生成 Windows 源码交接包：
+  - `J-Flow-V3.2-win-handoff-source-20260717.zip`
+  - SHA256：`050318bec614394bbd74c6ad30aa96f8ea023d7a0ad8cf9351a4fe4eebc3e491`
+- 当前 `release/J-Flow-V3.2-win-portable.exe` 与 `release/J-Flow-V3.2-win-setup.exe` 仍是热修前 Windows 包，不包含本热修。
+- 下一步需要使用新的源码交接包重新打包 Windows 端。
+
+## 2026-07-17（V3.2：Windows 真机打包产物归档）
+
+### 本轮目标
+- 接收 Windows 端 V3.2 打包结果。
+- 将 Windows portable / setup exe 放入 Mac 工作区 `release/`。
+- 核对 Windows exe SHA256。
+- 更新 README / handoff / dev-log / task-list 的 V3.2 Windows 状态。
+
+### 已归档到 Mac 工作区
+- `release/J-Flow-V3.2-win-portable.exe`
+- `release/J-Flow-V3.2-win-setup.exe`
+
+### SHA256
+- `J-Flow-V3.2-win-portable.exe`
+  - Windows 回传：`B6D04629275C9B31D98A68767DD46E291A5436AB3D2EB0FA0C770A6E054C4B6A`
+  - Mac 本地核对：`b6d04629275c9b31d98a68767dd46e291a5436ab3d2eb0fa0c770a6e054c4b6a`
+- `J-Flow-V3.2-win-setup.exe`
+  - Windows 回传：`2DFBBEF8A6516907F0EABAD47A9EDB9A31ECBFC8E13B840744428F8FFB570ABD`
+  - Mac 本地核对：`2dfbbef8a6516907f0eabad47a9edb9a31ecbfc8e13b840744428f8ffb570abd`
+
+### Windows 侧产物状态
+- Windows 侧报告已生成：
+  - `J-Flow-V3.2-win-portable.exe`
+  - `J-Flow-V3.2-win-setup.exe`
+  - `win-unpacked\J-Flow.exe`
+  - `J-Flow-V3.2-win-setup.exe.blockmap`
+- Mac 工作区当前只收到并归档：
+  - portable exe
+  - setup exe
+- Mac 工作区未收到：
+  - `win-unpacked/`
+  - `J-Flow-V3.2-win-setup.exe.blockmap`
+
+### Windows 侧验证
+- 源码 zip SHA256 已匹配：
+  - `050318bec614394bbd74c6ad30aa96f8ea023d7a0ad8cf9351a4fe4eebc3e491`
+- `package.json version = 3.2.0`
+- `build/icon.ico` 已生成
+- `tsc --noEmit`：通过
+- `tsc -p electron/tsconfig.json --noEmit`：通过
+- 第一组 Vitest：`33 passed`
+- 第二组 Vitest：`18 passed`
+- `dir / portable / nsis` 打包均通过
+
+### Windows 侧问题与处理
+- `pnpm install` 在 Electron postinstall 出现 `ECONNRESET`
+  - 已复用本机缓存的 Electron `41.3.0` Windows x64 runtime 手动补齐
+- 没有复现 V3.1 的 WindowsApps `node` 权限问题
+  - 本轮继续使用 `E:\J-Flow\.pnpm-tools` 里的本地 `node / pnpm` shim
+- `sync:icon` 默认覆盖 `build/icon.png` 时遇到权限拒绝
+  - Windows 侧改临时 PNG 输出路径生成 `build/icon.ico`
+  - 最终 `build/` 只保留 `icon.png` 和 `icon.ico`
+- Windows 侧为 SQLite 测试稳定通过做了最小测试兼容修复：
+  - 新增关闭 cached SQLite 连接的测试 helper
+  - 在相关测试清理临时目录前调用
+  - 避免 Windows 因 sqlite/wal/shm 句柄未释放报 `EBUSY`
+
+### 非阻塞 warning
+- Vite chunk size warning
+- electron-builder 提示 `package.json` 缺 `description / author`
+- Vitest 中 Node SQLite experimental warning
+- electron-builder / Node `DEP0190` warning
+
+## 2026-07-17（V3.2：macOS DMG 打包与 Windows 源码交接包）
+
+### 本轮目标
+- 将 V3.2 修复版打包为 macOS DMG，供真实数据验证。
+- 准备 Windows 端打包 exe 所需源码交接 zip。
+- 更新 README / handoff / dev-log 中的 V3.2 打包状态。
+
+### 本轮修改
+- `package.json`
+  - `version` 更新为 `3.2.0`
+  - macOS DMG artifact 更新为 `J-Flow-V3.2.dmg`
+  - Windows portable artifact 更新为 `J-Flow-V3.2-win-portable.exe`
+  - Windows setup artifact 更新为 `J-Flow-V3.2-win-setup.exe`
+- `README.md`
+  - 当前桌面版产物更新为 V3.2
+  - 补充 V3.2 macOS SHA256
+  - 当时标注 V3.2 Windows 包待真机打包；后续已完成，详见上方 Windows 真机打包产物归档记录
+
+### macOS 产物
+- `release/J-Flow-V3.2.dmg`
+  - 大小约 `114M`
+  - SHA256：`e8063e24520a3addb91987dafbd79770b76743c082c62786b9602b90d0f10cab`
+- `release/J-Flow-V3.2.dmg.blockmap`
+  - 大小约 `124K`
+
+### DMG 校验
+- `hdiutil imageinfo release/J-Flow-V3.2.dmg`：通过
+- `hdiutil attach -nobrowse -mountpoint /private/tmp/jflow_v32_dmg_mount release/J-Flow-V3.2.dmg`：通过
+- DMG 内：
+  - `J-Flow.app`
+  - `CFBundleDisplayName = J-Flow`
+  - `CFBundleShortVersionString = 3.2.0`
+  - `CFBundleIconFile = icon.icns`
+  - `Contents/Resources/icon.icns` 存在
+  - `Contents/Resources/icon.png` 存在
+- 挂载点已卸载。
+
+### Windows 源码交接包
+- 已生成：
+  - `J-Flow-V3.2-win-handoff-source-20260717.zip`
+- 大小约 `3.0M`
+- 最终 SHA256 以交接时重新计算结果为准。
+- 已排除：
+  - `.git/`
+  - `node_modules/`
+  - `release/`
+  - `dist/`
+  - `dist-desktop/`
+  - `dist-electron/`
+  - `.pnpm-store/`
+  - `.env.local`
+  - `.DS_Store`
+  - `*.tsbuildinfo`
+  - `*.zip`
+- 注意：
+  - `build/` 当前只含 `icon.png`
+  - Windows 端打包前需要先运行 `corepack pnpm run sync:icon` 生成 `build/icon.ico`
+
+### 打包输出提示
+- Vite chunk size warning：既有非阻塞提示。
+- electron-builder 提示 `package.json` 缺 `description / author`：非阻塞。
+- macOS notarization skipped：当前未签名 / 未公证，符合既有状态。
+- macOS 打包期间提示 `build/icon.ico` 不存在：对 macOS DMG 不阻塞；Windows 端需通过 `sync:icon` 生成。
+
+## 2026-07-17（V3.2：同步 repair 与分步日志快照修复）
+
+### 本轮目标
+- 排查 V3 后 Mac / Windows 双端同步异常。
+- 修复 V3.1 分步 Todo 在日志快照中只显示基础事项、不显示当前步骤的问题。
+
+### 排查结论
+- 同步异常不是同步按钮或同步目标规则被改动导致。
+- V3 修复重复事项日夜归属时新增了 `TaskTemplate.timeBlock / timeBlockSource`。
+- V3.1 分步优化新增了 `plannedSteps`。
+- SQLite migration 会本地补列与回填，但此前没有把受模型升级影响的旧 `taskTemplate / dayPlanItem` 重新放回 `sync_changes`。
+- 因此旧数据升级后可能只在本机被修好，不会自然重新发布到同步文件夹。
+- 日志快照分为两条生成路径：
+  - renderer 日志服务已使用分步显示标题
+  - Electron 自动补昨日日志仍使用原始 `item.title`
+
+### 本轮修改
+- 日志：
+  - `electron/daily-logbook.ts` 新增分步显示标题逻辑
+  - completed / pending / deleted 快照均保存 `事项：当前步骤`
+  - `src/features/todo/TodoModePanel.tsx` 中分次进度日志标题快照也改用同一显示口径
+- 同步：
+  - `sync_meta` 新增一次性标记 `v32SyncRepairAppliedAt`
+  - 启动 / 打开 SQLite 后，若已有业务数据且未执行过 V3.2 repair，则将当前库中的 `taskTemplate / dayPlanItem` 重新加入待同步队列
+  - repair 不改写业务实体 `updatedAt`
+  - 远端旧分步 item 缺 `plannedSteps` 时，从 `nextStep` 恢复后续步骤队列
+  - SQLite 写入层统一保持 `nextStep = plannedSteps[0] ?? ''`
+- 文档：
+  - `product-rules.md`
+  - `data-model.md`
+  - `task-list.md`
+  - `dev-log.md`
+  - `handoff.md`
+
+### 验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm exec vitest run electron/sqlite.test.ts electron/sync-import.test.ts electron/daily-logbook.test.ts src/features/logbook/logbook-service.test.ts src/db/storage.test.ts`：通过，`33` 项
+- `corepack pnpm exec vitest run electron/sync-export.test.ts electron/sync-now.test.ts electron/selected-date-state.test.ts`：通过，`18` 项
+
+### 后续注意
+- V3.2 repair 需要真实双端同步场景人工验证：
+  - 一端升级后执行“立即同步”
+  - 另一端升级后执行“立即同步”
+  - 确认重复事项夜晚归属、分步后续步骤队列、普通新增 / 删除仍能双端交换
+- 若用户已在某一端使用旧 V3/V3.1 产生了较新的实体，本轮同步仍遵循现有 LWW 比较，repair 本身不提高业务实体 `updatedAt`。
+
+## 2026-07-08（V3.1：Windows 真机打包完成并删除源码交接包）
+
+### 本轮目标
+- 接收 Windows Codex 打包结果。
+- 删除 Mac 工作区中的 Windows 源码交接 zip。
+- 核对 Windows exe SHA256。
+- 更新 README / handoff / dev-log / task-list 的 Windows 状态。
+
+### 已删除
+- `J-Flow-V3.1-win-handoff-source-20260708.zip`
+
+### Windows 产物
+- Mac 工作区当前可见：
+  - `release/J-Flow-V3.1-win-portable.exe`
+  - `release/J-Flow-V3.1-win-setup.exe`
+- Windows 侧另有：
+  - `win-unpacked\J-Flow.exe`
+  - `J-Flow-V3.1-win-setup.exe.blockmap`
+
+### SHA256
+- `J-Flow-V3.1-win-portable.exe`
+  - `EC2DF7FCDB6AA874840BFE9A232B2CC7458136A3DB185B3DEA0732E50E4F2E03`
+- `J-Flow-V3.1-win-setup.exe`
+  - `B0C068D777EA842FD6B7F27621FEC8BC44D1DAF20565728481BD011BCD2ED57E`
+- Mac 本地 `shasum -a 256` 核对结果与 Windows 交接说明一致。
+
+### Windows 构建结果
+- `sync:icon`：通过
+- renderer build：通过
+- Electron TS build：通过
+- `dir`：通过
+- `portable`：通过
+- `nsis`：通过
+
+### Windows 构建注意事项
+- Windows 机器 PATH 中的 `node` 会被 WindowsApps 权限挡住。
+- Windows 侧使用 Codex runtime Node，并复制到：
+  - `E:\J-Flow\.pnpm-tools\node.exe`
+- Windows 侧下载 pnpm `10.33.0` 到：
+  - `E:\J-Flow\.pnpm-tools\package\bin\pnpm.cjs`
+- Windows 侧创建：
+  - `E:\J-Flow\.pnpm-tools\pnpm.cmd`
+  供 electron-builder 子进程识别 `pnpm`。
+- `pnpm install` 曾卡在 Electron postinstall 下载。
+- Windows 侧已手动从镜像下载并补齐 Electron `41.3.0` Windows x64 runtime，并恢复 `node_modules/electron` 的 npm 包壳。
+- 后续如果重新安装依赖，最好确保 Windows 侧 PATH 先指向可用 Node，或者复用 `.pnpm-tools` 方案。
+
+### 非阻塞提示
+- Vite chunk size warning。
+- electron-builder 提示 `package.json` 缺 `description / author`。
+
 ## 2026-07-08（V3.1：Windows 源码交接包）
 
 ### 本轮目标

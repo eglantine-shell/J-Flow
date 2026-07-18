@@ -85,6 +85,7 @@ describe('electron/sync-export', () => {
 
     expect(result.success).toBe(true)
     expect(exportedItem.updatedAt).toBe(updated?.updatedAt)
+    expect(exportedItem.syncUpdatedAt).toBe(updated?.updatedAt)
     expect(exportedItem.deletedAt).toBeNull()
     expect(syncChange?.syncedAt).toBeTruthy()
     expect(getSqliteLocalSyncState(dataPath).lastSyncedAt).toBeNull()

@@ -96,6 +96,58 @@ describe('electron/sync-import', () => {
     expect(await readFile(itemFilePath(targetPath), 'utf8')).toBe(originalRemoteFileContent)
   })
 
+  it('normalizes legacy remote stepped nextStep into plannedSteps during import', async () => {
+    const dataPath = await createTempDirectory('j-flow-sync-import-db-')
+    const targetPath = await createTempDirectory('j-flow-sync-import-folder-')
+
+    await createAndExportBaselineItem(dataPath, targetPath)
+
+    const remoteContent = JSON.parse(await readFile(itemFilePath(targetPath), 'utf8')) as Record<string, unknown>
+    remoteContent.updatedAt = '2099-01-01T00:00:00.000Z'
+    const remoteData = remoteContent.data as Record<string, unknown>
+    remoteData.updatedAt = '2099-01-01T00:00:00.000Z'
+    remoteData.isStepped = true
+    remoteData.isSegmented = false
+    remoteData.currentStep = '第一步'
+    remoteData.nextStep = '第二步'
+    delete remoteData.plannedSteps
+    await writeFile(itemFilePath(targetPath), `${JSON.stringify(remoteContent, null, 2)}\n`, 'utf8')
+
+    const result = await importRemoteChangesFromSyncFolder({
+      dataPath,
+      appVersion: '3.2.0',
+    })
+    const importedItem = getSqliteDayPlanItemById(dataPath, 'day-plan-item-remote')
+
+    expect(result.appliedCount).toBe(1)
+    expect(importedItem?.isStepped).toBe(true)
+    expect(importedItem?.nextStep).toBe('第二步')
+    expect(importedItem?.plannedSteps).toEqual(['第二步'])
+  })
+
+  it('applies a remote item with equal updatedAt when its content differs', async () => {
+    const dataPath = await createTempDirectory('j-flow-sync-import-db-')
+    const targetPath = await createTempDirectory('j-flow-sync-import-folder-')
+
+    await createAndExportBaselineItem(dataPath, targetPath)
+
+    const remoteContent = JSON.parse(await readFile(itemFilePath(targetPath), 'utf8')) as Record<string, unknown>
+    const remoteData = remoteContent.data as Record<string, unknown>
+    remoteData.title = '同时间戳远端内容'
+    remoteContent.syncUpdatedAt = '2099-01-01T00:00:00.000Z'
+    await writeFile(itemFilePath(targetPath), `${JSON.stringify(remoteContent, null, 2)}\n`, 'utf8')
+
+    const result = await importRemoteChangesFromSyncFolder({
+      dataPath,
+      appVersion: '3.2.0',
+    })
+
+    expect(result.appliedCount).toBe(1)
+    expect(getSqliteDayPlanItemById(dataPath, 'day-plan-item-remote')?.title).toBe(
+      '同时间戳远端内容',
+    )
+  })
+
   it('skips an older remote item when local entity is newer', async () => {
     const dataPath = await createTempDirectory('j-flow-sync-import-db-')
     const targetPath = await createTempDirectory('j-flow-sync-import-folder-')

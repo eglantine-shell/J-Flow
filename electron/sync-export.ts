@@ -91,6 +91,21 @@ const resolveEntityUpdatedAt = (
     | DayPlanItem,
 ) => entity.updatedAt
 
+const resolveSyncUpdatedAt = (
+  change: SyncChange,
+  entity:
+    | AppSettings
+    | SceneTag
+    | ActivityType
+    | TaskTemplate
+    | RecurringTaskInstance
+    | DayPlanItem,
+) => {
+  const entityUpdatedAt = resolveEntityUpdatedAt(entity)
+
+  return change.changedAt > entityUpdatedAt ? change.changedAt : entityUpdatedAt
+}
+
 const buildItemFilePayload = (
   change: SyncChange,
   deviceId: string,
@@ -106,6 +121,7 @@ const buildItemFilePayload = (
   entityType: change.entityType,
   id: change.entityId,
   updatedAt: resolveEntityUpdatedAt(entity),
+  syncUpdatedAt: resolveSyncUpdatedAt(change, entity),
   deletedAt: null,
   deviceId,
   data: entity,

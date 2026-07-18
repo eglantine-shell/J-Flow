@@ -8,6 +8,43 @@ import {
 import { mockSeedAppData } from '@/mocks'
 
 describe('buildLogbookEntryForDate', () => {
+  it('uses stepped display titles in snapshots', () => {
+    const entry = buildLogbookEntryForDate(
+      {
+        ...mockSeedAppData,
+        dayPlanItems: [
+          {
+            id: 'stepped-completed',
+            date: '2026-05-14',
+            originDate: '2026-05-14',
+            timeBlock: 'day',
+            timeBlockSource: 'default_day',
+            sortOrder: 1,
+            source: 'manual_temporary',
+            title: '读书',
+            isNecessary: false,
+            requiresPreparation: false,
+            preparationNotes: '',
+            isSegmented: false,
+            isStepped: true,
+            currentStep: '第一章',
+            nextStep: '第二章',
+            plannedSteps: ['第二章'],
+            progressState: 'completed',
+            progressPercent: 100,
+            status: 'completed',
+            createdAt: '2026-05-14T08:00:00.000Z',
+            updatedAt: '2026-05-14T08:30:00.000Z',
+            completedAt: '2026-05-14T08:30:00.000Z',
+          },
+        ],
+      },
+      '2026-05-14',
+    )
+
+    expect(entry.snapshotItems[0]?.titleSnapshot).toBe('读书：第一章')
+  })
+
   it('builds a single snapshot list with completed, pending, and deleted items', () => {
     const entry = buildLogbookEntryForDate(
       {

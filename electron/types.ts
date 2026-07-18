@@ -259,6 +259,7 @@ export interface SyncItemFile<Entity = unknown> {
   entityType: SyncEntityType
   id: string
   updatedAt: string
+  syncUpdatedAt?: string
   deletedAt: null
   deviceId: string
   data: Entity

@@ -83,7 +83,11 @@
   - `lastSyncedAt`
   - `lastSyncStatus`
   - `lastSyncError`
+  - `lastSyncAttemptedAt`
+  - `lastSyncResult`
   - `syncTargetPath`
+  - `syncTargetConfig`
+  - `v32SyncRepairAppliedAt`
 - `sync_changes` 当前用于记录本机业务变化：
   - `entityType`
   - `entityId`
@@ -92,6 +96,20 @@
   - `syncedAt`
   - `deviceId`
 - 这些表只服务于后续同步实现，不改变当前产品的业务展示。
+- V3.2 起，桌面端会使用 `v32SyncRepairAppliedAt` 做一次性同步修复标记：
+  - 将受 V3/V3.1 数据模型升级影响的 `taskTemplate / dayPlanItem` 重新加入待同步队列
+  - 不改写业务实体的 `updatedAt`
+  - 不改变同步目标与同步规则
+- V3.2 同步热修后，sync item 可带同步层时间：
+  - `syncUpdatedAt?: string`
+  - 表示该同步文件本身的发布时间或 repair 排队时间
+  - 不等价于业务实体 `updatedAt`
+  - 当远端与本地业务 `updatedAt` 相等但内容不同，当前同步文件内容应被应用，解决模型升级后双端字段不一致但业务时间戳相同的问题
+- V3.2 坚果云兼容热修后，本地文件夹 `SyncTargetDriver.safeWriteJson` 不应再在同步目录内生成 `.tmp` 临时文件后 rename：
+  - 坚果云等云盘客户端可能会捕捉 `.tmp` 中间态并留下红叉、冲突文件或跨平台未落地状态
+  - 同步 JSON 文件体积很小，当前采用直接写最终 JSON 文件的方式
+  - 导入端继续只扫描 `.json` 文件，并通过单文件失败记录容忍偶发坏 JSON
+  - 当前不引入坚果云 API，也不把本地文件夹同步升级为官方云同步
 
 ---
 
@@ -183,6 +201,9 @@ type TodoItem = {
   - `title`
   - `currentStep`
   拼接得到，不建议把拼接后的标题反写回 `title`。
+- 分步 Todo 写入日志快照时使用同一显示标题：
+  - `titleSnapshot = title + '：' + currentStep`
+  - 若不是分步或 `currentStep` 为空，则继续使用 `title`
 - 分步 Todo 完成后若后续步骤队列非空，应创建新的 `DayPlanItem`：
   - `title` 沿用原基础标题
   - `currentStep` 取上一条 `plannedSteps[0]`

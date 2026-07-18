@@ -17,6 +17,12 @@ const toTimeLabel = (isoString: string) => {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+const getTodoDisplayTitle = (item: DayPlanItem) => {
+  const currentStep = item.currentStep?.trim() ?? ''
+
+  return item.isStepped && currentStep ? `${item.title}：${currentStep}` : item.title
+}
+
 const buildSegmentedProgressLogMap = (appData: AppData, dateKey: string) =>
   new Map(
     appData.segmentedProgressLogs
@@ -58,7 +64,7 @@ const buildCompletedSnapshotItems = (appData: AppData, dateKey: string): Logbook
     .map((item) => ({
       id: item.id,
       status: 'completed' as const,
-      titleSnapshot: item.title,
+      titleSnapshot: getTodoDisplayTitle(item),
       time: toTimeLabel(item.completedAt as string),
       isNecessary: item.isNecessary,
       isPicked: item.source === 'decision_selected',
@@ -117,7 +123,7 @@ const buildPendingSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
       return {
         id: item.id,
         status: 'pending' as const,
-        titleSnapshot: item.title,
+        titleSnapshot: getTodoDisplayTitle(item),
         isNecessary: item.isNecessary,
         isPicked: item.source === 'decision_selected',
         isSegmented: item.isSegmented,
@@ -148,7 +154,7 @@ const buildDeletedSnapshotItems = (appData: AppData, dateKey: string): LogbookSn
     .map((item) => ({
       id: item.id,
       status: 'deleted' as const,
-      titleSnapshot: item.title,
+      titleSnapshot: getTodoDisplayTitle(item),
       isNecessary: item.isNecessary,
       isPicked: item.source === 'decision_selected',
       isSegmented: item.isSegmented,

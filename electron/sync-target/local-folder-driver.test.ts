@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -104,6 +104,21 @@ describe('electron/sync-target/local-folder-driver', () => {
       syncVersion: 1,
       deviceId: 'device-1',
     })
+  })
+
+  it('does not leave temporary files in cloud-synced folders', async () => {
+    const basePath = await createTempDirectory()
+    const driver = new LocalFolderDriver(basePath)
+
+    await driver.safeWriteJson('devices/device-1.json', {
+      syncVersion: 1,
+      deviceId: 'device-1',
+    })
+
+    const deviceFiles = await readdir(path.join(basePath, 'devices'))
+
+    expect(deviceFiles).toEqual(['device-1.json'])
+    expect(deviceFiles.some((fileName) => fileName.endsWith('.tmp'))).toBe(false)
   })
 
   it('rejects windows-style logical paths', async () => {

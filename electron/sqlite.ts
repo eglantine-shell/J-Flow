@@ -44,6 +44,7 @@ const SYNC_META_LAST_SYNC_ATTEMPTED_AT = 'lastSyncAttemptedAt'
 const SYNC_META_LAST_SYNC_RESULT = 'lastSyncResult'
 const SYNC_META_TARGET_PATH = 'syncTargetPath'
 const SYNC_META_TARGET_CONFIG = 'syncTargetConfig'
+const SYNC_META_V32_SYNC_REPAIR_APPLIED_AT = 'v32SyncRepairAppliedAt'
 
 type SnapshotResult =
   | {
@@ -121,6 +122,45 @@ const parsePlannedSteps = (value: unknown, legacyNextStep: unknown, isStepped: b
     isStepped,
     nextStep: fallbackNextStep,
   })
+}
+
+const normalizeTaskTemplateForWrite = (template: TaskTemplate): TaskTemplate => {
+  const isStepped = Boolean(template.isStepped)
+  const plannedSteps = normalizePlannedSteps({ ...template, isStepped })
+
+  return {
+    ...template,
+    timeBlock: template.timeBlock ?? 'day',
+    timeBlockSource: template.timeBlockSource ?? 'default_day',
+    sceneTagIds: template.sceneTagIds ?? [],
+    requiresPreparation: Boolean(template.requiresPreparation),
+    preparationNotes: template.preparationNotes ?? '',
+    isNecessary: Boolean(template.isNecessary),
+    isStepped,
+    isSegmented: isStepped ? false : Boolean(template.isSegmented),
+    currentStep: template.currentStep ?? '',
+    nextStep: plannedSteps[0] ?? template.nextStep ?? '',
+    plannedSteps,
+  }
+}
+
+const normalizeDayPlanItemForWrite = (item: DayPlanItem): DayPlanItem => {
+  const isStepped = Boolean(item.isStepped)
+  const plannedSteps = normalizePlannedSteps({ ...item, isStepped })
+
+  return {
+    ...item,
+    timeBlock: item.timeBlock ?? 'day',
+    timeBlockSource: item.timeBlockSource ?? 'default_day',
+    requiresPreparation: Boolean(item.requiresPreparation),
+    preparationNotes: item.preparationNotes ?? '',
+    isNecessary: Boolean(item.isNecessary),
+    isStepped,
+    isSegmented: isStepped ? false : Boolean(item.isSegmented),
+    currentStep: item.currentStep ?? '',
+    nextStep: plannedSteps[0] ?? item.nextStep ?? '',
+    plannedSteps,
+  }
 }
 
 const parseJsonArray = <Item>(
@@ -665,6 +705,7 @@ const ensureSchema = (database: DatabaseSync) => {
   }
 
   ensureSyncMetaDefaults(database)
+  queueV32SyncRepairIfNeeded(database)
 }
 
 const migratePlannedStepsFromNextStep = (
@@ -806,6 +847,80 @@ const ensureSyncMetaDefaults = (database: DatabaseSync) => {
 
   if (readSyncMeta(database, SYNC_META_TARGET_CONFIG) === null) {
     writeSyncMeta(database, SYNC_META_TARGET_CONFIG, null)
+  }
+}
+
+const hasSettingsRow = (database: DatabaseSync) =>
+  Boolean(database.prepare('SELECT 1 FROM settings WHERE id = ? LIMIT 1').get(SETTINGS_ROW_ID))
+
+const queueV32SyncRepairIfNeeded = (database: DatabaseSync) => {
+  if (readSyncMeta(database, SYNC_META_V32_SYNC_REPAIR_APPLIED_AT)) {
+    return {
+      applied: false,
+      queuedCount: 0,
+    }
+  }
+
+  if (!hasSettingsRow(database)) {
+    return {
+      applied: false,
+      queuedCount: 0,
+    }
+  }
+
+  const taskTemplateRows = database
+    .prepare('SELECT id, updated_at FROM task_templates')
+    .all() as Array<{ id?: unknown; updated_at?: unknown }>
+  const dayPlanItemRows = database
+    .prepare('SELECT id, status, updated_at, deleted_at FROM day_plan_items')
+    .all() as Array<{
+      id?: unknown
+      status?: unknown
+      updated_at?: unknown
+      deleted_at?: unknown
+    }>
+  let queuedCount = 0
+  const repairQueuedAt = nowIso()
+
+  for (const row of taskTemplateRows) {
+    if (typeof row.id !== 'string' || typeof row.updated_at !== 'string') {
+      continue
+    }
+
+    recordSyncChange(database, {
+      entityType: 'taskTemplate',
+      entityId: row.id,
+      changeType: 'upsert',
+      changedAt: repairQueuedAt,
+    })
+    queuedCount += 1
+  }
+
+  for (const row of dayPlanItemRows) {
+    if (typeof row.id !== 'string' || typeof row.updated_at !== 'string') {
+      continue
+    }
+
+    const isDeleted = row.status === 'deleted'
+    const changedAt =
+      isDeleted && typeof row.deleted_at === 'string' && row.deleted_at.length > 0
+        ? row.deleted_at
+        : row.updated_at
+
+    recordSyncChange(database, {
+      entityType: 'dayPlanItem',
+      entityId: row.id,
+      changeType: isDeleted ? 'delete' : 'upsert',
+      changedAt: isDeleted ? changedAt : repairQueuedAt,
+    })
+    queuedCount += 1
+  }
+
+  writeSyncMeta(database, SYNC_META_V32_SYNC_REPAIR_APPLIED_AT, repairQueuedAt)
+
+  return {
+    applied: true,
+    queuedCount,
   }
 }
 
@@ -1735,6 +1850,8 @@ const replaceActivityType = (database: DatabaseSync, activityType: ActivityType)
 }
 
 const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) => {
+  const normalizedTemplate = normalizeTaskTemplateForWrite(template)
+
   database
     .prepare(`
       INSERT INTO task_templates (
@@ -1747,36 +1864,38 @@ const insertTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) =
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
-      template.id,
-      template.templateKind,
-      template.title,
-      template.date,
-      template.deadlineDate ?? null,
-      template.timeBlock ?? 'day',
-      template.timeBlockSource ?? 'default_day',
-      template.activityTypeId ?? null,
-      serializeStringArray(template.sceneTagIds),
-      template.interestLevel,
-      template.isNecessary ? 1 : 0,
-      template.requiresPreparation ? 1 : 0,
-      template.preparationNotes,
-      template.recurrence,
-      template.repeatType ?? null,
-      template.repeatIntervalUnit ?? null,
-      template.repeatIntervalValue ?? null,
-      template.isSegmented ? 1 : 0,
-      template.isStepped ? 1 : 0,
-      template.currentStep ?? '',
-      normalizePlannedSteps(template)[0] ?? template.nextStep ?? '',
-      serializeStringArray(normalizePlannedSteps(template)),
-      template.createdAt,
-      template.updatedAt,
-      template.grassStatus ?? null,
-      template.isArchived ? 1 : 0,
+      normalizedTemplate.id,
+      normalizedTemplate.templateKind,
+      normalizedTemplate.title,
+      normalizedTemplate.date,
+      normalizedTemplate.deadlineDate ?? null,
+      normalizedTemplate.timeBlock,
+      normalizedTemplate.timeBlockSource,
+      normalizedTemplate.activityTypeId ?? null,
+      serializeStringArray(normalizedTemplate.sceneTagIds),
+      normalizedTemplate.interestLevel,
+      normalizedTemplate.isNecessary ? 1 : 0,
+      normalizedTemplate.requiresPreparation ? 1 : 0,
+      normalizedTemplate.preparationNotes,
+      normalizedTemplate.recurrence,
+      normalizedTemplate.repeatType ?? null,
+      normalizedTemplate.repeatIntervalUnit ?? null,
+      normalizedTemplate.repeatIntervalValue ?? null,
+      normalizedTemplate.isSegmented ? 1 : 0,
+      normalizedTemplate.isStepped ? 1 : 0,
+      normalizedTemplate.currentStep,
+      normalizedTemplate.nextStep,
+      serializeStringArray(normalizedTemplate.plannedSteps),
+      normalizedTemplate.createdAt,
+      normalizedTemplate.updatedAt,
+      normalizedTemplate.grassStatus ?? null,
+      normalizedTemplate.isArchived ? 1 : 0,
     )
 }
 
 const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) => {
+  const normalizedTemplate = normalizeTaskTemplateForWrite(template)
+
   database
     .prepare(`
       UPDATE task_templates
@@ -1809,32 +1928,32 @@ const replaceTaskTemplateRow = (database: DatabaseSync, template: TaskTemplate) 
       WHERE id = ?
     `)
     .run(
-      template.templateKind,
-      template.title,
-      template.date,
-      template.deadlineDate ?? null,
-      template.timeBlock ?? 'day',
-      template.timeBlockSource ?? 'default_day',
-      template.activityTypeId ?? null,
-      serializeStringArray(template.sceneTagIds),
-      template.interestLevel,
-      template.isNecessary ? 1 : 0,
-      template.requiresPreparation ? 1 : 0,
-      template.preparationNotes,
-      template.recurrence,
-      template.repeatType ?? null,
-      template.repeatIntervalUnit ?? null,
-      template.repeatIntervalValue ?? null,
-      template.isSegmented ? 1 : 0,
-      template.isStepped ? 1 : 0,
-      template.currentStep ?? '',
-      normalizePlannedSteps(template)[0] ?? template.nextStep ?? '',
-      serializeStringArray(normalizePlannedSteps(template)),
-      template.createdAt,
-      template.updatedAt,
-      template.grassStatus ?? null,
-      template.isArchived ? 1 : 0,
-      template.id,
+      normalizedTemplate.templateKind,
+      normalizedTemplate.title,
+      normalizedTemplate.date,
+      normalizedTemplate.deadlineDate ?? null,
+      normalizedTemplate.timeBlock,
+      normalizedTemplate.timeBlockSource,
+      normalizedTemplate.activityTypeId ?? null,
+      serializeStringArray(normalizedTemplate.sceneTagIds),
+      normalizedTemplate.interestLevel,
+      normalizedTemplate.isNecessary ? 1 : 0,
+      normalizedTemplate.requiresPreparation ? 1 : 0,
+      normalizedTemplate.preparationNotes,
+      normalizedTemplate.recurrence,
+      normalizedTemplate.repeatType ?? null,
+      normalizedTemplate.repeatIntervalUnit ?? null,
+      normalizedTemplate.repeatIntervalValue ?? null,
+      normalizedTemplate.isSegmented ? 1 : 0,
+      normalizedTemplate.isStepped ? 1 : 0,
+      normalizedTemplate.currentStep,
+      normalizedTemplate.nextStep,
+      serializeStringArray(normalizedTemplate.plannedSteps),
+      normalizedTemplate.createdAt,
+      normalizedTemplate.updatedAt,
+      normalizedTemplate.grassStatus ?? null,
+      normalizedTemplate.isArchived ? 1 : 0,
+      normalizedTemplate.id,
     )
 }
 
@@ -1913,6 +2032,8 @@ const replaceRecurringTaskInstanceRow = (
 }
 
 const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
+  const normalizedItem = normalizeDayPlanItemForWrite(item)
+
   database
     .prepare(`
     INSERT INTO day_plan_items (
@@ -1926,44 +2047,46 @@ const insertDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
-      item.id,
-      item.date,
-      item.originDate ?? null,
-      item.targetDate ?? null,
-      item.deadlineDate ?? null,
-      item.timeBlock,
-      item.timeBlockSource,
-      item.sortOrder,
-      item.source,
-      item.templateId ?? null,
-      item.recurringInstanceId ?? null,
-      item.consumesDateTrigger === undefined ? null : item.consumesDateTrigger ? 1 : 0,
-      item.rootItemId ?? null,
-      item.continuationOfItemId ?? null,
-      item.carriedFromDate ?? null,
-      item.title,
-      item.activityTypeId ?? null,
-      item.isNecessary ? 1 : 0,
-      item.requiresPreparation ? 1 : 0,
-      item.preparationNotes,
-      item.isSegmented ? 1 : 0,
-      item.isStepped ? 1 : 0,
-      item.currentStep ?? '',
-      normalizePlannedSteps(item)[0] ?? item.nextStep ?? '',
-      serializeStringArray(normalizePlannedSteps(item)),
-      item.stepRootItemId ?? null,
-      item.previousStepItemId ?? null,
-      item.progressState,
-      item.progressPercent,
-      item.status,
-      item.createdAt,
-      item.updatedAt,
-      item.completedAt ?? null,
-      item.deletedAt ?? null,
+      normalizedItem.id,
+      normalizedItem.date,
+      normalizedItem.originDate ?? null,
+      normalizedItem.targetDate ?? null,
+      normalizedItem.deadlineDate ?? null,
+      normalizedItem.timeBlock,
+      normalizedItem.timeBlockSource,
+      normalizedItem.sortOrder,
+      normalizedItem.source,
+      normalizedItem.templateId ?? null,
+      normalizedItem.recurringInstanceId ?? null,
+      normalizedItem.consumesDateTrigger === undefined ? null : normalizedItem.consumesDateTrigger ? 1 : 0,
+      normalizedItem.rootItemId ?? null,
+      normalizedItem.continuationOfItemId ?? null,
+      normalizedItem.carriedFromDate ?? null,
+      normalizedItem.title,
+      normalizedItem.activityTypeId ?? null,
+      normalizedItem.isNecessary ? 1 : 0,
+      normalizedItem.requiresPreparation ? 1 : 0,
+      normalizedItem.preparationNotes,
+      normalizedItem.isSegmented ? 1 : 0,
+      normalizedItem.isStepped ? 1 : 0,
+      normalizedItem.currentStep,
+      normalizedItem.nextStep,
+      serializeStringArray(normalizedItem.plannedSteps),
+      normalizedItem.stepRootItemId ?? null,
+      normalizedItem.previousStepItemId ?? null,
+      normalizedItem.progressState,
+      normalizedItem.progressPercent,
+      normalizedItem.status,
+      normalizedItem.createdAt,
+      normalizedItem.updatedAt,
+      normalizedItem.completedAt ?? null,
+      normalizedItem.deletedAt ?? null,
     )
 }
 
 const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
+  const normalizedItem = normalizeDayPlanItemForWrite(item)
+
   database
     .prepare(`
       UPDATE day_plan_items
@@ -2004,40 +2127,40 @@ const replaceDayPlanItemRow = (database: DatabaseSync, item: DayPlanItem) => {
       WHERE id = ?
     `)
     .run(
-      item.date,
-      item.originDate ?? null,
-      item.targetDate ?? null,
-      item.deadlineDate ?? null,
-      item.timeBlock,
-      item.timeBlockSource,
-      item.sortOrder,
-      item.source,
-      item.templateId ?? null,
-      item.recurringInstanceId ?? null,
-      item.consumesDateTrigger === undefined ? null : item.consumesDateTrigger ? 1 : 0,
-      item.rootItemId ?? null,
-      item.continuationOfItemId ?? null,
-      item.carriedFromDate ?? null,
-      item.title,
-      item.activityTypeId ?? null,
-      item.isNecessary ? 1 : 0,
-      item.requiresPreparation ? 1 : 0,
-      item.preparationNotes,
-      item.isSegmented ? 1 : 0,
-      item.isStepped ? 1 : 0,
-      item.currentStep ?? '',
-      normalizePlannedSteps(item)[0] ?? item.nextStep ?? '',
-      serializeStringArray(normalizePlannedSteps(item)),
-      item.stepRootItemId ?? null,
-      item.previousStepItemId ?? null,
-      item.progressState,
-      item.progressPercent,
-      item.status,
-      item.createdAt,
-      item.updatedAt,
-      item.completedAt ?? null,
-      item.deletedAt ?? null,
-      item.id,
+      normalizedItem.date,
+      normalizedItem.originDate ?? null,
+      normalizedItem.targetDate ?? null,
+      normalizedItem.deadlineDate ?? null,
+      normalizedItem.timeBlock,
+      normalizedItem.timeBlockSource,
+      normalizedItem.sortOrder,
+      normalizedItem.source,
+      normalizedItem.templateId ?? null,
+      normalizedItem.recurringInstanceId ?? null,
+      normalizedItem.consumesDateTrigger === undefined ? null : normalizedItem.consumesDateTrigger ? 1 : 0,
+      normalizedItem.rootItemId ?? null,
+      normalizedItem.continuationOfItemId ?? null,
+      normalizedItem.carriedFromDate ?? null,
+      normalizedItem.title,
+      normalizedItem.activityTypeId ?? null,
+      normalizedItem.isNecessary ? 1 : 0,
+      normalizedItem.requiresPreparation ? 1 : 0,
+      normalizedItem.preparationNotes,
+      normalizedItem.isSegmented ? 1 : 0,
+      normalizedItem.isStepped ? 1 : 0,
+      normalizedItem.currentStep,
+      normalizedItem.nextStep,
+      serializeStringArray(normalizedItem.plannedSteps),
+      normalizedItem.stepRootItemId ?? null,
+      normalizedItem.previousStepItemId ?? null,
+      normalizedItem.progressState,
+      normalizedItem.progressPercent,
+      normalizedItem.status,
+      normalizedItem.createdAt,
+      normalizedItem.updatedAt,
+      normalizedItem.completedAt ?? null,
+      normalizedItem.deletedAt ?? null,
+      normalizedItem.id,
     )
 }
 
@@ -2287,6 +2410,12 @@ export const getSqliteSyncChangeByEntity = (
   return row ? mapSyncChangeRow(row) : null
 }
 
+export const queueSqliteV32SyncRepair = (dataPath: string) => {
+  const database = getDatabase(dataPath)
+
+  return runSyncMetaMutation(database, () => queueV32SyncRepairIfNeeded(database))
+}
+
 export const applyRemoteSqliteSyncChangeState = (
   dataPath: string,
   input: {
@@ -2372,25 +2501,26 @@ export const applyRemoteSqliteActivityType = (dataPath: string, activityType: Ac
 
 export const applyRemoteSqliteTaskTemplate = (dataPath: string, template: TaskTemplate) => {
   const database = getDatabase(dataPath)
+  const next = normalizeTaskTemplateForWrite(template)
 
   return runMutation(database, () => {
-    const current = getTaskTemplateById(database, template.id)
+    const current = getTaskTemplateById(database, next.id)
 
     if (current) {
-      replaceTaskTemplateRow(database, template)
+      replaceTaskTemplateRow(database, next)
     } else {
-      insertTaskTemplateRow(database, template)
+      insertTaskTemplateRow(database, next)
     }
 
     writeSyncChangeState(database, {
       entityType: 'taskTemplate',
-      entityId: template.id,
+      entityId: next.id,
       changeType: 'upsert',
-      changedAt: template.updatedAt,
-      syncedAt: template.updatedAt,
+      changedAt: next.updatedAt,
+      syncedAt: next.updatedAt,
     })
 
-    return template
+    return next
   })
 }
 
@@ -2423,25 +2553,26 @@ export const applyRemoteSqliteRecurringTaskInstance = (
 
 export const applyRemoteSqliteDayPlanItem = (dataPath: string, item: DayPlanItem) => {
   const database = getDatabase(dataPath)
+  const next = normalizeDayPlanItemForWrite(item)
 
   return runMutation(database, () => {
-    const current = getDayPlanItemById(database, item.id)
+    const current = getDayPlanItemById(database, next.id)
 
     if (current) {
-      replaceDayPlanItemRow(database, item)
+      replaceDayPlanItemRow(database, next)
     } else {
-      insertDayPlanItemRow(database, item)
+      insertDayPlanItemRow(database, next)
     }
 
     writeSyncChangeState(database, {
       entityType: 'dayPlanItem',
-      entityId: item.id,
+      entityId: next.id,
       changeType: 'upsert',
-      changedAt: item.updatedAt,
-      syncedAt: item.updatedAt,
+      changedAt: next.updatedAt,
+      syncedAt: next.updatedAt,
     })
 
-    return item
+    return next
   })
 }
 

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import type { SyncTargetDriver, SyncTargetEntry } from './types.js'
@@ -84,14 +84,12 @@ const listEntriesRecursive = async (
   return results
 }
 
-const safeWriteJsonAtomic = async (filePath: string, data: unknown) => {
+const safeWriteJsonDirect = async (filePath: string, data: unknown) => {
   const directoryPath = path.dirname(filePath)
-  const tmpPath = `${filePath}.${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`
   const content = `${JSON.stringify(data, null, 2)}\n`
 
   await mkdir(directoryPath, { recursive: true })
-  await writeFile(tmpPath, content, 'utf8')
-  await rename(tmpPath, filePath)
+  await writeFile(filePath, content, 'utf8')
 }
 
 export class LocalFolderDriver implements SyncTargetDriver {
@@ -134,6 +132,6 @@ export class LocalFolderDriver implements SyncTargetDriver {
   }
 
   safeWriteJson(logicalPath: string, data: unknown) {
-    return safeWriteJsonAtomic(resolveLocalFolderPath(this.basePath, logicalPath), data)
+    return safeWriteJsonDirect(resolveLocalFolderPath(this.basePath, logicalPath), data)
   }
 }

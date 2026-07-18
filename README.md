@@ -246,16 +246,19 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 - `V2.3`：集中优化 Todo 与种草清单体验，包含跨日刷新、日志修复、兴趣排序、必要事项筛选、24 小时完成时间编辑和拖动排序。
 - `V3`：整合原 V2.4 大更新，包含备注替代准备、夜间新增默认归属、拔草删除语义重构、分步 Todo、真实 UI 使用教学，以及重复 Todo 日夜归属修复。
 - `V3.1`：已完成分步 Todo 优化，支持一次安排多个后续步骤，并同步更新真实 UI 教学与教学 demo 日期逻辑。
+- `V3.2`：修复 V3/V3.1 模型升级后的双端同步 repair、分步 Todo 日志快照显示当前步骤，并改进本地文件夹同步在第三方云盘目录中的稳定性。
+
+> 如果同步文件夹放在坚果云、OneDrive 等第三方云盘目录中，请确认对应云盘客户端正在运行，并已开启需要的文件夹同步。
 
 当前桌面版产物：
-- macOS：`J-Flow-V3.1.dmg`
-- Windows：`J-Flow-V3.1-win-setup.exe`
-- Windows：`J-Flow-V3.1-win-portable.exe`
+- macOS：`J-Flow-V3.2.dmg`
+- Windows：`J-Flow-V3.2-win-setup.exe`
+- Windows：`J-Flow-V3.2-win-portable.exe`
 
 平台状态：
-- macOS：V3.1 已完成构建层验证，仍建议正式使用前做一轮真实数据试用；
+- macOS：V3.2 已完成构建层验证，仍建议正式使用前做一轮真实数据试用；
 - Windows：
-  - V3.1 Windows 包待单独真机打包验证；
+  - V3.2 Windows 包已完成真机打包；
   - 推荐普通用户优先下载 `setup`；
   - `portable` 首次启动需要自解包，启动时间通常更长；
 - Web：V2 版本保留为在线参考版本；
@@ -264,9 +267,16 @@ J-Flow 不提供账号系统，也不提供自己的云服务。你可以选择�
 Releases：
 - GitHub Releases：<https://github.com/eglantine-shell/J-Flow/releases>
 - 当前建议通过 GitHub Releases 分发与下载：
-  - `J-Flow-V3.1.dmg`
-  - `J-Flow-V3.1-win-setup.exe`
-  - `J-Flow-V3.1-win-portable.exe`
+  - `J-Flow-V3.2.dmg`
+  - `J-Flow-V3.2-win-setup.exe`
+  - `J-Flow-V3.2-win-portable.exe`
+
+V3.2 macOS SHA256：
+- `J-Flow-V3.2.dmg`：`b702cbf4e7c1e2522040430d1d095c1894da48853a6fa8109f6e9fb34691d7cc`
+
+V3.2 Windows SHA256：
+- `J-Flow-V3.2-win-portable.exe`：`543469A6285B02C1B1D7980B150F3ED379BAE48EBC31E365848008E3F2FAE3DE`
+- `J-Flow-V3.2-win-setup.exe`：`3FE02510528C184C563DF399461CAE7A0F5FCE38AEB78FAA588B050087452D5E`
 
 > 当前 macOS 与 Windows 安装包均未进行正式代码签名。首次打开时，系统或安全软件可能显示风险提示，请确认文件来自本仓库 Releases。
 
@@ -281,11 +291,11 @@ J-Flow 还不是一个完整商业化产品，目前更接近一个持续打磨�
 - 暂不支持账号系统、官方云同步；
 - 暂不支持手机端；
 - 暂不支持多人协作；
-- V3.1 的真实 UI 教学仍需继续通过实际使用打磨。
+- V3.2 仍需继续通过真实使用观察同步、日志和分步 Todo 的边界情况。
 
 下一步优先方向：
 
-- 进行 V3.1 真实数据试用与 debug；
+- 进行 V3.2 真实数据试用与 debug；
 - 完善本地备份与同步的说明和体验。
 
 ---

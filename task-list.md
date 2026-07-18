@@ -433,7 +433,77 @@
 
 ---
 
+## V3.2 同步与日志快照修复
+
+说明：
+- 本节为当前发布口径的 `V3.2`。
+- 下方早期 `V3.2 Grass List Page` 属于历史路线图命名，后续版本号需重新顺延。
+
+### 目标
+- 修复 V3/V3.1 数据模型升级后，Mac / Windows 双端本地文件夹同步可能不传播新字段的问题。
+- 修复分步 Todo 日志快照只显示基础事项、不显示当前步骤的问题。
+
+### 已完成
+- 日志快照：
+  - renderer 日志服务继续使用分步显示标题
+  - Electron 自动补昨日日志改为使用分步显示标题
+  - 分步快照保存为 `事项：当前步骤`
+- 同步修复：
+  - 新增一次性 V3.2 同步 repair 标记 `v32SyncRepairAppliedAt`
+  - repair 会把当前库中的 `taskTemplate / dayPlanItem` 重新加入待同步队列
+  - repair 不改写业务实体 `updatedAt`
+  - 远端旧分步 item 缺 `plannedSteps` 时，从 `nextStep` 归一化恢复后续步骤队列
+  - 写入 SQLite 前统一保持 `nextStep = plannedSteps[0] ?? ''`
+  - 追加坚果云兼容热修：本地文件夹同步写 JSON 时不再在同步目录内生成 `.tmp` 后 rename，改为直接写最终 JSON，避免坚果云留下红叉 / 冲突临时文件
+- 回归测试：
+  - Electron 自动日志分步快照
+  - renderer 日志分步快照
+  - V3.2 同步 repair 只执行一次
+  - 旧远端分步 `nextStep` 导入归一化
+  - 同步导出 / 手动同步闭环未回退
+  - `LocalFolderDriver.safeWriteJson` 不留下 `.tmp` 文件
+
+### 当前验证
+- `corepack pnpm exec tsc --noEmit`：通过
+- `corepack pnpm exec tsc -p electron/tsconfig.json --noEmit`：通过
+- `corepack pnpm exec vitest run electron/sqlite.test.ts electron/sync-import.test.ts electron/daily-logbook.test.ts src/features/logbook/logbook-service.test.ts src/db/storage.test.ts`：通过，`33` 项
+- `corepack pnpm exec vitest run electron/sync-export.test.ts electron/sync-now.test.ts electron/selected-date-state.test.ts`：通过，`18` 项
+- 追加同步热修验证：
+  - `corepack pnpm exec vitest run electron/sync-import.test.ts electron/sync-export.test.ts electron/sqlite.test.ts electron/sync-now.test.ts electron/daily-logbook.test.ts src/features/logbook/logbook-service.test.ts src/db/storage.test.ts electron/selected-date-state.test.ts`：通过，`52` 项
+- 追加坚果云兼容热修验证：
+  - `corepack pnpm exec vitest run electron/sync-target/local-folder-driver.test.ts electron/sync-target/metadata.test.ts electron/sync-import.test.ts electron/sync-export.test.ts electron/sync-now.test.ts electron/sqlite.test.ts`：通过，`55` 项
+- 已生成 macOS DMG：
+  - `release/J-Flow-V3.2.dmg`
+  - SHA256：`b702cbf4e7c1e2522040430d1d095c1894da48853a6fa8109f6e9fb34691d7cc`
+  - 该 DMG 已包含 `updatedAt` 相等同步热修与坚果云 `.tmp` 写入兼容热修
+- 已生成 Windows 源码交接包：
+  - `J-Flow-V3.2-win-handoff-source-20260718.zip`
+  - 用于 Windows 端重新打包包含坚果云 `.tmp` 写入兼容热修的安装包
+- 已完成 Windows 真机打包，Mac 工作区已归档：
+  - `release/J-Flow-V3.2-win-portable.exe`
+  - SHA256：`543469A6285B02C1B1D7980B150F3ED379BAE48EBC31E365848008E3F2FAE3DE`
+  - `release/J-Flow-V3.2-win-setup.exe`
+  - SHA256：`3FE02510528C184C563DF399461CAE7A0F5FCE38AEB78FAA588B050087452D5E`
+  - Windows 侧另有 `win-unpacked/J-Flow.exe` 与 setup blockmap；Mac 工作区当前只归档 portable / setup 两个 exe。
+- 真实双端同步排查最终结论：
+  - Windows 端新建普通 txt 探针后，坚果云网页端可见；
+  - Mac 本地同步文件夹不可见；
+  - 用户确认 Mac 自动更新后坚果云客户端被关闭，且没有开机自启；
+  - 因此“双端完全不同步”的最终根因是 Mac 端坚果云客户端未运行，不是 J-Flow 同步链路失败。
+
+### 后续人工观察
+- 使用真实 Mac / Windows 双端同步文件夹：
+  - 先确认坚果云等第三方云盘客户端正在运行，且目标文件夹已完成同步
+  - 至少一端执行一次“立即同步”
+  - 确认重复事项夜晚归属、分步后续步骤队列、普通新增 / 删除仍能双端交换
+- 查看自动生成日志：
+  - 分步已完成 / 未完成 / 删除快照应显示 `事项：当前步骤`
+
+---
+
 ## V3.2 Grass List Page
+
+> 历史路线图标题；当前发布口径中，`V3.2` 已用于“同步与日志快照修复”。
 
 ### 优先级
 - Must-have
@@ -611,9 +681,17 @@
   - Desktop `build:desktop` 仍保留
 - 已于 2026-05-02 通过镜像下载方式在 macOS 环境下成功产出：
   - `release/J-Flow-V1-win-portable.exe`
+- 已于 2026-07-08 在 Windows 真机完成 V3.1 打包：
+  - `release/J-Flow-V3.1-win-portable.exe`
+  - `release/J-Flow-V3.1-win-setup.exe`
+  - Windows 侧另有 `win-unpacked/J-Flow.exe`
+  - Windows 侧另有 `J-Flow-V3.1-win-setup.exe.blockmap`
+- V3.1 Windows SHA256：
+  - portable：`EC2DF7FCDB6AA874840BFE9A232B2CC7458136A3DB185B3DEA0732E50E4F2E03`
+  - setup：`B0C068D777EA842FD6B7F27621FEC8BC44D1DAF20565728481BD011BCD2ED57E`
 
 ### 当前未完成 / 风险
-- V3 Windows 包尚未完成真机打包与启动测试闭环。
+- V3.1 Windows 包已完成真机打包；后续若重新安装依赖或重打包，仍需注意 Windows 侧 Node / Electron 下载环境。
 - Windows 侧需要先运行 `corepack pnpm run sync:icon` 生成 `build/icon.ico`。
 - 当前 Windows `afterPack` 会检查并写入 exe 图标；缺少 `build/icon.ico` 时会中止打包，避免产出无图标包。
 - 当前建议 Windows 真机依次验证：

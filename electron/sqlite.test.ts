@@ -16,8 +16,11 @@ import {
   getSqliteAppData,
   getSqliteLocalSyncState,
   getSqliteTaskTemplateById,
+  listPendingSqliteSyncChanges,
   listSqliteSyncChanges,
   listSqliteDayPlanItems,
+  markSqliteSyncChangeSyncedAt,
+  queueSqliteV32SyncRepair,
   replaceSqliteSnapshot,
   setSqliteSyncTargetConfig,
   setSqliteSyncTargetPath,
@@ -395,6 +398,110 @@ describe('electron/sqlite', () => {
     })
     expect(change?.deviceId).toBe(getSqliteLocalSyncState(dataPath).deviceId)
     expect(change?.syncedAt).toBeNull()
+  })
+
+  it('queues V3.2 sync repair for task templates and day plan items once', async () => {
+    const dataPath = await createTempDataPath()
+    replaceSqliteSnapshot(dataPath, {
+      ...sqliteTestSeedAppData,
+      taskTemplates: [
+        {
+          id: 'template-v32-repair',
+          templateKind: 'todo_recurring',
+          title: '重复夜间事项',
+          date: '2026-05-01',
+          deadlineDate: '2026-05-01',
+          timeBlock: 'night',
+          timeBlockSource: 'manual_night',
+          sceneTagIds: [],
+          interestLevel: 1,
+          isNecessary: true,
+          requiresPreparation: false,
+          preparationNotes: '',
+          recurrence: 'daily',
+          repeatType: 'calendar',
+          repeatIntervalUnit: 'day',
+          repeatIntervalValue: 1,
+          isSegmented: false,
+          isStepped: false,
+          currentStep: '',
+          nextStep: '',
+          plannedSteps: [],
+          createdAt: '2026-05-01T08:00:00.000Z',
+          updatedAt: '2026-05-01T08:30:00.000Z',
+          isArchived: false,
+        },
+      ],
+      dayPlanItems: [
+        {
+          id: 'item-v32-repair',
+          date: '2026-05-01',
+          originDate: '2026-05-01',
+          timeBlock: 'day',
+          timeBlockSource: 'default_day',
+          sortOrder: 1,
+          source: 'manual_temporary',
+          title: '分步事项',
+          isNecessary: false,
+          requiresPreparation: false,
+          preparationNotes: '',
+          isSegmented: false,
+          isStepped: true,
+          currentStep: '第一步',
+          nextStep: '第二步',
+          plannedSteps: ['第二步', '第三步'],
+          progressState: 'not_started',
+          progressPercent: 0,
+          status: 'pending',
+          createdAt: '2026-05-01T08:00:00.000Z',
+          updatedAt: '2026-05-01T08:30:00.000Z',
+        },
+      ],
+    })
+
+    for (const change of listSqliteSyncChanges(dataPath)) {
+      markSqliteSyncChangeSyncedAt(dataPath, change.id, '2026-05-01T09:00:00.000Z')
+    }
+
+    expect(listPendingSqliteSyncChanges(dataPath)).toEqual([])
+
+    const firstRepair = queueSqliteV32SyncRepair(dataPath)
+    const pendingChanges = listPendingSqliteSyncChanges(dataPath)
+
+    expect(firstRepair).toEqual({
+      applied: true,
+      queuedCount: 2,
+    })
+    expect(pendingChanges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityType: 'taskTemplate',
+          entityId: 'template-v32-repair',
+          changeType: 'upsert',
+          syncedAt: null,
+        }),
+        expect.objectContaining({
+          entityType: 'dayPlanItem',
+          entityId: 'item-v32-repair',
+          changeType: 'upsert',
+          syncedAt: null,
+        }),
+      ]),
+    )
+    expect(
+      Date.parse(
+        pendingChanges.find((change) => change.entityId === 'template-v32-repair')?.changedAt ??
+          '',
+      ),
+    ).toBeGreaterThan(Date.parse('2026-05-01T08:30:00.000Z'))
+    expect(getSqliteTaskTemplateById(dataPath, 'template-v32-repair')?.updatedAt).toBe(
+      '2026-05-01T08:30:00.000Z',
+    )
+
+    expect(queueSqliteV32SyncRepair(dataPath)).toEqual({
+      applied: false,
+      queuedCount: 0,
+    })
   })
 
   it('persists and clears syncTargetPath in local sync metadata', async () => {
